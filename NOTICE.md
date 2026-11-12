@@ -74,3 +74,19 @@ The synthetic alerts in the scenario files were written with AI assistance
   `requirements-lab.txt` and used only by `triage/lab_sniffer.py`. It is
   installed from PyPI under its own licence and is not copied into this
   repository.
+
+## AlarmOps
+
+The `alarmops/` folder is a copy of AlarmOps, built by Anthony Afonughe for the
+GitLab Transcend "Life After Code" hackathon and released under the MIT
+License (see `alarmops/LICENSE`):
+
+- Original repository: https://github.com/ToniGift/AlarmOps
+- Imported with `git subtree` from commit
+  `834e5e1f7d73eb9a17c2eacc2bf965555d804b77`, unchanged
+- The original repository is kept as the hackathon submission and is where the
+  GitLab CI/CD pipeline runs.
+
+AlarmOps is a simulation. Its sensor data, faults and alarm logs are generated
+files, and it does not connect to any plant equipment. Its Python dependency
+(PyYAML) is installed from PyPI under its own licence.

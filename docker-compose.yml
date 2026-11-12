@@ -16,6 +16,13 @@ services:
       timeout: 5s
       retries: 3
 
+  # AlarmOps (simulation only). Its page uses root paths, so it gets its own port.
+  alarmops:
+    build: ./alarmops
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
   caddy:
     image: caddy:2
     environment:
