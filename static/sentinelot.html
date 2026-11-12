@@ -218,6 +218,7 @@ footer p{margin:0;max-width:66ch}
       <div class="tools">
         <button type="button" id="zin" aria-label="Zoom in">+</button>
         <button type="button" id="zout" aria-label="Zoom out">−</button>
+        <button type="button" id="front">Front view</button>
         <button type="button" id="spin">Pause rotation</button>
       </div>
     </div>
@@ -757,8 +758,8 @@ function build(){
     showLabels();
   }
   function showLabels(){
-    var wide=stage.clientWidth>620;
-    labs.forEach(function(l){if(l.cls.indexOf("asset")<0)return;l.el.style.display=(wide||l.el.classList.contains("hot"))?"":"none"});
+    /* Level names always show. An asset name shows only when it is clicked or is part of the traced alert. */
+    labs.forEach(function(l){if(l.cls.indexOf("asset")<0)return;l.el.style.display=l.el.classList.contains("hot")?"":"none"});
   }
 
   var th0=0.62,theta=th0,phi=1.18,zoom=1,dist=20,holdUntil=0;
@@ -805,6 +806,7 @@ function build(){
   var spinBtn=$("#spin");
   function spinLabel(){spinBtn.textContent=auto?"Pause rotation":"Rotate plant"}
   spinBtn.addEventListener("click",function(){auto=!auto;spinLabel()});spinLabel();
+  $("#front").addEventListener("click",function(){theta=0;phi=1.18;zoom=1;auto=false;spinLabel()});
   $("#card").addEventListener("click",function(){if($("#card").hidden){selAsset=null;update()}});
 
   var v=new THREE.Vector3(),last=performance.now(),t0=last;
