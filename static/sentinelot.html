@@ -38,7 +38,7 @@ html{scroll-padding-top:env(safe-area-inset-top,0px)}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:17px;line-height:1.5}
 a{color:inherit}
 :focus-visible{outline:3px solid var(--live);outline-offset:2px}
-.wrap{max-width:1180px;margin:0 auto;padding:0 20px}
+.wrap{padding:0 24px}
 
 .top{display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap;padding:18px 0;border-bottom:1px solid var(--line)}
 .mark{font-family:var(--cond);font-weight:600;font-size:26px;text-decoration:none}
@@ -56,7 +56,7 @@ a{color:inherit}
 .board-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--line);font-size:15px}
 .board-head b{font-family:var(--cond);font-size:20px;font-weight:600}
 .sim{border:1px dashed var(--mute);border-radius:3px;padding:2px 8px;color:var(--mute)}
-.grid{display:grid;grid-template-columns:1.3fr 1fr}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) clamp(380px,34vw,560px)}
 .cell{padding:16px 14px;min-width:0;border-bottom:1px solid var(--line)}
 .cell.l{border-right:1px solid var(--line)}
 .cell.b{border-bottom:0}
@@ -64,7 +64,7 @@ a{color:inherit}
 .note{font-size:14.5px;color:var(--mute);margin:0 0 12px}
 
 /* 3D stage */
-.stage{position:relative;padding:0;min-height:540px;overflow:hidden}
+.stage{position:relative;padding:0;min-height:clamp(540px,38vw,760px);overflow:hidden}
 .stage canvas{position:absolute;inset:0;display:block;width:100%;height:100%;touch-action:pan-y;cursor:grab}
 .stage canvas:active{cursor:grabbing}
 .labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
@@ -158,9 +158,9 @@ a{color:inherit}
 .steps li + li{padding-left:18px;border-left:1px solid var(--line)}
 .steps .n{font-family:var(--cond);font-weight:600;font-size:22px;color:var(--mute)}
 .steps h3{font-family:var(--cond);font-weight:600;font-size:26px;margin:0 0 6px}
-.steps p{margin:0;font-size:16.5px}
+.steps p{margin:0;font-size:16.5px;max-width:60ch}
 .rule{margin:22px 0 0;font-size:19px;max-width:66ch}
-.about{display:grid;grid-template-columns:1.1fr .9fr;gap:36px}
+.about{display:grid;grid-template-columns:minmax(0,62ch) minmax(0,640px);gap:clamp(36px,5vw,96px)}
 .about p{margin:0 0 14px;max-width:62ch}
 .cv{margin:0;border-top:2px solid var(--ink)}
 .cv div{display:grid;grid-template-columns:110px 1fr;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:16px}
@@ -169,8 +169,10 @@ a{color:inherit}
 .contact{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .contact .btn{text-decoration:none;display:inline-block}
 .todo{font-size:15px;color:var(--mute);margin:12px 0 0}
-footer{border-top:1px solid var(--line);padding:18px 0 28px;font-size:14.5px;color:var(--mute);max-width:90ch}
+footer{border-top:1px solid var(--line);padding:18px 0 28px;font-size:14.5px;color:var(--mute)}
+footer p{margin:0;max-width:66ch}
 
+@media (max-width:600px){.wrap{padding:0 16px}}
 @media (max-width:860px){
   .grid{grid-template-columns:1fr}
   .cell.l{border-right:0}
@@ -311,7 +313,7 @@ footer{border-top:1px solid var(--line);padding:18px 0 28px;font-size:14.5px;col
   </div>
 </section>
 
-<footer>The plant, hosts and traffic on this page are invented and simulated in your browser. No real control system is connected. The recorded verdicts are the ones SentinelOT returned in its evaluation run on 6 October 2026. Level 5, the firewalls, the ERP server, the robot and the conveyor motor were added for this demo and aren’t in the project’s asset file.</footer>
+<footer><p>The plant, hosts and traffic on this page are invented and simulated in your browser. No real control system is connected. The recorded verdicts are the ones SentinelOT returned in its evaluation run on 6 October 2026. Level 5, the firewalls, the ERP server, the robot and the conveyor motor were added for this demo and aren’t in the project’s asset file.</p></footer>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -826,6 +828,7 @@ function build(){
       var l=labs[i];if(l.el.style.display==="none")continue;
       v.copy(l.pos).project(camera);
       var x=(v.x*0.5+0.5)*w,y=(-v.y*0.5+0.5)*h;
+      if(l.cls==="level"){if(!l.w)l.w=l.el.offsetWidth;x=Math.max(x,l.w/2+4)}
       l.el.style.transform="translate("+x.toFixed(1)+"px,"+y.toFixed(1)+"px)"+(l.cls==="level"?" translate(-50%,-50%)":" translate(-50%,-140%)");
     }
     requestAnimationFrame(frame);
