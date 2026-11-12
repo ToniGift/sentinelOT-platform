@@ -36,7 +36,7 @@ The planned lab is LabShock. The test has not been run yet. Expected verdicts fo
 
 ### Showcase page
 
-`static/sentinelot.html`, served at `/sentinelot.html`. It shows a 3D plant, a live console on simulated Modbus/TCP traffic, three simulated attacks, and eight recorded alerts with the verdicts from the evaluation run on 6 October 2026. Everything simulated is labelled on the page. Some items on the page (Level 5, the firewalls, the ERP server, the robot and the conveyor motor) were added for the demo and are not in `data/assets.json`.
+`static/sentinelot.html`, served at `/sentinelot.html`. It shows a 3D plant, a live console on simulated Modbus/TCP traffic, three simulated attacks, and eight recorded alerts with the verdicts from the evaluation run on 6 October 2026. Everything simulated is labelled on the page. Some items on the page (Level 5, the firewalls, the ERP server, the MES server, the OT domain controller, the DCS, the robot and the conveyor motor) were added for the demo and are not in `data/assets.json`.
 
 ### AlarmOps
 
