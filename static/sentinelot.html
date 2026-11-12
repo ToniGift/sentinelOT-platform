@@ -120,6 +120,14 @@ a{color:inherit}
 .detail p{margin:0 0 10px;font-size:16px}
 .badge{display:inline-block;font-weight:600;font-size:15px;padding:2px 9px;border-radius:3px;color:var(--on-alarm)}
 .badge.v-investigate,.badge.v-likely_benign{color:var(--well)}
+.badge.g-pass{background:var(--live);color:var(--well)}
+.badge.g-block{background:var(--alarm)}
+.badge.g-rec{background:var(--mute);color:var(--well)}
+.lims{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px}
+.lims label{display:grid;gap:3px;font-size:14.5px;color:var(--mute)}
+.lims label.wide{grid-column:1/-1}
+.lims input,.lims select{font:inherit;font-size:16px;color:var(--ink);background:var(--well);border:1px solid var(--line);border-radius:3px;padding:7px 9px;min-width:0;width:100%;box-sizing:border-box}
+.limbtns{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
 
 /* process */
 .tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
@@ -172,7 +180,7 @@ a{color:inherit}
 footer{border-top:1px solid var(--line);padding:18px 0 28px;font-size:14.5px;color:var(--mute)}
 footer p{margin:0;max-width:66ch}
 
-@media (max-width:600px){.wrap{padding:0 16px}}
+@media (max-width:600px){.wrap{padding:0 16px}.tabs button{font-size:14.5px;padding:9px 4px}}
 @media (max-width:860px){
   .grid{grid-template-columns:1fr}
   .cell.l{border-right:0}
@@ -227,6 +235,7 @@ footer p{margin:0;max-width:66ch}
       <div class="tabs">
         <button type="button" id="tab-live" aria-pressed="true">Live attack</button>
         <button type="button" id="tab-rec" aria-pressed="false">Recorded alerts</button>
+        <button type="button" id="tab-lim" aria-pressed="false">Alarm limits</button>
       </div>
 
       <div class="pane" id="pane-live">
@@ -245,6 +254,22 @@ footer p{margin:0;max-width:66ch}
         <p class="note">Alerts from the SentinelOT evaluation run, with the verdict its AI triage returned.</p>
         <div class="recs" id="recs"></div>
         <div class="detail" id="detail" aria-live="polite"><p class="empty">Pick an alert to trace it through the plant.</p></div>
+      </div>
+
+      <div class="pane" id="pane-lim" hidden>
+        <p class="note">Simulated. AlarmOps replays a generated, fault-labelled sensor dataset against the alarm limits you enter, and blocks a change that would lose too much detection. Nothing is sent to a plant.</p>
+        <div class="lims">
+          <label class="wide">Tag<select id="lim-tag"></select></label>
+          <label>Low low<input id="lim-low_low" type="number" step="any" inputmode="decimal"></label>
+          <label>Low<input id="lim-low" type="number" step="any" inputmode="decimal"></label>
+          <label>High<input id="lim-high" type="number" step="any" inputmode="decimal"></label>
+          <label>High high<input id="lim-high_high" type="number" step="any" inputmode="decimal"></label>
+        </div>
+        <div class="limbtns">
+          <button type="button" class="btn" id="lim-check">Check change</button>
+          <button type="button" class="btn ghost" id="lim-reset">Reset to current limits</button>
+        </div>
+        <div class="detail" id="lim-out" aria-live="polite"><p class="empty">Loading the baseline replay…</p></div>
       </div>
     </div>
 
@@ -314,7 +339,7 @@ footer p{margin:0;max-width:66ch}
   </div>
 </section>
 
-<footer><p>The plant, hosts and traffic on this page are invented and simulated in your browser. No real control system is connected. The recorded verdicts are the ones SentinelOT returned in its evaluation run on 6 October 2026. Level 5, the firewalls, the ERP server, the MES server, the OT domain controller, the DCS (controller, server and operator station), the robot and the conveyor motor were added for this demo and aren’t in the project’s asset file.</p></footer>
+<footer><p>The plant, hosts and traffic on this page are invented and simulated in your browser. No real control system is connected. The recorded verdicts are the ones SentinelOT returned in its evaluation run on 6 October 2026. Level 5, the firewalls, the ERP server, the MES server, the OT domain controller, the DCS (DCS-CTRL-01, its server and operator station), the utilities tank, the robot and the conveyor motor were added for this demo and aren’t in the project’s asset file. The Alarm limits results come from replaying a generated dataset with labelled faults. They are not measurements from a plant.</p></footer>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -348,10 +373,11 @@ var ASSETS=[
  ["10.10.30.10","SCADA-SRV-01","SCADA server","2","high","SCADA server with OPC UA endpoint and DNP3 master","server"],
  ["10.10.30.20","DCS-OPS-01","DCS operator station","2","high","Operator console for the plant utilities: steam, compressed air and chilled water","ws"],
  ["10.10.30.21","DCS-SRV-01","DCS server","2","high","DCS application server: holds the control configuration, alarms and trends for the utilities","server"],
+ ["10.10.20.40","DCS-CTRL-01","DCS controller","1","high","Redundant controller pair running the utilities control loops. Reads the level of TANK-Utility-1","dcs"],
  ["10.10.20.11","PLC-Line1","PLC","1","high","Packaging line 1 control","plc"],
  ["10.10.20.12","PLC-Line2","PLC","1","high","Packaging line 2 control","plc"],
- ["10.10.20.40","DCS-CTRL-01","DCS controller","1","high","Redundant controller pair running the utilities control loops","dcs"],
  ["10.10.20.30","RTU-Outstation-3","RTU","1","high","Utility metering outstation, reports to SCADA over DNP3","rtu"],
+ ["","TANK-Utility-1","Utilities tank","0","medium","Chilled-water buffer tank. Its level transmitter is wired to DCS-CTRL-01","tank"],
  ["10.10.10.12","IO-Module-Line2","Remote I/O module","0","high","EtherNet/IP remote I/O for PLC-Line2","io"],
  ["10.10.10.21","VFD-Conveyor-1","Variable frequency drive","0","medium","Drives the line 1 conveyor motor","vfd"],
  ["","MOTOR-Conveyor-1","Conveyor motor","0","medium","Line 1 conveyor motor, driven by VFD-Conveyor-1","motor"],
@@ -365,8 +391,10 @@ var FWS=[
  ["FW-Cell-1","2","1","Line 1 cell firewall. Only HMI-Line1, the historian and the engineering workstation may reach PLC-Line1"]
 ].map(function(f){return {ip:"",name:f[0],type:"Firewall",level:f[1],crit:"high",fn:f[3],kind:"fw",
   zone:"Between level "+f[1]+" and level "+f[2],fy:(levelY[f[1]]+levelY[f[2]])/2,ya:levelY[f[1]],yb:levelY[f[2]]}});
-function traceY(ip,unk){var a=byIp[ip];return a?levelY[a.level]:levelY[unk.level]}
-function crossed(tr){var y1=traceY(tr.src,tr.unk),y2=traceY(tr.dst,tr.unk),lo=Math.min(y1,y2),hi=Math.max(y1,y2);
+/* a trace names its ends by address (src, dst) or, for items with no address, by asset (srcA, dstA) */
+function traceEnd(tr,which){return tr[which+"A"]||byIp[tr[which]]||null}
+function traceY(tr,which){var a=traceEnd(tr,which);return a?levelY[a.level]:levelY[tr.unk.level]}
+function crossed(tr){var y1=traceY(tr,"src"),y2=traceY(tr,"dst"),lo=Math.min(y1,y2),hi=Math.max(y1,y2);
   return FWS.filter(function(f){return f.fy>lo&&f.fy<hi})}
 var byIp={},byName={};ASSETS.forEach(function(a){if(a.ip)byIp[a.ip]=a;byName[a.name]=a});
 
@@ -587,8 +615,10 @@ document.querySelectorAll(".atk").forEach(function(b){
 function showTab(which){
   $("#tab-live").setAttribute("aria-pressed",which==="live"?"true":"false");
   $("#tab-rec").setAttribute("aria-pressed",which==="rec"?"true":"false");
-  $("#pane-live").hidden=which!=="live";$("#pane-rec").hidden=which!=="rec";
+  $("#tab-lim").setAttribute("aria-pressed",which==="lim"?"true":"false");
+  $("#pane-live").hidden=which!=="live";$("#pane-rec").hidden=which!=="rec";$("#pane-lim").hidden=which!=="lim";
 }
+$("#tab-lim").addEventListener("click",function(){showTab("lim")});
 $("#tab-live").addEventListener("click",function(){showTab("live")});
 $("#tab-rec").addEventListener("click",function(){showTab("rec")});
 function hostName(ip,a){return byIp[ip]?byIp[ip].name+" ("+ip+")":(a.unk?a.unk.label:"Unknown host")+" ("+ip+")"}
@@ -614,9 +644,89 @@ function showCard(s){
   if(!s){c.hidden=true;return}
   var x=el("button","x","×");x.type="button";x.setAttribute("aria-label","Close");x.addEventListener("click",function(){showCard(null)});
   c.appendChild(x);c.appendChild(el("h3",null,s.name));c.appendChild(el("p",null,s.fn+"."));
-  c.appendChild(factsEl([["Type",s.type],["Address",s.ip||"None, wired to the drive"],["Zone",s.zone],["Criticality",s.crit.charAt(0).toUpperCase()+s.crit.slice(1)]]));
+  c.appendChild(factsEl([["Type",s.type],["Address",s.ip||(s.kind==="tank"?"None, wired to DCS-CTRL-01":"None, wired to the drive")],["Zone",s.zone],["Criticality",s.crit.charAt(0).toUpperCase()+s.crit.slice(1)]]));
   c.hidden=false;
 }
+
+/* ================= alarm limits (AlarmOps) ================= */
+/* Saved copy of GET /api/alarmops/baseline, shown when the page is opened without the platform server. */
+var LIM_RECORDED={dataset:{samples:6000,faults:21,source:"alarmops"},
+  baseline:{detection_rate:1,faults_detected:21,faults_total:21,false_alarm_count:0},
+  tags:{tank_level:{unit:"percent",low_low:10,low:20,high:80,high_high:90,faults_total:7,faults_detected:7,false_alarms:0},
+    pump_pressure:{unit:"bar",low_low:2,low:3,high:7,high_high:8,faults_total:7,faults_detected:7,false_alarms:0},
+    flow_rate:{unit:"m3/h",low_low:60,low:80,high:160,high_high:180,faults_total:7,faults_detected:7,false_alarms:0}}};
+/* which equipment a tag belongs to: [measured at, controlled by] */
+var TAG_ASSETS={tank_level:["TANK-Utility-1","DCS-CTRL-01"]};
+var LIM_KEYS=["low_low","low","high","high_high"],LIM_API="/api/alarmops/";
+var LIM={data:null,live:false,trace:null,run:0};
+function pct(x){return (x*100).toFixed(1)+"%"}
+function limTag(){return $("#lim-tag").value}
+function limFill(){
+  var t=LIM.data.tags[limTag()];
+  LIM_KEYS.forEach(function(k){$("#lim-"+k).value=t[k]});
+}
+function limSetTrace(tag,on){
+  var m=TAG_ASSETS[tag];
+  LIM.trace=(on&&m)?{srcA:byName[m[0]],dstA:byName[m[1]],cvar:"--warn"}:null;
+  if(scene3d)scene3d.update();
+}
+function limDataset(d){return "Simulated dataset: "+d.samples+" samples, "+d.faults+" labelled faults."}
+function limShowBaseline(){
+  var o=$("#lim-out"),d=LIM.data,b=d.baseline,t=d.tags[limTag()];o.textContent="";
+  o.appendChild(el("span","badge g-rec",LIM.live?"Current limits":"Recorded"));
+  o.appendChild(el("h3",null,"Baseline replay"));
+  o.appendChild(factsEl([["Detection",pct(b.detection_rate)+" ("+b.faults_detected+" of "+b.faults_total+" faults)"],
+    ["False alarms",String(b.false_alarm_count)],
+    [limTag(),t.faults_detected+" of "+t.faults_total+" faults, "+t.false_alarms+" false alarms"]]));
+  o.appendChild(el("p",null,LIM.live?limDataset(d.dataset)+" Edit the limits and press Check change."
+    :"Recorded result, saved from the baseline replay. "+limDataset(d.dataset)+" Checking your own limits needs the platform server, which isn’t running in this view."));
+}
+function limShowResult(r){
+  var o=$("#lim-out"),u=r.unit?" "+r.unit:"";o.textContent="";
+  o.appendChild(el("span","badge "+(r.passed?"g-pass":"g-block"),r.passed?"Passes the gate":"Blocked"));
+  o.appendChild(el("h3",null,r.tag+": "+LIM_KEYS.map(function(k){return r.limits[k]}).join(" / ")+u));
+  var rows=[["Detection",pct(r.base.detection_rate)+" to "+pct(r.head.detection_rate)+" ("+r.head.faults_detected+" of "+r.head.faults_total+" faults)"],
+    ["False alarms",r.base.false_alarm_count+" to "+r.head.false_alarm_count]];
+  if(r.violations.length)rows.push(["Why",r.violations.join("; ")]);
+  if(r.newly_missed.length)rows.push(["Would miss",r.newly_missed.map(function(f){return f.fault_id+" ("+f.type+")"}).join(", ")]);
+  if(r.newly_detected.length)rows.push(["Newly detected",r.newly_detected.map(function(f){return f.fault_id}).join(", ")]);
+  o.appendChild(factsEl(rows));
+  o.appendChild(el("p",null,(r.passed?"In the AlarmOps pipeline this change would go on to staging and wait for a person to approve it. "
+    :"In the AlarmOps pipeline this change would stop at review. ")+limDataset(r.dataset)));
+}
+function limError(msg){var o=$("#lim-out");o.textContent="";o.appendChild(el("p","empty",msg))}
+function limCheck(){
+  if(!LIM.live)return;
+  var q="tag="+encodeURIComponent(limTag()),my=++LIM.run;
+  for(var i=0;i<LIM_KEYS.length;i++){
+    var v=$("#lim-"+LIM_KEYS[i]).value.trim();
+    if(v===""||!isFinite(Number(v))){limError("Enter a number for every limit.");return}
+    q+="&"+LIM_KEYS[i]+"="+encodeURIComponent(v);
+  }
+  $("#lim-check").disabled=true;limError("Replaying the dataset…");
+  fetch(LIM_API+"compare?"+q).then(function(res){return res.json().then(function(j){return {ok:res.ok,j:j}})})
+    .then(function(x){
+      if(my!==LIM.run)return;
+      if(!x.ok){limSetTrace(limTag(),false);limError(typeof x.j.detail==="string"?"Not checked: "+x.j.detail+".":"The check failed.");return}
+      limShowResult(x.j);limSetTrace(x.j.tag,!x.j.passed);
+    }).catch(function(){if(my===LIM.run)limError("The platform server didn’t answer. Try again.")})
+    .then(function(){$("#lim-check").disabled=!LIM.live});
+}
+function limReset(){LIM.run++;limFill();limSetTrace(limTag(),false);limShowBaseline()}
+function limInit(d,live){
+  LIM.data=d;LIM.live=live;
+  var sel=$("#lim-tag");sel.textContent="";
+  Object.keys(d.tags).forEach(function(t){var o=el("option",null,t+(d.tags[t].unit?" ("+d.tags[t].unit+")":""));o.value=t;sel.appendChild(o)});
+  $("#lim-check").disabled=!live;
+  LIM_KEYS.forEach(function(k){$("#lim-"+k).disabled=!live});
+  limReset();
+}
+$("#lim-tag").addEventListener("change",limReset);
+$("#lim-check").addEventListener("click",limCheck);
+$("#lim-reset").addEventListener("click",limReset);
+(location.protocol==="file:"?Promise.reject():fetch(LIM_API+"baseline").then(function(r){if(!r.ok)throw 0;return r.json()}))
+  .then(function(d){if(!d||!d.tags)throw 0;limInit(d,true)})
+  .catch(function(){limInit(LIM_RECORDED,false)});
 
 /* ================= 3D ================= */
 function build(){
@@ -690,6 +800,9 @@ function build(){
     db:function(g,a){[0.13,0.43,0.73].forEach(function(y){put(g,a,C(0.38,0.26,22),0,y,0)});return 0.86},
     plc:function(g,a){rail(g,a,4,[0.62,0.5,0.5,0.5]);put(g,a,B(0.12,0.14,0.02),-0.36,0.5,0.21,scrMat);return 0.68},
     io:function(g,a){rail(g,a,3,[0.34,0.34,0.34]);return 0.4},
+    tank:function(g,a){
+      put(g,a,C(0.4,0.95,24),0,0.55,0);put(g,a,C(0.44,0.08,24),0,0.04,0);put(g,a,C(0.3,0.08,24),0,1.06,0);
+      put(g,a,B(0.06,0.7,0.02),0,0.55,0.41,scrMat);return 1.1},
     dcs:function(g,a){
       put(g,a,B(0.9,1.2,0.5),0,0.6,0);
       [-0.2,0.2].forEach(function(x){put(g,a,B(0.3,0.42,0.02),x,0.82,0.26,scrMat)});
@@ -715,6 +828,13 @@ function build(){
       a.lab=addLabel(a.name,a.top,"asset");
     });
   });
+  /* signal cable from the tank's level transmitter up to its DCS controller */
+  (function(){
+    var a=byName["TANK-Utility-1"].top,b=byName["DCS-CTRL-01"].center.clone();b.y=levelY["1"];
+    var len=a.distanceTo(b),wire=new THREE.Mesh(C(0.03,len,8),pipeMat);
+    wire.position.copy(a).add(b).multiplyScalar(0.5);
+    wire.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),b.clone().sub(a).normalize());scene.add(wire);
+  })();
   /* firewalls sit between levels, on the conduit that joins them */
   FWS.forEach(function(f){
     var x=-3.3,z=-1.5;f.mat=new THREE.MeshLambertMaterial();
@@ -746,12 +866,12 @@ function build(){
     var base=css("--box"),ink=css("--ink"),alarmCol=css("--alarm");
     ALL.forEach(function(a){a.mat.color.set(a===selAsset?ink:(a.kind==="fw"?css("--mute"):base));a.lab.el.classList.toggle("hot",a===selAsset)});
     if(!st.robot){byName["ROBOT-Pick-1"].mat.color.set(alarmCol);byName["ROBOT-Pick-1"].lab.el.classList.add("hot")}
-    var tr=active?active.trace:(selRec?selRec.trace:null);
+    var tr=active?active.trace:(selRec?selRec.trace:(LIM.trace||null));
     if(tr){
-      var col=css(tr.cvar),dst=byIp[tr.dst],from,to=dst.center.clone();
+      var col=css(tr.cvar),dst=traceEnd(tr,"dst"),src=traceEnd(tr,"src"),from,to=dst.center.clone();
       dst.mat.color.set(col);dst.lab.el.classList.add("hot");
       crossed(tr).forEach(function(f){f.mat.color.set(col);f.lab.el.classList.add("hot")});
-      if(byIp[tr.src]){var src=byIp[tr.src];src.mat.color.set(col);src.lab.el.classList.add("hot");from=src.center.clone()}
+      if(src){src.mat.color.set(col);src.lab.el.classList.add("hot");from=src.center.clone()}
       else{
         var y=levelY[tr.unk.level],gp=new THREE.Vector3(SLAB_W/2-0.8,y+0.31,SLAB_D/2-0.75);
         var ghost=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(0.95,0.62,0.95)),ghostMat);
