@@ -7,6 +7,7 @@ control network, and nothing is stored: a "change" exists only in the reply.
 This is the only module that imports alarmops. The library is used from
 alarmops/src as imported (see NOTICE.md); it is not modified.
 """
+import json
 import math
 import os
 import sys
@@ -37,8 +38,14 @@ _plant = None
 
 
 def _root():
-    """Folder holding alarms.yaml, gate.yaml and data/. Read at first use."""
-    return Path(os.getenv("ALARM_LIMITS_ROOT", str(ALARMOPS)))
+    """Folder holding alarms.yaml, gate.yaml and data/. Read at first use.
+
+    Default is plant/: the AlarmOps tags and dataset, unchanged, plus the
+    sealer and conveyor tags of the showcase plant. Set ALARM_LIMITS_ROOT to
+    alarmops to replay the original AlarmOps files instead.
+    """
+    p = Path(os.getenv("ALARM_LIMITS_ROOT", "plant"))
+    return p if p.is_absolute() else REPO / p
 
 
 class Plant:
@@ -55,6 +62,10 @@ class Plant:
             p = root / "data" / name
             self.logs[n] = load_log(p if p.exists()
                                     else ALARMOPS / "data" / name)
+        # tag -> [asset it is measured at, controller that reads it]
+        m = root / "tag_assets.json"
+        self.assets = json.loads(m.read_text(encoding="utf-8")) \
+            if m.exists() else {}
         self.cache = {}
 
     def dataset(self):
@@ -92,7 +103,8 @@ def baseline():
                      "deadband": r.deadband, "delay_samples": r.delay_samples,
                      "faults_total": s["faults_total"],
                      "faults_detected": s["faults_detected"],
-                     "false_alarms": s["false_alarms"]}
+                     "false_alarms": s["false_alarms"],
+                     "assets": p.assets.get(tag, [])}
     return {"simulated": True, "dataset": p.dataset(), "gate": p.gate,
             "baseline": _head(p.base), "tags": tags}
 
@@ -138,6 +150,7 @@ def compare(request: Request, tag: str = "tank_level"):
         _slots.release()
     res = evaluate(p.base, head, p.gate)
     out = {"simulated": True, "dataset": p.dataset(), "tag": tag,
+           "assets": p.assets.get(tag, []),
            "unit": cur.unit, "limits": vals,
            "current": {k: getattr(cur, k) for k in LIMIT_KEYS},
            "base": _head(p.base), "head": _head(head),

@@ -1,0 +1,7 @@
+{
+  "tank_level": ["TANK-Utility-1", "DCS-CTRL-01"],
+  "pump_pressure": ["PUMP-Utility-1", "PLC-Line2"],
+  "flow_rate": ["FLOW-Meter-1", "PLC-Line2"],
+  "sealer_temperature": ["SENSOR-GW-1", "PLC-Line1"],
+  "conveyor_speed": ["VFD-Conveyor-1", "PLC-Line1"]
+}
