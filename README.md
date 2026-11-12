@@ -13,7 +13,7 @@ This is a research prototype, not a production security tool.
 | Alert triage (five agents and code checks) | `triage/`, `static/index.html` | Working. Evaluated on synthetic alerts only |
 | Lab feeds (ELK adapter, passive Modbus sniffer) | `triage/lab_elk.py`, `triage/lab_sniffer.py` | Built and unit tested. Not yet run against a lab. No lab results exist |
 | Showcase page | `static/sentinelot.html` | Working. The plant and traffic on it are simulated in the browser |
-| AlarmOps (alarm-limit change control) | `alarmops/` | Working as a simulation, with its own page and tests. Its GitLab pipeline runs only in the original repository. Not yet linked to triage |
+| AlarmOps (alarm-limit change control) | `alarmops/`, `plant/`, `triage/alarm_limits.py` | Connected, simulated. The showcase page runs its replay and gate through `/api/alarmops/`. Its GitLab pipeline runs only in the original repository. No data passes between AlarmOps and triage |
 
 ## Modules
 
@@ -36,7 +36,7 @@ The planned lab is LabShock. The test has not been run yet. Expected verdicts fo
 
 ### Showcase page
 
-`static/sentinelot.html`, served at `/sentinelot.html`. It shows a 3D plant, a live console on simulated Modbus/TCP traffic, three simulated attacks, and eight recorded alerts with the verdicts from the evaluation run on 6 October 2026. Everything simulated is labelled on the page. Some items on the page (Level 5, the firewalls, the ERP server, the MES server, the OT domain controller, the DCS, the utilities tank, the robot and the conveyor motor) were added for the demo and are not in `data/assets.json`.
+`static/sentinelot.html`, served at `/sentinelot.html`. It shows a 3D plant, a live console on simulated Modbus/TCP traffic, three simulated attacks, eight recorded alerts with the verdicts from the evaluation run on 6 October 2026, and an "Alarm limits" tab that checks a limit change with AlarmOps. Everything simulated is labelled on the page. Some items on the page (Level 5, the firewalls, the ERP server, the MES server, the OT domain controller, the DCS, the utilities tank, pump and flow meter, the robot and the conveyor motor) were added for the demo and are not in `data/assets.json`.
 
 ### AlarmOps
 
@@ -48,7 +48,14 @@ What works here and what does not:
 
 - **Works:** the library, the replay and gate code, the web page with its "Try it yourself" lab, and the 86 tests.
 - **Runs only in the original repository:** the GitLab CI/CD pipeline (review, scan, staging, approval, monitoring). The pipeline file is in the folder but GitHub does not run it.
-- **Not built yet:** any link between AlarmOps and triage. They are two modules side by side.
+- **Not built:** any exchange of data between AlarmOps and triage. An attack is never sent to AlarmOps, and AlarmOps does not watch network traffic.
+
+#### How it is connected to the showcase page
+
+- `triage/alarm_limits.py` adds three read-only routes, `/api/alarmops/baseline`, `/compare` and `/monitor`. They call the AlarmOps rules, replay, gate and drift code from `alarmops/src`. Nothing is stored, and nothing is written to any control network.
+- `plant/` holds the alarm limits and the dataset those routes replay. It keeps the three AlarmOps tags and their data exactly as they are and adds two tags for packaging line 1: `sealer_temperature` and `conveyor_speed`. `plant/generate_dataset.py` runs the unchanged AlarmOps generator with the two extra tags, and `plant/tag_assets.json` maps each tag to equipment on the page.
+- The page's "Alarm limits" tab sends edited limits to `/compare` and shows the detection rate, the false alarms and whether the change passes or is blocked. A blocked change lights the equipment the tag belongs to. Opened without the server, the tab shows saved results labelled "Recorded" (refresh them with `python plant/save_page_copy.py`).
+- The link between the two halves is one limit. The simulated attack raises the sealer setpoint to 240 °C, and the alarm that catches it is the 190 °C high limit. The tab has a preset that widens that limit to 250 °C, which the gate blocks. The page shows only that the limit AlarmOps protects is the one that catches the attack.
 
 To pull later AlarmOps changes into this repository:
 
@@ -58,13 +65,35 @@ git subtree pull --prefix=alarmops https://github.com/ToniGift/AlarmOps main --s
 
 ## Results
 
-Measured on the hackathon version of the triage module, with synthetic alerts written with AI assistance (Claude), then reviewed and run by me:
+All numbers below come from synthetic alerts or simulated sensor data. There are no results from real or lab traffic yet. The numbers have two origins, kept apart here.
+
+### From the hackathon repositories
+
+**Triage**, measured on the hackathon version in [ToniGift/sentinelOT](https://github.com/ToniGift/sentinelOT), with synthetic alerts written with AI assistance (Claude), then reviewed and run by me:
 
 - **Fresh held-out set (10 scenarios, 3 runs each):** 29 of 30 verdicts correct, 28 of 30 technique choices acceptable
 - **Prompt injection:** 0 of 10 injected runs followed the hidden instruction
 - **Speed:** median 26 seconds per alert across 66 runs
 
-How the numbers were produced, and their limits, are on the [Evaluation](docs/EVALUATION.md) page. There are no results from real or lab traffic yet.
+How these were produced, and their limits, are on the [Evaluation](docs/EVALUATION.md) page. They were not re-measured in this repository.
+
+**AlarmOps**, measured in [ToniGift/AlarmOps](https://github.com/ToniGift/AlarmOps) on its own dataset (3 tags, 21 labelled faults). These are the numbers in `alarmops/README.md`, and `alarmops/` still reproduces them:
+
+- **Baseline limits:** 21 of 21 faults detected, 0 false alarms
+- **Tank limits widened to 88 / 95:** blocked, detection 100% to 81.0% (17 of 21)
+
+### From this repository
+
+**Alarm limits on the showcase plant**, measured here on the `plant/` dataset (5 tags, 35 labelled faults: the 21 above plus 7 each for the sealer temperature and the conveyor speed). The percentages differ from the AlarmOps ones because the same missed faults are counted out of 35, not 21:
+
+| Change | Result |
+|---|---|
+| Baseline limits | 35 of 35 faults detected, 0 false alarms |
+| Tank limits widened to 88 / 95 | Blocked. Detection 100% to 88.6% (31 of 35). The same four tank faults are missed |
+| Tank limits tightened to 75 / 88 | Passes. 35 of 35, 0 false alarms |
+| Sealer high limit widened from 190 to 250 °C (high high 205 to 265) | Blocked. Detection 100% to 85.7% (30 of 35). Five sealer faults are missed |
+
+`tests/test_alarm_limits.py` checks these numbers.
 
 ## Quick start
 
@@ -77,6 +106,8 @@ docker compose up --build
 ```
 
 Then open http://localhost for the triage interface, http://localhost/sentinelot.html for the showcase page and http://localhost:8080 for the AlarmOps page. Never commit `.env`.
+
+The Docker setup has not been run since the `app/` to `triage/` rename and the AlarmOps import, because the machine this was built on has no Docker. The app was started with the image's own command from a copy holding only the files the image includes, and it served the pages and `/api/alarmops/baseline`.
 
 To run the tests without Docker (the two suites run separately):
 
@@ -112,7 +143,7 @@ More on the [Run it yourself](docs/RUN_IT.md) page.
 ## What's next
 
 - **Lab run.** Fill in the lab inventory, run the planned attacks and compare the verdicts with the expected labels.
-- **AlarmOps and triage together.** AlarmOps is in the repository but the two modules do not talk to each other yet.
+- **AlarmOps and triage together.** They share the showcase page and one alarm limit, but no data passes between them yet.
 - **A shadow-mode trial,** with permission, on a company's past and already labelled alerts: an analyst's decision next to SentinelOT's, with nothing acted on.
 
 ## Origin and credits

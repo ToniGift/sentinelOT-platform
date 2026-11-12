@@ -180,7 +180,7 @@ a{color:inherit}
 footer{border-top:1px solid var(--line);padding:18px 0 28px;font-size:14.5px;color:var(--mute)}
 footer p{margin:0;max-width:66ch}
 
-@media (max-width:600px){.wrap{padding:0 16px}.tabs button{font-size:14.5px;padding:9px 4px}}
+@media (max-width:600px){.wrap{padding:0 16px}}
 @media (max-width:860px){
   .grid{grid-template-columns:1fr}
   .cell.l{border-right:0}
@@ -233,9 +233,9 @@ footer p{margin:0;max-width:66ch}
 
     <div class="cell">
       <div class="tabs">
-        <button type="button" id="tab-live" aria-pressed="true">Live attack</button>
-        <button type="button" id="tab-rec" aria-pressed="false">Recorded alerts</button>
-        <button type="button" id="tab-lim" aria-pressed="false">Alarm limits</button>
+        <button type="button" id="tab-live" aria-pressed="true" aria-label="Live attack">Live</button>
+        <button type="button" id="tab-rec" aria-pressed="false" aria-label="Recorded alerts">Recorded</button>
+        <button type="button" id="tab-lim" aria-pressed="false" aria-label="Alarm limits">Limits</button>
       </div>
 
       <div class="pane" id="pane-live">
@@ -258,6 +258,9 @@ footer p{margin:0;max-width:66ch}
 
       <div class="pane" id="pane-lim" hidden>
         <p class="note">Simulated. AlarmOps replays a generated, fault-labelled sensor dataset against the alarm limits you enter, and blocks a change that would lose too much detection. Nothing is sent to a plant.</p>
+        <div class="limbtns">
+          <button type="button" class="btn" id="lim-preset">Widen the sealer high limit to 250 °C</button>
+        </div>
         <div class="lims">
           <label class="wide">Tag<select id="lim-tag"></select></label>
           <label>Low low<input id="lim-low_low" type="number" step="any" inputmode="decimal"></label>
@@ -270,6 +273,7 @@ footer p{margin:0;max-width:66ch}
           <button type="button" class="btn ghost" id="lim-reset">Reset to current limits</button>
         </div>
         <div class="detail" id="lim-out" aria-live="polite"><p class="empty">Loading the baseline replay…</p></div>
+        <p class="note" style="margin-top:12px">The attack on the Live tab does not feed AlarmOps, and AlarmOps does not watch network traffic. This page only shows that the limit AlarmOps protects is the one that catches the attack.</p>
       </div>
     </div>
 
@@ -339,7 +343,7 @@ footer p{margin:0;max-width:66ch}
   </div>
 </section>
 
-<footer><p>The plant, hosts and traffic on this page are invented and simulated in your browser. No real control system is connected. The recorded verdicts are the ones SentinelOT returned in its evaluation run on 6 October 2026. Level 5, the firewalls, the ERP server, the MES server, the OT domain controller, the DCS (DCS-CTRL-01, its server and operator station), the utilities tank, the robot and the conveyor motor were added for this demo and aren’t in the project’s asset file. The Alarm limits results come from replaying a generated dataset with labelled faults. They are not measurements from a plant.</p></footer>
+<footer><p>The plant, hosts and traffic on this page are invented and simulated in your browser. No real control system is connected. The recorded verdicts are the ones SentinelOT returned in its evaluation run on 6 October 2026. Level 5, the firewalls, the ERP server, the MES server, the OT domain controller, the DCS (DCS-CTRL-01, its server and operator station), the utilities tank, pump and flow meter, the robot and the conveyor motor were added for this demo and aren’t in the project’s asset file. The Alarm limits results come from replaying a generated dataset with labelled faults. They are not measurements from a plant.</p></footer>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -378,10 +382,12 @@ var ASSETS=[
  ["10.10.20.12","PLC-Line2","PLC","1","high","Packaging line 2 control","plc"],
  ["10.10.20.30","RTU-Outstation-3","RTU","1","high","Utility metering outstation, reports to SCADA over DNP3","rtu"],
  ["","TANK-Utility-1","Utilities tank","0","medium","Chilled-water buffer tank. Its level transmitter is wired to DCS-CTRL-01","tank"],
- ["10.10.10.12","IO-Module-Line2","Remote I/O module","0","high","EtherNet/IP remote I/O for PLC-Line2","io"],
  ["10.10.10.21","VFD-Conveyor-1","Variable frequency drive","0","medium","Drives the line 1 conveyor motor","vfd"],
  ["","MOTOR-Conveyor-1","Conveyor motor","0","medium","Line 1 conveyor motor, driven by VFD-Conveyor-1","motor"],
  ["10.10.10.40","ROBOT-Pick-1","Pick-and-place robot","0","high","Packs line 1 product into cases, enabled by PLC-Line1","robot"],
+ ["10.10.10.12","IO-Module-Line2","Remote I/O module","0","high","EtherNet/IP remote I/O for PLC-Line2","io"],
+ ["","PUMP-Utility-1","Utilities pump","0","medium","Chilled-water circulation pump. Its pressure transmitter is wired to PLC-Line2","pump"],
+ ["","FLOW-Meter-1","Flow meter","0","medium","Chilled-water flow meter on the pump discharge. Wired to PLC-Line2","flow"],
  ["10.10.10.30","SENSOR-GW-1","Sensor gateway","0","medium","Modbus TCP gateway for the line 1 sealer temperature sensors","gw"]
 ].map(function(a){return {ip:a[0],name:a[1],type:a[2],level:a[3],crit:a[4],fn:a[5],kind:a[6],zone:"Level "+a[3]}});
 var FWS=[
@@ -397,6 +403,8 @@ function traceY(tr,which){var a=traceEnd(tr,which);return a?levelY[a.level]:leve
 function crossed(tr){var y1=traceY(tr,"src"),y2=traceY(tr,"dst"),lo=Math.min(y1,y2),hi=Math.max(y1,y2);
   return FWS.filter(function(f){return f.fy>lo&&f.fy<hi})}
 var byIp={},byName={};ASSETS.forEach(function(a){if(a.ip)byIp[a.ip]=a;byName[a.name]=a});
+/* field devices with no network address: [device, what its signal cable runs to] */
+var WIRED={"TANK-Utility-1":"DCS-CTRL-01","PUMP-Utility-1":"PLC-Line2","FLOW-Meter-1":"PLC-Line2"};
 
 var RECS=[
  {title:"Modbus write coil to PLC from an office PC",v:"escalate",p:"P1",t:"T0835",src:"10.10.50.7",dst:"10.10.20.11",
@@ -428,7 +436,7 @@ var WRITE_FC={5:1,6:1,15:1,16:1};
 var HI_SEAL=190,SP_NORMAL=160;
 var st={sp:SP_NORMAL,pv:159.7,rpm:1200,ppm:42,heater:1,conv:1,robot:1};
 var hist=[],queue=[],rows=[],tid=0x1A00,lastTid=0,step=0,ticks=0;
-var active=null,selRec=null,scan={addrs:[],frames:[]},runId=0,scene3d=null;
+var active=null,selRec=null,scan={addrs:[],frames:[]},runId=0,scene3d=null,curTab="live";
 
 var samplePromise=(window.claude&&typeof window.claude.use==="function")
   ? window.claude.use("sample").catch(function(){return null}) : Promise.resolve(null);
@@ -553,6 +561,13 @@ function paintAlarm(){
   box.appendChild(factsEl([["Time",a.time],["Source",a.src.ip+" ("+a.src.name+")"],["Target",a.target],["Rule",a.rule],["Crossed",fwNames(a.trace)]]));
   var ai=el("div","ai"),who=el("p","who",a.who),txt=el("p","text",a.note);who.id="ai-who";txt.id="ai-text";
   ai.appendChild(who);ai.appendChild(txt);box.appendChild(ai);
+  if(a.kind==="setpoint"){
+    /* the link to AlarmOps: one sentence and a jump to the blocked change. The attack itself is not sent to AlarmOps. */
+    var lk=el("div","ai");
+    lk.appendChild(el("p","text","The 190 °C high limit still fires because AlarmOps blocked the change that would have widened it."));
+    var jb=el("button","btn ghost ack","See the blocked change");jb.type="button";
+    jb.addEventListener("click",function(){showTab("lim");limPreset()});lk.appendChild(jb);box.appendChild(lk);
+  }
   var b=el("button","btn ack","Acknowledge and restore");b.type="button";b.addEventListener("click",restore);box.appendChild(b);
 }
 function restore(){
@@ -617,6 +632,7 @@ function showTab(which){
   $("#tab-rec").setAttribute("aria-pressed",which==="rec"?"true":"false");
   $("#tab-lim").setAttribute("aria-pressed",which==="lim"?"true":"false");
   $("#pane-live").hidden=which!=="live";$("#pane-rec").hidden=which!=="rec";$("#pane-lim").hidden=which!=="lim";
+  curTab=which;if(scene3d)scene3d.update();
 }
 $("#tab-lim").addEventListener("click",function(){showTab("lim")});
 $("#tab-live").addEventListener("click",function(){showTab("live")});
@@ -644,19 +660,14 @@ function showCard(s){
   if(!s){c.hidden=true;return}
   var x=el("button","x","×");x.type="button";x.setAttribute("aria-label","Close");x.addEventListener("click",function(){showCard(null)});
   c.appendChild(x);c.appendChild(el("h3",null,s.name));c.appendChild(el("p",null,s.fn+"."));
-  c.appendChild(factsEl([["Type",s.type],["Address",s.ip||(s.kind==="tank"?"None, wired to DCS-CTRL-01":"None, wired to the drive")],["Zone",s.zone],["Criticality",s.crit.charAt(0).toUpperCase()+s.crit.slice(1)]]));
+  c.appendChild(factsEl([["Type",s.type],["Address",s.ip||"None, wired to "+(WIRED[s.name]||"the drive")],["Zone",s.zone],["Criticality",s.crit.charAt(0).toUpperCase()+s.crit.slice(1)]]));
   c.hidden=false;
 }
 
 /* ================= alarm limits (AlarmOps) ================= */
-/* Saved copy of GET /api/alarmops/baseline, shown when the page is opened without the platform server. */
-var LIM_RECORDED={dataset:{samples:6000,faults:21,source:"alarmops"},
-  baseline:{detection_rate:1,faults_detected:21,faults_total:21,false_alarm_count:0},
-  tags:{tank_level:{unit:"percent",low_low:10,low:20,high:80,high_high:90,faults_total:7,faults_detected:7,false_alarms:0},
-    pump_pressure:{unit:"bar",low_low:2,low:3,high:7,high_high:8,faults_total:7,faults_detected:7,false_alarms:0},
-    flow_rate:{unit:"m3/h",low_low:60,low:80,high:160,high_high:180,faults_total:7,faults_detected:7,false_alarms:0}}};
-/* which equipment a tag belongs to: [measured at, controlled by] */
-var TAG_ASSETS={tank_level:["TANK-Utility-1","DCS-CTRL-01"]};
+/* Saved copies of GET /api/alarmops/baseline and of the sealer preset check, shown when the page is opened
+   without the platform server. Written by plant/save_page_copy.py; do not edit by hand. */
+var LIM_RECORDED={"baseline":{"simulated":true,"dataset":{"samples":6000,"faults":35,"source":"plant"},"gate":{"min_detection_rate":0.9,"max_detection_rate_drop":0.05,"max_false_alarms":3.0,"max_false_alarm_increase":2.0},"baseline":{"detection_rate":1.0,"faults_detected":35,"faults_total":35,"false_alarm_count":0},"tags":{"tank_level":{"unit":"percent","low_low":10.0,"low":20.0,"high":80.0,"high_high":90.0,"deadband":2.0,"delay_samples":3,"faults_total":7,"faults_detected":7,"false_alarms":0,"assets":["TANK-Utility-1","DCS-CTRL-01"]},"pump_pressure":{"unit":"bar","low_low":2.0,"low":3.0,"high":7.0,"high_high":8.0,"deadband":0.2,"delay_samples":2,"faults_total":7,"faults_detected":7,"false_alarms":0,"assets":["PUMP-Utility-1","PLC-Line2"]},"flow_rate":{"unit":"m3/h","low_low":60.0,"low":80.0,"high":160.0,"high_high":180.0,"deadband":3.0,"delay_samples":3,"faults_total":7,"faults_detected":7,"false_alarms":0,"assets":["FLOW-Meter-1","PLC-Line2"]},"sealer_temperature":{"unit":"°C","low_low":100.0,"low":120.0,"high":190.0,"high_high":205.0,"deadband":2.0,"delay_samples":3,"faults_total":7,"faults_detected":7,"false_alarms":0,"assets":["SENSOR-GW-1","PLC-Line1"]},"conveyor_speed":{"unit":"rpm","low_low":600.0,"low":900.0,"high":1500.0,"high_high":1650.0,"deadband":20.0,"delay_samples":3,"faults_total":7,"faults_detected":7,"false_alarms":0,"assets":["VFD-Conveyor-1","PLC-Line1"]}}},"preset":{"simulated":true,"dataset":{"samples":6000,"faults":35,"source":"plant"},"tag":"sealer_temperature","assets":["SENSOR-GW-1","PLC-Line1"],"unit":"°C","limits":{"low_low":100.0,"low":120.0,"high":250.0,"high_high":265.0},"current":{"low_low":100.0,"low":120.0,"high":190.0,"high_high":205.0},"base":{"detection_rate":1.0,"faults_detected":35,"faults_total":35,"false_alarm_count":0},"head":{"detection_rate":0.8571,"faults_detected":30,"faults_total":35,"false_alarm_count":0},"passed":false,"violations":["detection rate 85.7% is below the minimum 90.0%","detection rate fell by 14.3%, more than the allowed 5.0%"],"newly_missed":[{"fault_id":"F22","tag":"sealer_temperature","type":"spike","start":896,"end":901},{"fault_id":"F24","tag":"sealer_temperature","type":"drift","start":2453,"end":2562},{"fault_id":"F25","tag":"sealer_temperature","type":"spike","start":3308,"end":3313},{"fault_id":"F26","tag":"sealer_temperature","type":"spike","start":4115,"end":4120},{"fault_id":"F28","tag":"sealer_temperature","type":"stuck","start":5656,"end":5695}],"newly_detected":[]}};
 var LIM_KEYS=["low_low","low","high","high_high"],LIM_API="/api/alarmops/";
 var LIM={data:null,live:false,trace:null,run:0};
 function pct(x){return (x*100).toFixed(1)+"%"}
@@ -666,8 +677,9 @@ function limFill(){
   LIM_KEYS.forEach(function(k){$("#lim-"+k).value=t[k]});
 }
 function limSetTrace(tag,on){
-  var m=TAG_ASSETS[tag];
-  LIM.trace=(on&&m)?{srcA:byName[m[0]],dstA:byName[m[1]],cvar:"--warn"}:null;
+  /* a tag's equipment comes from plant/tag_assets.json: [measured at, read by] */
+  var t=LIM.data.tags[tag],m=t&&t.assets;
+  LIM.trace=(on&&m&&byName[m[0]]&&byName[m[1]])?{srcA:byName[m[0]],dstA:byName[m[1]],cvar:"--warn"}:null;
   if(scene3d)scene3d.update();
 }
 function limDataset(d){return "Simulated dataset: "+d.samples+" samples, "+d.faults+" labelled faults."}
@@ -681,9 +693,9 @@ function limShowBaseline(){
   o.appendChild(el("p",null,LIM.live?limDataset(d.dataset)+" Edit the limits and press Check change."
     :"Recorded result, saved from the baseline replay. "+limDataset(d.dataset)+" Checking your own limits needs the platform server, which isn’t running in this view."));
 }
-function limShowResult(r){
+function limShowResult(r,recorded){
   var o=$("#lim-out"),u=r.unit?" "+r.unit:"";o.textContent="";
-  o.appendChild(el("span","badge "+(r.passed?"g-pass":"g-block"),r.passed?"Passes the gate":"Blocked"));
+  o.appendChild(el("span","badge "+(r.passed?"g-pass":"g-block"),(r.passed?"Passes the gate":"Blocked")+(recorded?" (recorded)":"")));
   o.appendChild(el("h3",null,r.tag+": "+LIM_KEYS.map(function(k){return r.limits[k]}).join(" / ")+u));
   var rows=[["Detection",pct(r.base.detection_rate)+" to "+pct(r.head.detection_rate)+" ("+r.head.faults_detected+" of "+r.head.faults_total+" faults)"],
     ["False alarms",r.base.false_alarm_count+" to "+r.head.false_alarm_count]];
@@ -692,7 +704,17 @@ function limShowResult(r){
   if(r.newly_detected.length)rows.push(["Newly detected",r.newly_detected.map(function(f){return f.fault_id}).join(", ")]);
   o.appendChild(factsEl(rows));
   o.appendChild(el("p",null,(r.passed?"In the AlarmOps pipeline this change would go on to staging and wait for a person to approve it. "
-    :"In the AlarmOps pipeline this change would stop at review. ")+limDataset(r.dataset)));
+    :"In the AlarmOps pipeline this change would stop at review. ")+limDataset(r.dataset)
+    +(recorded?" Recorded result, saved from the platform server, which isn’t running in this view.":"")));
+}
+/* the one change this page ties to the live attack: sealer high 190 to 250 °C (high high moves to 265 so the order stays valid) */
+var LIM_PRESET={tag:"sealer_temperature",high:250,high_high:265};
+function limPreset(){
+  if(!LIM.data.tags[LIM_PRESET.tag])return;
+  LIM.run++;$("#lim-tag").value=LIM_PRESET.tag;limFill();
+  $("#lim-high").value=LIM_PRESET.high;$("#lim-high_high").value=LIM_PRESET.high_high;
+  if(LIM.live){limCheck();return}
+  limShowResult(LIM_RECORDED.preset,true);limSetTrace(LIM_PRESET.tag,true);
 }
 function limError(msg){var o=$("#lim-out");o.textContent="";o.appendChild(el("p","empty",msg))}
 function limCheck(){
@@ -724,9 +746,10 @@ function limInit(d,live){
 $("#lim-tag").addEventListener("change",limReset);
 $("#lim-check").addEventListener("click",limCheck);
 $("#lim-reset").addEventListener("click",limReset);
+$("#lim-preset").addEventListener("click",limPreset);
 (location.protocol==="file:"?Promise.reject():fetch(LIM_API+"baseline").then(function(r){if(!r.ok)throw 0;return r.json()}))
   .then(function(d){if(!d||!d.tags)throw 0;limInit(d,true)})
-  .catch(function(){limInit(LIM_RECORDED,false)});
+  .catch(function(){limInit(LIM_RECORDED.baseline,false)});
 
 /* ================= 3D ================= */
 function build(){
@@ -803,6 +826,16 @@ function build(){
     tank:function(g,a){
       put(g,a,C(0.4,0.95,24),0,0.55,0);put(g,a,C(0.44,0.08,24),0,0.04,0);put(g,a,C(0.3,0.08,24),0,1.06,0);
       put(g,a,B(0.06,0.7,0.02),0,0.55,0.41,scrMat);return 1.1},
+    pump:function(g,a){
+      put(g,a,B(0.9,0.08,0.5),0,0.04,0);
+      var m=put(g,a,C(0.2,0.5,18),-0.18,0.32,0);m.rotation.z=Math.PI/2;
+      var v=put(g,a,C(0.27,0.2,20),0.24,0.32,0);v.rotation.z=Math.PI/2;
+      put(g,a,C(0.07,0.3,10),0.24,0.66,0);return 0.82},
+    flow:function(g,a){
+      var p=put(g,a,C(0.11,0.9,14),0,0.3,0);p.rotation.z=Math.PI/2;
+      [-0.4,0.4].forEach(function(x){var f=put(g,a,C(0.18,0.05,16),x,0.3,0);f.rotation.z=Math.PI/2});
+      put(g,a,B(0.08,0.2,0.08),0,0.5,0);put(g,a,B(0.3,0.24,0.2),0,0.7,0);put(g,a,B(0.2,0.12,0.02),0,0.7,0.11,scrMat);
+      put(g,a,B(0.1,0.19,0.1),-0.35,0.095,0);put(g,a,B(0.1,0.19,0.1),0.35,0.095,0);return 0.82},
     dcs:function(g,a){
       put(g,a,B(0.9,1.2,0.5),0,0.6,0);
       [-0.2,0.2].forEach(function(x){put(g,a,B(0.3,0.42,0.02),x,0.82,0.26,scrMat)});
@@ -821,20 +854,20 @@ function build(){
     a.center=new THREE.Vector3(x,y+top/2,0);a.top=new THREE.Vector3(x,y+top,0);
   }
   LEVELS.forEach(function(l){
-    var group=ASSETS.filter(function(a){return a.level===l.id}),gap=Math.min(2.3,7.2/Math.max(1,group.length-1));
+    var group=ASSETS.filter(function(a){return a.level===l.id}),gap=Math.min(2.3,7.8/Math.max(1,group.length-1));
     group.forEach(function(a,i){
       var x=(i-(group.length-1)/2)*gap,y=levelY[l.id];
       if(a.kind==="robot")makeRobot(a,x,y);else if(a.kind==="motor")makeMotor(a,x,y);else makeShape(a,x,y);
       a.lab=addLabel(a.name,a.top,"asset");
     });
   });
-  /* signal cable from the tank's level transmitter up to its DCS controller */
-  (function(){
-    var a=byName["TANK-Utility-1"].top,b=byName["DCS-CTRL-01"].center.clone();b.y=levelY["1"];
+  /* signal cables from the field devices up to the controller that reads them */
+  Object.keys(WIRED).forEach(function(n){
+    var a=byName[n].top,b=byName[WIRED[n]].center.clone();b.y=levelY[byName[WIRED[n]].level];
     var len=a.distanceTo(b),wire=new THREE.Mesh(C(0.03,len,8),pipeMat);
     wire.position.copy(a).add(b).multiplyScalar(0.5);
     wire.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),b.clone().sub(a).normalize());scene.add(wire);
-  })();
+  });
   /* firewalls sit between levels, on the conduit that joins them */
   FWS.forEach(function(f){
     var x=-3.3,z=-1.5;f.mat=new THREE.MeshLambertMaterial();
@@ -866,7 +899,8 @@ function build(){
     var base=css("--box"),ink=css("--ink"),alarmCol=css("--alarm");
     ALL.forEach(function(a){a.mat.color.set(a===selAsset?ink:(a.kind==="fw"?css("--mute"):base));a.lab.el.classList.toggle("hot",a===selAsset)});
     if(!st.robot){byName["ROBOT-Pick-1"].mat.color.set(alarmCol);byName["ROBOT-Pick-1"].lab.el.classList.add("hot")}
-    var tr=active?active.trace:(selRec?selRec.trace:(LIM.trace||null));
+    /* the Limits tab shows its own path; the other tabs show the alarm or the picked alert */
+    var tr=(curTab==="lim"&&LIM.trace)?LIM.trace:(active?active.trace:(selRec?selRec.trace:null));
     if(tr){
       var col=css(tr.cvar),dst=traceEnd(tr,"dst"),src=traceEnd(tr,"src"),from,to=dst.center.clone();
       dst.mat.color.set(col);dst.lab.el.classList.add("hot");
