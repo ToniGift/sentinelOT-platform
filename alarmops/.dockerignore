@@ -1,0 +1,9 @@
+.git
+.venv
+__pycache__
+*.pyc
+out
+deploy
+tests
+reports
+*.zip

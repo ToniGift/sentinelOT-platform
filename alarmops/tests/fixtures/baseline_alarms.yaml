@@ -1,0 +1,27 @@
+# AlarmOps baseline alarm rules (SIMULATION - not for real plant use).
+# Limits must satisfy: low_low < low < high < high_high
+tags:
+  tank_level:
+    unit: percent
+    low_low: 10
+    low: 20
+    high: 80
+    high_high: 90
+    deadband: 2
+    delay_samples: 3
+  pump_pressure:
+    unit: bar
+    low_low: 2.0
+    low: 3.0
+    high: 7.0
+    high_high: 8.0
+    deadband: 0.2
+    delay_samples: 2
+  flow_rate:
+    unit: m3/h
+    low_low: 60
+    low: 80
+    high: 160
+    high_high: 180
+    deadband: 3
+    delay_samples: 3

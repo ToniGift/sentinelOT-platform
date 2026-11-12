@@ -1,0 +1,18 @@
+# PLACEHOLDER, NOT A WORKING FLOW.
+#
+# GitLab Duo custom flows are created in the GitLab UI (AI > Flows > New flow),
+# as a single YAML file in the "flow registry v1" format. Per the docs, the top
+# level has: version, environment (only "ambient" is allowed in custom flows),
+# components, prompts, routers and flow.
+#
+# The component, prompt and router syntax was NOT confirmed when this file was
+# written, so it is deliberately left empty rather than guessed. Fill it in using:
+#   https://docs.gitlab.com/user/duo_agent_platform/flows/custom_flows_schema/
+#   https://docs.gitlab.com/user/duo_agent_platform/flows/claude-edit-v1-flow-registry/
+#
+# Intended behaviour (merge-request review agent):
+#   trigger : flow service account assigned as reviewer on a merge request
+#   task    : read the diff of alarms.yaml, run `python scripts/compare_replay.py`,
+#             and comment the measured change in detection rate and false alarms.
+version: "v1"
+environment: ambient

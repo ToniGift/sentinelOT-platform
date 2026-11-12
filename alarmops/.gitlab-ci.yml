@@ -1,0 +1,263 @@
+# AlarmOps pipeline. SIMULATION: no real plant equipment is touched.
+#
+# Stages: plan -> review -> test -> security -> compliance -> deploy_staging
+#         -> validate -> approve (manual, human) -> monitor
+#
+# Merge-request pipelines run everything up to `validate`. The production
+# approval (`deploy_production`) exists only on the default branch, so the
+# human gate can never be reached from an unmerged change.
+#
+# Where GitLab Duo agents fit is documented in docs/duo-agents.md (Phase 5).
+# Duo flows are created in the GitLab UI (AI > Flows), not from this file.
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never                       # avoid a duplicate branch pipeline
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_PIPELINE_SOURCE == "web"
+
+stages:
+  - plan
+  - review
+  - test
+  - security
+  - compliance
+  - deploy_staging
+  - validate
+  - approve
+  - monitor
+
+default:
+  image: python:3.12            # full image: includes git, which the review job needs
+  interruptible: true
+
+variables:
+  GIT_DEPTH: "50"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  MONITOR_LOG: "data/post_deploy_alarm_log_drift.csv"   # simulated post-deploy log
+
+cache:
+  key: pip-$CI_COMMIT_REF_SLUG
+  paths:
+    - .cache/pip
+
+include:
+  # GitLab's own scanner. Available on the Free tier in pipelines.
+  - template: Security/Secret-Detection.gitlab-ci.yml
+  # TODO(confirm availability under the hackathon tier before enabling):
+  # - template: Security/Dependency-Scanning.gitlab-ci.yml
+  # - template: Security/Container-Scanning.gitlab-ci.yml   # needs a built image
+
+.on_change: &on_change              # code changes: MR pipelines + default branch
+  - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE != "schedule"
+
+.install_dev: &install_dev
+  - pip install -r requirements-dev.txt
+  - pip install -e .
+
+# ---------------------------------------------------------------- plan
+validate_rules:
+  stage: plan
+  rules: *on_change
+  before_script:
+    - pip install -r requirements.txt
+    - pip install -e .
+  script:
+    - python scripts/validate_rules.py --rules alarms.yaml
+  # TODO(duo): issue-triage agent (classify incoming change requests, apply labels)
+
+# -------------------------------------------------------------- review
+replay_review:
+  stage: review
+  rules: *on_change
+  before_script:
+    - pip install -r requirements.txt
+    - pip install -e .
+  script:
+    - sh scripts/ci_review.sh        # replay + gate + MR comment; non-zero blocks the change
+  artifacts:
+    when: always
+    paths:
+      - out/
+    expire_in: 2 months
+  # TODO(duo): merge-request review agent (reads the rules diff and comments).
+  # Needs a CI variable GITLAB_API_TOKEN (project access token, api scope) to comment.
+
+# ---------------------------------------------------------------- test
+unit_tests:
+  stage: test
+  rules: *on_change
+  before_script: *install_dev
+  script:
+    - mkdir -p out
+    - python -m pytest -q --junitxml=out/junit.xml
+  artifacts:
+    when: always
+    reports:
+      junit: out/junit.xml
+
+replay_test:
+  stage: test
+  rules: *on_change
+  before_script:
+    - pip install -r requirements.txt
+    - pip install -e .
+  script:
+    # Absolute floors from gate.yaml: head rules compared with themselves.
+    - python scripts/compare_replay.py --base-rules alarms.yaml --head-rules alarms.yaml --summary out/floor_summary.md --json out/floor.json
+  artifacts:
+    when: always
+    paths:
+      - out/floor_summary.md
+    expire_in: 2 months
+
+# ------------------------------------------------------------ security
+secret_detection:                   # job comes from the template above
+  stage: security
+  rules: *on_change
+  allow_failure: false              # TODO: confirm on first run that findings fail the job
+
+secret_guard:                       # deterministic backstop for the demo
+  stage: security
+  rules: *on_change
+  script:
+    - python scripts/secret_guard.py
+
+# ---------------------------------------------------------- compliance
+change_record:
+  stage: compliance
+  rules: *on_change
+  dependencies: [replay_review]
+  before_script:
+    - pip install -r requirements.txt
+    - pip install -e .
+  script:
+    - python scripts/change_record.py --base-rules out/base_alarms.yaml --head-rules alarms.yaml --compare-json out/compare.json --scan-status "Secret Detection and secret_guard passed in the security stage" --out out/change_record.md
+  artifacts:
+    paths:
+      - out/change_record.md
+    expire_in: 2 months
+
+sbom:
+  stage: compliance
+  rules: *on_change
+  dependencies: []
+  script:
+    - python -m venv .sbom-env
+    - .sbom-env/bin/pip install -r requirements.txt
+    - pip install cyclonedx-bom
+    - mkdir -p out
+    - cyclonedx-py environment --of JSON -o out/sbom.cdx.json .sbom-env/bin/python
+  artifacts:
+    paths:
+      - out/sbom.cdx.json
+    expire_in: 2 months
+
+# ------------------------------------------------------ deploy_staging
+deploy_staging:
+  stage: deploy_staging
+  rules: *on_change
+  dependencies: []
+  environment:
+    name: staging
+  before_script:
+    - pip install -r requirements.txt
+    - pip install -e .
+  script:
+    - python scripts/deploy_staging.py --rules alarms.yaml --dest deploy/staging
+  artifacts:
+    paths:
+      - deploy/staging/
+    expire_in: 2 months
+
+build_image:                        # optional; UNTESTED here (needs a Docker-capable runner)
+  stage: deploy_staging
+  image: docker:27
+  services:
+    - docker:27-dind
+  rules:
+    - if: $BUILD_IMAGE == "true"
+  allow_failure: true
+  script:
+    - docker build -t "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA" .
+  # TODO(bonus): Google Cloud deployment (e.g. Cloud Run) for up to +0.2 points.
+
+# ------------------------------------------------------------ validate
+validate_staging:
+  stage: validate
+  rules: *on_change
+  dependencies: [deploy_staging]
+  before_script:
+    - pip install -r requirements.txt
+    - pip install -e .
+  script:
+    - python scripts/validate_staging.py --dir deploy/staging
+  artifacts:
+    when: always
+    paths:
+      - out/validation.json
+
+# ------------------------------------------------------------- approve
+deploy_production:                  # the single human gate (Supervised autonomy)
+  stage: approve
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE != "schedule"
+      when: manual
+  allow_failure: false              # pipeline waits as "blocked" until a human clicks
+  dependencies: [deploy_staging]
+  environment:
+    name: production
+  before_script:
+    - pip install -r requirements.txt
+    - pip install -e .
+  script:
+    - python scripts/deploy_production.py --source deploy/staging --dest deploy/production
+  artifacts:
+    paths:
+      - deploy/production/manifest.json
+  # TODO: protect the `production` environment in Settings > CI/CD > Protected environments.
+
+# Optional bonus: public live deployment on Google Cloud Run, only after the human approval.
+# CI/CD variables (Settings > CI/CD > Variables), all masked/protected, NEVER committed:
+#   GCP_PROJECT_ID, GCP_REGION, and GCP_SA_KEY (type "File": a service-account key with
+#   Cloud Run Admin, Cloud Build Editor, Service Account User, Storage Admin on the project).
+# TODO: prefer Workload Identity Federation over a key file once confirmed for this project.
+deploy_cloud_run:
+  stage: approve
+  image: google/cloud-sdk:slim
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE != "schedule" && $GCP_PROJECT_ID
+      when: manual
+  allow_failure: true               # optional bonus: never blocks the pipeline
+  needs: [deploy_production]        # only after a human approved the release
+  environment:
+    name: cloud-run-public
+  script:
+    - gcloud auth activate-service-account --key-file="$GCP_SA_KEY"
+    - sh cloud/cloudrun_deploy.sh
+
+# ------------------------------------------------------------- monitor
+monitor_alarm_rate:
+  stage: monitor
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+      allow_failure: true
+  dependencies: []
+  before_script:
+    - pip install -r requirements.txt
+    - pip install -e .
+  script:
+    - python scripts/monitor.py --log "$MONITOR_LOG" --out out/monitor_diagnosis.md
+  artifacts:
+    when: always
+    paths:
+      - out/monitor_diagnosis.md
+  # Opens a GitLab issue on drift (needs GITLAB_API_TOKEN).
+  # TODO(duo): monitoring agent that writes the diagnosis.

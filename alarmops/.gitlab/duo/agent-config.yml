@@ -1,0 +1,12 @@
+# Execution environment for GitLab Duo flows in this project.
+# Keys below are the ones documented for agent-config.yml (image, setup_script,
+# network_policy). This file is only read from the DEFAULT branch.
+# TODO: confirm the image requirements for flow execution in the GitLab docs.
+image: python:3.12
+setup_script:
+  - pip install -r requirements-dev.txt
+  - pip install -e .
+network_policy:
+  allowed_domains:
+    - pypi.org
+    - files.pythonhosted.org
