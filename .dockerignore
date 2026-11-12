@@ -8,4 +8,10 @@ __pycache__
 *.csv
 data/cache
 tests
-alarmops
+alarmops/*
+!alarmops/src
+!alarmops/alarms.yaml
+!alarmops/gate.yaml
+!alarmops/LICENSE
+!alarmops/data
+!alarmops/data/*.csv

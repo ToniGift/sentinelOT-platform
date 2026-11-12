@@ -10,6 +10,7 @@ from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 
 import store
+from alarm_limits import router as alarm_limits_router
 from orchestrator import run_triage
 from scenarios import SCENARIOS as DEV
 from scenarios_heldout import SCENARIOS as HELD
@@ -17,6 +18,7 @@ from scenarios_heldout2 import SCENARIOS as HELD2
 from schemas import Alert
 
 app = FastAPI(title="SentinelOT")
+app.include_router(alarm_limits_router)
 
 ALL = {**{k: ("development", v) for k, v in DEV.items()},
        **{k: ("held-out", v) for k, v in HELD.items()},
