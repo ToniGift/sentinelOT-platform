@@ -1,0 +1,855 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SentinelOT: live OT security demo by Anthony Afonughe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#CDD2D5; --panel:#E0E4E6; --well:#EFF1F2; --ink:#1B2428; --mute:#515E66;
+  --line:#A6AFB5; --live:#0E5A75; --alarm:#BE1529; --warn:#9A5D00; --on-alarm:#FFFFFF;
+  --alarm-tint:#F3D3D7; --slab:#B4BCC1; --box:#7C8990;
+  --sans:"Barlow","Segoe UI",Helvetica,Arial,sans-serif;
+  --cond:"Barlow Condensed","Arial Narrow","Segoe UI",Arial,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#1D2326; --panel:#283034; --well:#20272A; --ink:#E5E9EB; --mute:#9BA7AE;
+    --line:#45515A; --live:#74C6E0; --alarm:#E0475B; --warn:#EDB040; --on-alarm:#FFFFFF;
+    --alarm-tint:#4A2229; --slab:#3A454B; --box:#8A979E;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#1D2326; --panel:#283034; --well:#20272A; --ink:#E5E9EB; --mute:#9BA7AE;
+  --line:#45515A; --live:#74C6E0; --alarm:#E0475B; --warn:#EDB040; --on-alarm:#FFFFFF;
+  --alarm-tint:#4A2229; --slab:#3A454B; --box:#8A979E;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:17px;line-height:1.5}
+a{color:inherit}
+:focus-visible{outline:3px solid var(--live);outline-offset:2px}
+.wrap{max-width:1180px;margin:0 auto;padding:0 20px}
+
+.top{display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap;padding:18px 0;border-bottom:1px solid var(--line)}
+.mark{font-family:var(--cond);font-weight:600;font-size:26px;text-decoration:none}
+.top nav{display:flex;gap:20px;flex-wrap:wrap;font-size:16px}
+.top nav a{text-decoration:none;border-bottom:1px solid transparent}
+.top nav a:hover{border-bottom-color:var(--ink)}
+
+.hero{padding:40px 0 24px}
+.hero h1{font-family:var(--cond);font-weight:600;font-size:clamp(40px,7.2vw,80px);line-height:.98;margin:0 0 16px;max-width:15ch}
+.hero p{margin:0;max-width:62ch;font-size:19px;color:var(--mute)}
+.hero p strong{color:var(--ink);font-weight:600}
+
+/* board */
+.board{background:var(--panel);border:1px solid var(--line);border-radius:4px;margin-bottom:56px}
+.board-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--line);font-size:15px}
+.board-head b{font-family:var(--cond);font-size:20px;font-weight:600}
+.sim{border:1px dashed var(--mute);border-radius:3px;padding:2px 8px;color:var(--mute)}
+.grid{display:grid;grid-template-columns:1.3fr 1fr}
+.cell{padding:16px 14px;min-width:0;border-bottom:1px solid var(--line)}
+.cell.l{border-right:1px solid var(--line)}
+.cell.b{border-bottom:0}
+.cell h2{font-family:var(--cond);font-weight:600;font-size:21px;margin:0 0 10px}
+.note{font-size:14.5px;color:var(--mute);margin:0 0 12px}
+
+/* 3D stage */
+.stage{position:relative;padding:0;min-height:540px;overflow:hidden}
+.stage canvas{position:absolute;inset:0;display:block;width:100%;height:100%;touch-action:pan-y;cursor:grab}
+.stage canvas:active{cursor:grabbing}
+.labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.lab{position:absolute;left:0;top:0;font-size:12.5px;line-height:1.1;white-space:nowrap;color:var(--ink);background:var(--well);border:1px solid var(--line);border-radius:2px;padding:1px 5px;will-change:transform}
+.lab.level{background:var(--panel);border:0;color:var(--mute);font-family:var(--cond);font-weight:600;font-size:15px;padding:0 4px}
+.lab.hot{border-color:var(--ink);font-weight:600;z-index:3}
+.tools{position:absolute;right:10px;bottom:10px;display:flex;gap:6px}
+.tools button{font:inherit;font-weight:600;font-size:15px;min-width:40px;height:40px;padding:0 10px;border:1px solid var(--ink);background:var(--well);color:var(--ink);border-radius:3px;cursor:pointer}
+.card{position:absolute;left:10px;top:10px;max-width:min(300px,calc(100% - 20px));background:var(--well);border:1px solid var(--ink);border-radius:3px;padding:10px 12px;font-size:15px}
+.card[hidden]{display:none}
+.card h3{font-family:var(--cond);font-weight:600;font-size:21px;margin:0 28px 4px 0;line-height:1.1}
+.card p{margin:0 0 6px}
+.card .x{position:absolute;right:4px;top:4px;width:32px;height:32px;border:0;background:transparent;color:var(--ink);font:inherit;font-size:20px;cursor:pointer}
+.nogl{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;color:var(--mute)}
+
+/* tabs + side */
+.tabs{display:flex;gap:0;margin-bottom:14px;border:1px solid var(--ink);border-radius:3px;overflow:hidden}
+.tabs button{flex:1;font:inherit;font-weight:600;font-size:16px;padding:9px 8px;border:0;background:transparent;color:var(--ink);cursor:pointer}
+.tabs button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.pane[hidden]{display:none}
+.btn{font:inherit;font-weight:600;font-size:16px;border:1px solid var(--ink);background:var(--ink);color:var(--bg);border-radius:3px;padding:9px 14px;cursor:pointer;text-align:left}
+.btn.ghost{background:transparent;color:var(--ink)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.attacks{display:grid;gap:8px;margin-bottom:14px}
+.attacks .btn span{display:block;font-weight:400;font-size:14.5px;opacity:.85}
+
+.alarm{border:1px solid var(--line);border-radius:3px;background:var(--well);padding:12px}
+.alarm.quiet p{margin:0;color:var(--mute)}
+.sev{display:inline-block;font-weight:600;font-size:15px;padding:2px 9px;border-radius:3px;background:var(--alarm);color:var(--on-alarm)}
+.alarm.warnbox .sev{background:var(--warn);color:var(--well)}
+.alarm.crit{border-color:var(--alarm);border-width:2px}
+.alarm.warnbox{border-color:var(--warn);border-width:2px}
+.alarm.unack .sev{animation:flash 1s steps(2,jump-none) infinite}
+@keyframes flash{50%{opacity:.35}}
+@media (prefers-reduced-motion: reduce){.alarm.unack .sev{animation:none}}
+.alarm h3,.detail h3{font-family:var(--cond);font-weight:600;font-size:25px;line-height:1.1;margin:8px 0}
+.facts{margin:0 0 10px;display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:15px}
+.facts dt{color:var(--mute)}
+.facts dd{margin:0;overflow-wrap:anywhere}
+.ai{border-top:1px solid var(--line);padding-top:10px;margin-top:6px}
+.ai .who{font-size:14px;color:var(--mute);margin:0 0 4px}
+.ai .text{margin:0;white-space:pre-line;font-size:16px}
+.ack{margin-top:12px}
+
+.recs{display:grid;gap:6px;margin-bottom:12px}
+.recs button{font:inherit;font-size:15.5px;text-align:left;display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);background:var(--well);color:var(--ink);border-radius:3px;cursor:pointer}
+.recs button[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 4px 0 0 var(--ink)}
+.recs button:disabled{opacity:.45;cursor:not-allowed}
+.dot{width:12px;height:12px;border-radius:50%}
+.v-escalate{background:var(--alarm)} .v-investigate{background:var(--warn)} .v-likely_benign{background:var(--live)}
+.detail{background:var(--well);border:1px solid var(--line);border-radius:3px;padding:12px}
+.detail .empty{margin:0;color:var(--mute)}
+.detail p{margin:0 0 10px;font-size:16px}
+.badge{display:inline-block;font-weight:600;font-size:15px;padding:2px 9px;border-radius:3px;color:var(--on-alarm)}
+.badge.v-investigate,.badge.v-likely_benign{color:var(--well)}
+
+/* process */
+.tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.tile{background:var(--well);border:1px solid var(--line);border-radius:3px;padding:8px 10px}
+.tile .tag{font-size:14px;color:var(--mute);display:flex;justify-content:space-between;gap:8px}
+.tile .val{font-family:var(--cond);font-weight:600;font-size:34px;line-height:1.1;color:var(--live);font-variant-numeric:tabular-nums}
+.tile .val small{font-size:17px;font-weight:500;color:var(--mute)}
+.tile.bad{background:var(--alarm-tint);border-color:var(--alarm)}
+.tile.bad .val,.tile.bad .state{color:var(--alarm)}
+.tile .state{font-weight:600}
+.coils{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 12px}
+.coil{background:var(--well);border:1px solid var(--line);border-radius:3px;padding:4px 10px;font-size:15px}
+.coil b{color:var(--live);font-weight:600}
+.coil.bad{background:var(--alarm-tint);border-color:var(--alarm)}
+.coil.bad b{color:var(--alarm)}
+.trend{background:var(--well);border:1px solid var(--line);border-radius:3px;padding:8px 10px}
+.trend svg{display:block;width:100%;height:92px}
+.key{display:flex;gap:14px;flex-wrap:wrap;font-size:13.5px;color:var(--mute);margin-top:4px}
+.key i{display:inline-block;width:18px;border-top:2px solid var(--live);vertical-align:middle;margin-right:5px}
+.key i.sp{border-top:2px dashed var(--mute)}
+.key i.hi{border-top:2px solid var(--alarm)}
+
+.log{height:318px;overflow-y:auto;background:var(--well);border:1px solid var(--line);border-radius:3px}
+.row{padding:6px 10px;border-bottom:1px solid var(--line);font-size:14.5px}
+.row .meta{display:flex;gap:10px;flex-wrap:wrap;color:var(--mute)}
+.row .meta .fc{color:var(--ink);font-weight:600}
+.row .hex{font-family:var(--mono);font-size:12.5px;color:var(--mute);overflow-x:auto;white-space:nowrap}
+.row.flag{background:var(--alarm-tint);box-shadow:inset 4px 0 0 var(--alarm)}
+.row.flag .meta,.row.flag .hex{color:var(--ink)}
+
+/* sections */
+.sec{padding:8px 0 52px}
+.sec > h2{font-family:var(--cond);font-weight:600;font-size:clamp(30px,4.6vw,46px);line-height:1.05;margin:0 0 18px}
+.steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,1fr);border-top:2px solid var(--ink)}
+.steps li{padding:14px 18px 0 0}
+.steps li + li{padding-left:18px;border-left:1px solid var(--line)}
+.steps .n{font-family:var(--cond);font-weight:600;font-size:22px;color:var(--mute)}
+.steps h3{font-family:var(--cond);font-weight:600;font-size:26px;margin:0 0 6px}
+.steps p{margin:0;font-size:16.5px}
+.rule{margin:22px 0 0;font-size:19px;max-width:66ch}
+.about{display:grid;grid-template-columns:1.1fr .9fr;gap:36px}
+.about p{margin:0 0 14px;max-width:62ch}
+.cv{margin:0;border-top:2px solid var(--ink)}
+.cv div{display:grid;grid-template-columns:110px 1fr;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:16px}
+.cv dt{color:var(--mute)}
+.cv dd{margin:0}
+.contact{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.contact .btn{text-decoration:none;display:inline-block}
+.todo{font-size:15px;color:var(--mute);margin:12px 0 0}
+footer{border-top:1px solid var(--line);padding:18px 0 28px;font-size:14.5px;color:var(--mute);max-width:90ch}
+
+@media (max-width:860px){
+  .grid{grid-template-columns:1fr}
+  .cell.l{border-right:0}
+  .cell.b{border-bottom:1px solid var(--line)}
+  .cell.end{border-bottom:0}
+  .stage{min-height:0;height:62vh}
+  .steps{grid-template-columns:1fr}
+  .steps li + li{padding-left:0;border-left:0;border-top:1px solid var(--line);margin-top:14px}
+  .about{grid-template-columns:1fr;gap:20px}
+  .hero{padding-top:28px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <a class="mark" href="#demo">SentinelOT</a>
+  <nav aria-label="Sections">
+    <a href="#demo">Live demo</a>
+    <a href="#method">How it works</a>
+    <a href="#about">About Anthony</a>
+    <a href="#contact">Contact</a>
+  </nav>
+</header>
+
+<section class="hero">
+  <h1>Catch the write that should never reach the PLC.</h1>
+  <p>SentinelOT watches industrial traffic, flags commands that don’t belong and explains them in plain language. <strong>The plant below is running now on simulated Modbus data. Launch an attack and watch which firewalls it crosses on its way down.</strong></p>
+</section>
+
+<section class="board" id="demo" aria-label="Live demo">
+  <div class="board-head">
+    <b>Packaging plant, line 1</b>
+    <span class="sim">Simulated data, no real plant connected</span>
+  </div>
+  <div class="grid">
+
+    <div class="cell l stage" id="stage">
+      <canvas id="gl" tabindex="0" aria-label="3D model of the plant. Drag or use arrow keys to rotate."></canvas>
+      <div class="labels" id="labels" aria-hidden="true"></div>
+      <div class="card" id="card" hidden></div>
+      <div class="tools">
+        <button type="button" id="zin" aria-label="Zoom in">+</button>
+        <button type="button" id="zout" aria-label="Zoom out">−</button>
+        <button type="button" id="spin">Pause rotation</button>
+      </div>
+    </div>
+
+    <div class="cell">
+      <div class="tabs">
+        <button type="button" id="tab-live" aria-pressed="true">Live attack</button>
+        <button type="button" id="tab-rec" aria-pressed="false">Recorded alerts</button>
+      </div>
+
+      <div class="pane" id="pane-live">
+        <p class="note">Each button sends real Modbus frames to PLC-Line1 from a host that isn’t an approved master.</p>
+        <div class="attacks">
+          <button class="btn atk" data-atk="setpoint">Raise the sealer setpoint<span>Office PC writes register 40001 to 240 °C</span></button>
+          <button class="btn atk" data-atk="robot">Stop the packing robot<span>Office PC writes coil 00003 to off</span></button>
+          <button class="btn atk" data-atk="scan">Scan the register map<span>A new host reads address ranges until something answers</span></button>
+        </div>
+        <div class="alarm quiet" id="alarm" aria-live="polite">
+          <p>No active alarm. Only HMI-Line1 and the historian are talking to the PLC.</p>
+        </div>
+      </div>
+
+      <div class="pane" id="pane-rec" hidden>
+        <p class="note">Alerts from the SentinelOT evaluation run, with the verdict its AI triage returned.</p>
+        <div class="recs" id="recs"></div>
+        <div class="detail" id="detail" aria-live="polite"><p class="empty">Pick an alert to trace it through the plant.</p></div>
+      </div>
+    </div>
+
+    <div class="cell l b">
+      <h2>Line 1 process</h2>
+      <div class="tiles">
+        <div class="tile" id="t-sp"><div class="tag"><span>Sealer setpoint</span><span class="state"></span></div><div class="val"><span class="v">160.0</span> <small>°C</small></div></div>
+        <div class="tile" id="t-pv"><div class="tag"><span>Sealer temperature</span><span class="state"></span></div><div class="val"><span class="v">160.0</span> <small>°C</small></div></div>
+        <div class="tile" id="t-rpm"><div class="tag"><span>Conveyor motor</span><span class="state"></span></div><div class="val"><span class="v">1200</span> <small>rpm</small></div></div>
+        <div class="tile" id="t-ppm"><div class="tag"><span>Packs per minute</span><span class="state"></span></div><div class="val"><span class="v">42</span></div></div>
+      </div>
+      <div class="coils">
+        <span class="coil" id="c-heat">Sealer heater <b>on</b></span>
+        <span class="coil" id="c-conv">Conveyor <b>running</b></span>
+        <span class="coil" id="c-robot">Robot <b>running</b></span>
+      </div>
+      <div class="trend">
+        <svg viewBox="0 0 300 90" preserveAspectRatio="none" role="img" aria-label="Sealer temperature trend">
+          <line id="l-hi" x1="0" x2="300" y1="0" y2="0" stroke="var(--alarm)" stroke-width="1.2" vector-effect="non-scaling-stroke"/>
+          <line id="l-sp" x1="0" x2="300" y1="0" y2="0" stroke="var(--mute)" stroke-width="1.2" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>
+          <polyline id="l-pv" fill="none" stroke="var(--live)" stroke-width="2" vector-effect="non-scaling-stroke" points=""/>
+        </svg>
+        <div class="key"><span><i></i>Sealer temperature</span><span><i class="sp"></i>Setpoint</span><span><i class="hi"></i>High limit 190 °C</span></div>
+      </div>
+    </div>
+
+    <div class="cell b end">
+      <h2>Modbus/TCP traffic</h2>
+      <div class="log" id="log" tabindex="0" aria-label="Frame log, newest first"></div>
+    </div>
+
+  </div>
+</section>
+
+<section class="sec" id="method">
+  <h2>How it works</h2>
+  <ol class="steps">
+    <li><span class="n">1</span><h3>Listen</h3><p>A sensor on a mirror port reads every frame between the masters and the PLC. It never writes to the control network.</p></li>
+    <li><span class="n">2</span><h3>Judge</h3><p>Rules check who is talking, which function code they used and whether the value fits the engineering limits.</p></li>
+    <li><span class="n">3</span><h3>Explain</h3><p>AI adds asset context, maps the activity to MITRE ATT&amp;CK for ICS and tells the analyst what to do first. It recommends and never acts.</p></li>
+  </ol>
+  <p class="rule">In the live demo a fixed rule raises the alarm and the AI only explains it. The recorded alerts come from the full project, where five AI agents triage each alert and code checks their output. <a href="https://github.com/ToniGift/sentinelOT" target="_blank" rel="noopener">Read the code on GitHub</a>.</p>
+</section>
+
+<section class="sec" id="about">
+  <h2>Built by Anthony Afonughe</h2>
+  <div class="about">
+    <div>
+      <p>I’m an OT/ICS security engineer based in Bydgoszcz, Poland. I spent about three years on the floor of a manufacturing plant, working across PLC, SCADA, HMI, DCS and RTU systems, so I build security tools around how plants really run.</p>
+      <p>SentinelOT is my prototype for OT security a small factory can install without a security team.</p>
+    </div>
+    <dl class="cv">
+      <div><dt>Experience</dt><dd>About 3 years hands-on across PLC, SCADA, HMI, DCS and RTU environments</dd></div>
+      <div><dt>Tools</dt><dd>Nozomi Networks, Elastic SIEM</dd></div>
+      <div><dt>Protocols</dt><dd>Modbus, OPC UA, EtherNet/IP, DNP3, PROFINET</dd></div>
+      <div><dt>Education</dt><dd>B.Eng Computer Engineering and Mechatronics, WSG Bydgoszcz, 2025</dd></div>
+      <div><dt>Also built</dt><dd>MQTT to InfluxDB telemetry pipeline with anomaly detection; ESP32 NFC and keypad access control</dd></div>
+    </dl>
+  </div>
+</section>
+
+<section class="sec" id="contact">
+  <h2>Hiring for OT security, or running a plant?</h2>
+  <div class="contact">
+    <a class="btn" href="mailto:anthonygift2019@gmail.com?subject=OT%20security%20role">Email me about a role</a>
+    <a class="btn ghost" href="mailto:anthonygift2019@gmail.com?subject=SentinelOT%20pilot">Ask about a SentinelOT pilot</a>
+  </div>
+</section>
+
+<footer>The plant, hosts and traffic on this page are invented and simulated in your browser. No real control system is connected. The recorded verdicts are the ones SentinelOT returned in its evaluation run on 6 October 2026. Level 5, the firewalls, the ERP server, the robot and the conveyor motor were added for this demo and aren’t in the project’s asset file.</footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+"use strict";
+var $=function(s){return document.querySelector(s)};
+function el(tag,cls,text){var e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e}
+function css(name){return getComputedStyle(document.documentElement).getPropertyValue(name).trim()}
+
+/* ================= plant data ================= */
+var LEVELS=[
+  {id:"0",name:"Level 0 field"},{id:"1",name:"Level 1 control"},{id:"2",name:"Level 2 supervisory"},
+  {id:"3",name:"Level 3 operations"},{id:"3.5",name:"Level 3.5 DMZ"},{id:"4",name:"Level 4 enterprise"},
+  {id:"5",name:"Level 5 internet"}
+];
+var GAP=1.7,levelY={};LEVELS.forEach(function(l,i){levelY[l.id]=i*GAP});
+var ASSETS=[
+ ["","INTERNET","Internet","5","low","Public internet and cloud services","cloud"],
+ ["10.10.90.1","VPN-GW-01","VPN gateway","5","high","Remote access for staff and vendors, hands out the 10.10.90.0/24 pool","router"],
+ ["10.10.50.7","OFFICE-PC-14","Office PC","4","low","Office workstation, not an engineering station","pc"],
+ ["10.10.50.20","ERP-SRV-01","ERP server","4","medium","Production planning and customer orders","server"],
+ ["10.10.45.5","JUMP-SRV-01","Jump server","3.5","high","Remote access entry point for OT","server"],
+ ["10.10.45.10","PATCH-SRV-01","Patch server","3.5","medium","Stages approved patches for OT","server"],
+ ["10.10.45.20","HIST-DMZ-01","Historian replica","3.5","medium","Read-only copy of historian data for the enterprise network","db"],
+ ["10.10.40.8","ENG-WS-01","Engineering workstation","3","high","PLC programming. Approved change window: Tuesday 08:00 to 10:00","ws"],
+ ["10.10.40.20","HIST-01","Historian","3","medium","Process data historian, polls PLCs read-only","db"],
+ ["10.10.30.5","HMI-Line1","HMI","2","medium","Operator screen for line 1, the approved Modbus master","hmi"],
+ ["10.10.30.10","SCADA-SRV-01","SCADA server","2","high","SCADA server with OPC UA endpoint and DNP3 master","server"],
+ ["10.10.20.11","PLC-Line1","PLC","1","high","Packaging line 1 control","plc"],
+ ["10.10.20.12","PLC-Line2","PLC","1","high","Packaging line 2 control","plc"],
+ ["10.10.20.30","RTU-Outstation-3","RTU","1","high","Utility metering outstation, reports to SCADA over DNP3","rtu"],
+ ["10.10.10.12","IO-Module-Line2","Remote I/O module","0","high","EtherNet/IP remote I/O for PLC-Line2","io"],
+ ["10.10.10.21","VFD-Conveyor-1","Variable frequency drive","0","medium","Drives the line 1 conveyor motor","vfd"],
+ ["","MOTOR-Conveyor-1","Conveyor motor","0","medium","Line 1 conveyor motor, driven by VFD-Conveyor-1","motor"],
+ ["10.10.10.40","ROBOT-Pick-1","Pick-and-place robot","0","high","Packs line 1 product into cases, enabled by PLC-Line1","robot"],
+ ["10.10.10.30","SENSOR-GW-1","Sensor gateway","0","medium","Modbus TCP gateway for the line 1 sealer temperature sensors","gw"]
+].map(function(a){return {ip:a[0],name:a[1],type:a[2],level:a[3],crit:a[4],fn:a[5],kind:a[6],zone:"Level "+a[3]}});
+var FWS=[
+ ["FW-Edge","5","4","Internet edge firewall. Only the VPN gateway and outbound web traffic may pass"],
+ ["FW-IT-DMZ","4","3.5","Separates the office network from the OT DMZ. Office hosts may reach the DMZ servers only"],
+ ["FW-DMZ-OT","3.5","3","Separates the DMZ from operations. No direct path from the office network to the plant floor"],
+ ["FW-Cell-1","2","1","Line 1 cell firewall. Only HMI-Line1, the historian and the engineering workstation may reach PLC-Line1"]
+].map(function(f){return {ip:"",name:f[0],type:"Firewall",level:f[1],crit:"high",fn:f[3],kind:"fw",
+  zone:"Between level "+f[1]+" and level "+f[2],fy:(levelY[f[1]]+levelY[f[2]])/2,ya:levelY[f[1]],yb:levelY[f[2]]}});
+function traceY(ip,unk){var a=byIp[ip];return a?levelY[a.level]:levelY[unk.level]}
+function crossed(tr){var y1=traceY(tr.src,tr.unk),y2=traceY(tr.dst,tr.unk),lo=Math.min(y1,y2),hi=Math.max(y1,y2);
+  return FWS.filter(function(f){return f.fy>lo&&f.fy<hi})}
+var byIp={},byName={};ASSETS.forEach(function(a){if(a.ip)byIp[a.ip]=a;byName[a.name]=a});
+
+var RECS=[
+ {title:"Modbus write coil to PLC from an office PC",v:"escalate",p:"P1",t:"T0835",src:"10.10.50.7",dst:"10.10.20.11",
+  d:"Modbus/TCP function code 5 sent from 10.10.50.7 to 10.10.20.11, coil 12, value ON. The source has never written to this PLC before."},
+ {title:"PLC program download outside the change window",v:"escalate",p:"P1",t:"T0843.001",src:"10.10.40.8",dst:"10.10.20.12",
+  d:"Full program download to 10.10.20.12 from 10.10.40.8 at 02:40 on a Thursday. No change ticket is referenced."},
+ {title:"Setpoint written outside its normal range",v:"escalate",p:"P1",t:"T0836",src:"10.10.30.5",dst:"10.10.20.11",
+  d:"Modbus function code 6 from the HMI to 10.10.20.11, register 40021 set to 9500. Normal range is 1000 to 3000."},
+ {title:"New remote session to the HMI from the VPN pool",v:"investigate",p:"P2",t:"T0822",src:"10.10.90.14",dst:"10.10.30.5",unk:{label:"VPN pool host",level:"5"},
+  d:"RDP session from 10.10.90.14 to 10.10.30.5. The account has not logged in to this HMI before."},
+ {title:"Modbus unit ID and port sweep from a new host",v:"investigate",p:"P2",t:"T0846.001",src:"10.10.50.99",dst:"10.10.20.11",unk:{label:"New host",level:"4"},
+  d:"Host 10.10.50.99 probed 10.10.20.0/24 on ports 502, 44818 and 20000 and tried Modbus unit IDs 1 to 247 within 90 seconds."},
+ {title:"DNP3 responses from an unknown outstation",v:"investigate",p:"P2",t:"T1692.002",src:"10.10.20.99",dst:"10.10.30.10",unk:{label:"Unknown outstation",level:"1"},
+  d:"The SCADA master received unsolicited DNP3 responses from 10.10.20.99, which is not a configured outstation."},
+ {title:"Repeated failed OPC UA logins",v:"investigate",p:"P2",t:"T0822",src:"10.10.50.7",dst:"10.10.30.10",
+  d:"47 failed OPC UA session activations against 10.10.30.10 within 5 minutes from 10.10.50.7, using different usernames."},
+ {title:"Engineering workstation reading PLC registers",v:"likely_benign",p:"P4",t:"",src:"10.10.40.8",dst:"10.10.20.11",
+  d:"Modbus function code 3 from 10.10.40.8 to 10.10.20.11, 120 registers, polled every 5 seconds for 20 minutes."}
+];
+var VLABEL={escalate:"Escalate",investigate:"Investigate",likely_benign:"Likely benign"};
+var VVAR={escalate:"--alarm",investigate:"--warn",likely_benign:"--live"};
+
+/* ================= live console ================= */
+var HMI={ip:"10.10.30.5",name:"HMI-Line1"},HIST={ip:"10.10.40.20",name:"HIST-01"},
+    PLC={ip:"10.10.20.11",name:"PLC-Line1"},OFFICE={ip:"10.10.50.7",name:"OFFICE-PC-14"},
+    NEWHOST={ip:"10.10.50.99",name:"New host"};
+var APPROVED={};APPROVED[HMI.ip]=1;APPROVED[HIST.ip]=1;
+var WRITE_FC={5:1,6:1,15:1,16:1};
+var HI_SEAL=190,SP_NORMAL=160;
+var st={sp:SP_NORMAL,pv:159.7,rpm:1200,ppm:42,heater:1,conv:1,robot:1};
+var hist=[],queue=[],rows=[],tid=0x1A00,lastTid=0,step=0,ticks=0;
+var active=null,selRec=null,scan={addrs:[],frames:[]},runId=0,scene3d=null;
+
+var samplePromise=(window.claude&&typeof window.claude.use==="function")
+  ? window.claude.use("sample").catch(function(){return null}) : Promise.resolve(null);
+
+function w(n){n=Math.round(n)&0xFFFF;return [n>>8,n&255]}
+function hx(b){return b.map(function(x){return (x<16?"0":"")+x.toString(16).toUpperCase()}).join(" ")}
+function adu(id,pdu){return w(id).concat([0,0],w(pdu.length+1),[1],pdu)}
+function clock(){var d=new Date();function p(n){return (n<10?"0":"")+n}return p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds())}
+function rnd(a){return (Math.random()*2-1)*a}
+function f1(n){return n.toFixed(1)}
+function mk(src,dst,fc,pdu,text,isResp,extra){var f={src:src,dst:dst,fc:fc,pdu:pdu,text:text,resp:isResp};if(extra)for(var k in extra)f[k]=extra[k];return f}
+
+function nextPoll(){
+  var pattern=[0,1,0,1,2,3],s=pattern[step%pattern.length];step++;
+  if(s===0)return mk(HMI,PLC,3,[3,0,0,0,4],"Read 4 holding registers from 40001",false);
+  if(s===1)return mk(PLC,HMI,3,[3,8].concat(w(st.sp*10),w(st.pv*10),w(st.rpm),w(st.ppm)),
+    "Returns "+f1(st.sp)+" / "+f1(st.pv)+" °C, "+Math.round(st.rpm)+" rpm, "+Math.round(st.ppm)+" packs/min",true);
+  if(s===2)return mk(HIST,PLC,1,[1,0,0,0,3],"Read 3 coils from 00001",false);
+  return mk(PLC,HIST,1,[1,1,st.heater|(st.conv<<1)|(st.robot<<2)],
+    "Returns heater "+(st.heater?"on":"off")+", conveyor "+(st.conv?"on":"off")+", robot "+(st.robot?"on":"off"),true);
+}
+var ATTACKS={
+  setpoint:function(){
+    queue.push(mk(OFFICE,PLC,6,[6,0,0].concat(w(2400)),"Write register 40001 = 2400 (240.0 °C)",false,{addr:"40001",kind:"setpoint",effect:function(){st.sp=240}}));
+    queue.push(mk(PLC,OFFICE,6,[6,0,0].concat(w(2400)),"Echo: write accepted",true));
+  },
+  robot:function(){
+    queue.push(mk(OFFICE,PLC,5,[5,0,2,0,0],"Write coil 00003 = OFF (packing robot)",false,{addr:"00003",kind:"robot",effect:function(){st.robot=0}}));
+    queue.push(mk(PLC,OFFICE,5,[5,0,2,0,0],"Echo: write accepted",true));
+  },
+  scan:function(){
+    [100,200,300,400,500].forEach(function(a){
+      queue.push(mk(NEWHOST,PLC,3,[3].concat(w(a),[0,10]),"Read 10 holding registers from "+(40001+a),false,{start:a,kind:"scan"}));
+      queue.push(mk(PLC,NEWHOST,3,[0x83,2],"Exception 02: illegal data address",true));
+    });
+  }
+};
+
+function detect(f){
+  if(active||f.resp||f.dst!==PLC||APPROVED[f.src.ip])return;
+  if(WRITE_FC[f.fc]){
+    f.flag=true;
+    raise({sev:"crit",kind:f.kind,label:"Critical",
+      title:f.kind==="robot"?"Unapproved host stopped the packing robot":"Unapproved host changed the sealer setpoint",
+      rule:"Write command from a host that is not an approved master",
+      src:f.src,target:(f.fc===5?"Coil ":"Register ")+f.addr+" on PLC-Line1",frames:[f]});
+    return;
+  }
+  scan.addrs.push(f.start);scan.frames.push(f);
+  if(scan.addrs.length>=3){
+    scan.frames.forEach(function(x){x.flag=true});
+    raise({sev:"warn",kind:"scan",label:"Warning",
+      title:"New host is scanning the PLC register map",
+      rule:"Three or more reads of unmapped address ranges from one unapproved host",
+      src:f.src,target:"Holding registers 40101 onwards on PLC-Line1",frames:scan.frames.slice()});
+  }
+}
+function emit(f){
+  if(f.resp){f.tid=lastTid}else{tid=(tid+1)&0xFFFF;f.tid=lastTid=tid}
+  f.time=clock();f.hex=hx(adu(f.tid,f.pdu));
+  if(f.effect)f.effect();
+  if(active&&active.kind==="scan"&&!f.resp&&f.kind==="scan")f.flag=true;
+  detect(f);
+  rows.unshift(f);if(rows.length>60)rows.pop();
+}
+function simulate(){
+  ticks++;
+  st.pv+=(st.sp-st.pv)*0.06+rnd(0.3);
+  st.rpm=1200+Math.sin(ticks/3)*8+rnd(3);
+  st.ppm+=((st.robot?42:0)-st.ppm)*0.25+(st.robot?rnd(0.5):0);if(st.ppm<0.3)st.ppm=0;
+  hist.push(st.pv);if(hist.length>70)hist.shift();
+}
+
+var SCRIPTED={
+  setpoint:"OFFICE-PC-14, an office workstation, wrote 240 °C to the sealer setpoint on PLC-Line1. Only HMI-Line1 is allowed to write to this PLC.\n\nThe sealer will climb past its 190 °C high limit. Film can burn or melt onto the sealing bars and the line may need to stop for cleaning.\n\nPut the setpoint back to 160 °C from the HMI, block 10.10.50.7 from the control network and find out who or what is using that PC.",
+  robot:"OFFICE-PC-14, an office workstation, forced the robot enable coil off on PLC-Line1. Only HMI-Line1 is allowed to write to this PLC.\n\nThe packing robot has stopped while the conveyor keeps running, so product will pile up at the end of line 1.\n\nCheck the cell is safe, re-enable the robot from the HMI and block 10.10.50.7 from the control network.",
+  scan:"A host first seen today, 10.10.50.99, is reading address ranges PLC-Line1 doesn’t use, and the PLC is answering with exception 02 each time.\n\nNothing in the process has changed yet. This is how someone maps a controller before sending a write.\n\nBlock 10.10.50.99 from the control network, find out what that host is and watch for write commands from it."
+};
+function buildPrompt(a){
+  var lines=a.frames.map(function(f){return f.time+" "+f.src.ip+" -> "+f.dst.ip+" FC"+("0"+f.fc).slice(-2)+" "+f.text+" ["+f.hex+"]"}).join("\n");
+  return "You are an OT security analyst. Write a short note for a plant operator about an alarm from a passive Modbus/TCP monitor. The data is simulated for a demo.\n\n"+
+    "Plant: packaging line 1, controlled by PLC-Line1 "+PLC.ip+". Approved masters: HMI-Line1 "+HMI.ip+" (read and write), historian HIST-01 "+HIST.ip+" (read only). OFFICE-PC-14 10.10.50.7 is an office workstation on the enterprise level and is not an engineering station. Three firewalls (FW-IT-DMZ, FW-DMZ-OT, FW-Cell-1) sit between the office network and PLC-Line1 and should have blocked office hosts. 10.10.50.99 is not in the asset inventory.\n"+
+    "Register map: 40001 sealer setpoint (x10 °C, normal 160.0), 40002 sealer temperature (high limit 190 °C), 40003 conveyor motor speed (rpm), 40004 packs per minute. Coils: 00001 sealer heater, 00002 conveyor run, 00003 packing robot enable.\n\n"+
+    "Alarm: "+a.title+"\nRule that fired: "+a.rule+"\nSource: "+a.src.ip+" ("+a.src.name+")\nFrames:\n"+lines+"\n\n"+
+    "Write exactly three short paragraphs in plain text, no headings, no markdown, no lists, 80 words at most in total: first what happened, then what it could do to the process, then what the operator should do first. Use plain words. Do not invent facts beyond what is given.";
+}
+function raise(a){
+  a.time=clock();a.note="";a.who="Writing the analyst note…";active=a;selRec=null;
+  a.trace={src:a.src.ip,dst:PLC.ip,cvar:a.sev==="crit"?"--alarm":"--warn",unk:byIp[a.src.ip]?null:{label:a.src.name,level:"4"}};
+  showTab("live");paintRecs();
+  var my=++runId;
+  samplePromise.then(function(sample){
+    if(my!==runId)return;
+    if(!sample){fallback(a);return}
+    return sample(buildPrompt(a),{modelTier:"quick",onText:function(e){
+      if(my!==runId)return;a.who="Analyst note, written live by Claude";a.note=e.text;paintNote();
+    }}).then(function(r){
+      if(my!==runId)return;
+      if(r&&r.text){a.who="Analyst note, written live by Claude";a.note=r.text;paintNote()}else fallback(a);
+    });
+  }).catch(function(){if(my===runId)fallback(a)});
+}
+function fallback(a){a.who="Analyst note (pre-written, live AI isn’t available in this view)";a.note=SCRIPTED[a.kind];paintNote()}
+function paintNote(){
+  var who=$("#ai-who"),t=$("#ai-text");
+  if(who&&active)who.textContent=active.who;
+  if(t&&active)t.textContent=active.note;
+}
+function fwNames(tr){var c=crossed(tr).map(function(f){return f.name});return c.length?c.join(", "):"No firewall"}
+function factsEl(pairs){var dl=el("dl","facts");pairs.forEach(function(p){dl.appendChild(el("dt",null,p[0]));dl.appendChild(el("dd",null,p[1]))});return dl}
+function paintAlarm(){
+  var box=$("#alarm");box.textContent="";
+  if(!active){
+    box.className="alarm quiet";
+    box.appendChild(el("p",null,"No active alarm. Only HMI-Line1 and the historian are talking to the PLC."));
+    return;
+  }
+  var a=active;
+  box.className="alarm unack "+(a.sev==="crit"?"crit":"warnbox");
+  box.appendChild(el("span","sev",a.label));
+  box.appendChild(el("h3",null,a.title));
+  box.appendChild(factsEl([["Time",a.time],["Source",a.src.ip+" ("+a.src.name+")"],["Target",a.target],["Rule",a.rule],["Crossed",fwNames(a.trace)]]));
+  var ai=el("div","ai"),who=el("p","who",a.who),txt=el("p","text",a.note);who.id="ai-who";txt.id="ai-text";
+  ai.appendChild(who);ai.appendChild(txt);box.appendChild(ai);
+  var b=el("button","btn ack","Acknowledge and restore");b.type="button";b.addEventListener("click",restore);box.appendChild(b);
+}
+function restore(){
+  runId++;active=null;queue.length=0;scan={addrs:[],frames:[]};
+  st.sp=SP_NORMAL;st.robot=1;
+  rows.unshift({time:clock(),text:"Operator acknowledged the alarm. Setpoint and robot restored from HMI-Line1.",hex:"",note:true});
+  setButtons();paintAlarm();paint();if(scene3d)scene3d.update();
+}
+function setButtons(){
+  var off=!!active||queue.length>0;
+  document.querySelectorAll(".atk").forEach(function(b){b.disabled=off});
+  document.querySelectorAll("#recs button").forEach(function(b){b.disabled=off});
+}
+function tile(id,val,bad,state){var t=$(id);t.classList.toggle("bad",!!bad);t.querySelector(".v").textContent=val;t.querySelector(".state").textContent=state||""}
+function coil(id,txt,bad){var c=$(id);c.classList.toggle("bad",!!bad);c.querySelector("b").textContent=txt}
+function ty(v){var lo=130,hi=260;return (90-((v-lo)/(hi-lo))*86-2).toFixed(1)}
+function paint(){
+  tile("#t-sp",f1(st.sp),st.sp!==SP_NORMAL,st.sp!==SP_NORMAL?"Changed":"");
+  tile("#t-pv",f1(st.pv),st.pv>HI_SEAL,st.pv>HI_SEAL?"High":"");
+  tile("#t-rpm",String(Math.round(st.rpm)),false,"");
+  tile("#t-ppm",String(Math.round(st.ppm)),!st.robot,!st.robot?"Stopped":"");
+  coil("#c-heat",st.heater?"on":"off",false);
+  coil("#c-conv",st.conv?"running":"stopped",false);
+  coil("#c-robot",st.robot?"running":"stopped",!st.robot);
+  $("#l-pv").setAttribute("points",hist.map(function(v,i){return ((i/69)*300).toFixed(1)+","+ty(v)}).join(" "));
+  $("#l-sp").setAttribute("y1",ty(st.sp));$("#l-sp").setAttribute("y2",ty(st.sp));
+  $("#l-hi").setAttribute("y1",ty(HI_SEAL));$("#l-hi").setAttribute("y2",ty(HI_SEAL));
+  var log=$("#log"),frag=document.createDocumentFragment();
+  rows.forEach(function(f){
+    var r=el("div","row"+(f.flag?" flag":"")),m=el("div","meta");
+    m.appendChild(el("span",null,f.time));
+    if(f.note){m.appendChild(el("span","fc",f.text))}
+    else{
+      m.appendChild(el("span",null,f.src.ip+" to "+f.dst.ip));
+      m.appendChild(el("span","fc","FC"+("0"+f.fc).slice(-2)+(f.pdu[0]&0x80?" error":"")));
+      m.appendChild(el("span",null,f.text));
+    }
+    r.appendChild(m);if(f.hex)r.appendChild(el("div","hex",f.hex));frag.appendChild(r);
+  });
+  log.textContent="";log.appendChild(frag);
+}
+function tick(){
+  simulate();
+  var before=active,robotBefore=st.robot;
+  emit(queue.length?queue.shift():nextPoll());
+  if(active!==before)paintAlarm();
+  if((active!==before||st.robot!==robotBefore)&&scene3d)scene3d.update();
+  setButtons();paint();
+}
+document.querySelectorAll(".atk").forEach(function(b){
+  b.addEventListener("click",function(){
+    if(active||queue.length)return;
+    selRec=null;paintRecs();if(scene3d)scene3d.update();
+    ATTACKS[b.getAttribute("data-atk")]();setButtons();
+    if(window.matchMedia("(max-width:860px)").matches)$("#stage").scrollIntoView({block:"start",behavior:"smooth"});
+  });
+});
+
+/* ================= tabs + recorded alerts ================= */
+function showTab(which){
+  $("#tab-live").setAttribute("aria-pressed",which==="live"?"true":"false");
+  $("#tab-rec").setAttribute("aria-pressed",which==="rec"?"true":"false");
+  $("#pane-live").hidden=which!=="live";$("#pane-rec").hidden=which!=="rec";
+}
+$("#tab-live").addEventListener("click",function(){showTab("live")});
+$("#tab-rec").addEventListener("click",function(){showTab("rec")});
+function hostName(ip,a){return byIp[ip]?byIp[ip].name+" ("+ip+")":(a.unk?a.unk.label:"Unknown host")+" ("+ip+")"}
+RECS.forEach(function(a){
+  var b=el("button");b.type="button";b.setAttribute("aria-pressed","false");
+  b.appendChild(el("i","dot v-"+a.v));b.appendChild(el("span",null,a.title));
+  b.addEventListener("click",function(){if(active)return;selRec=(selRec===a?null:a);paintRecs();if(scene3d)scene3d.update()});
+  a.btn=b;a.trace={src:a.src,dst:a.dst,cvar:VVAR[a.v],unk:a.unk||null};
+  $("#recs").appendChild(b);
+});
+function paintRecs(){
+  RECS.forEach(function(x){x.btn.setAttribute("aria-pressed",x===selRec?"true":"false")});
+  var d=$("#detail");d.textContent="";
+  if(!selRec){d.appendChild(el("p","empty","Pick an alert to trace it through the plant."));return}
+  var a=selRec;
+  d.appendChild(el("span","badge v-"+a.v,VLABEL[a.v]+", priority "+a.p));
+  d.appendChild(el("h3",null,a.title));
+  d.appendChild(el("p",null,a.d));
+  d.appendChild(factsEl([["From",hostName(a.src,a)],["To",hostName(a.dst,a)],["ATT&CK for ICS",a.t||"No technique mapped"],["Crossed",fwNames(a.trace)]]));
+}
+function showCard(s){
+  var c=$("#card");c.textContent="";
+  if(!s){c.hidden=true;return}
+  var x=el("button","x","×");x.type="button";x.setAttribute("aria-label","Close");x.addEventListener("click",function(){showCard(null)});
+  c.appendChild(x);c.appendChild(el("h3",null,s.name));c.appendChild(el("p",null,s.fn+"."));
+  c.appendChild(factsEl([["Type",s.type],["Address",s.ip||"None, wired to the drive"],["Zone",s.zone],["Criticality",s.crit.charAt(0).toUpperCase()+s.crit.slice(1)]]));
+  c.hidden=false;
+}
+
+/* ================= 3D ================= */
+function build(){
+  var stage=$("#stage"),canvas=$("#gl"),labels=$("#labels");
+  var renderer=new THREE.WebGLRenderer({canvas:canvas,antialias:true,alpha:true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+  var scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(35,1,0.1,200);
+  scene.add(new THREE.AmbientLight(0xffffff,0.78));
+  var sun=new THREE.DirectionalLight(0xffffff,0.55);sun.position.set(6,14,9);scene.add(sun);
+
+  var SLAB_W=9,SLAB_D=4.6,TARGET=new THREE.Vector3(0,GAP*3,0);
+  var scrMat=new THREE.MeshLambertMaterial(),pipeMat=new THREE.MeshLambertMaterial();
+  var slabMat=new THREE.MeshLambertMaterial({transparent:true,opacity:0.5});
+  var edgeMat=new THREE.LineBasicMaterial(),ghostMat=new THREE.LineBasicMaterial();
+  var labs=[],pick=[];
+  function addLabel(text,pos,cls){var e=el("div","lab"+(cls?" "+cls:""),text);labels.appendChild(e);var o={el:e,pos:pos,cls:cls||""};labs.push(o);return o}
+
+  LEVELS.forEach(function(l){
+    var g=new THREE.BoxGeometry(SLAB_W,0.1,SLAB_D),m=new THREE.Mesh(g,slabMat);
+    m.position.y=levelY[l.id]-0.05;scene.add(m);
+    var e=new THREE.LineSegments(new THREE.EdgesGeometry(g),edgeMat);e.position.copy(m.position);scene.add(e);
+    addLabel(l.name,new THREE.Vector3(-SLAB_W/2+0.1,levelY[l.id]+0.02,SLAB_D/2+0.25),"level");
+  });
+
+  var robot={},motor={};
+  function part(geo,mat,a){var m=new THREE.Mesh(geo,mat);m.userData.asset=a;pick.push(m);return m}
+  function makeRobot(a,x,y){
+    var mat=new THREE.MeshLambertMaterial(),g=new THREE.Group();g.position.set(x,y,0);
+    g.add(part(new THREE.CylinderGeometry(0.34,0.4,0.18,20),mat,a)).position.y=0.09;
+    var turret=new THREE.Group();turret.position.y=0.18;g.add(turret);
+    turret.add(part(new THREE.CylinderGeometry(0.2,0.2,0.2,16),mat,a)).position.y=0.1;
+    var shoulder=new THREE.Group();shoulder.position.y=0.2;turret.add(shoulder);
+    shoulder.add(part(new THREE.BoxGeometry(0.17,0.72,0.17),mat,a)).position.y=0.36;
+    var elbow=new THREE.Group();elbow.position.y=0.72;shoulder.add(elbow);
+    elbow.add(part(new THREE.BoxGeometry(0.14,0.6,0.14),mat,a)).position.y=0.3;
+    var grip=part(new THREE.BoxGeometry(0.3,0.08,0.12),mat,a);grip.position.y=0.62;elbow.add(grip);
+    scene.add(g);robot={mat:mat,turret:turret,shoulder:shoulder,elbow:elbow,t:0};
+    a.mat=mat;a.center=new THREE.Vector3(x,y+0.6,0);a.top=new THREE.Vector3(x,y+1.55,0);
+  }
+  function makeMotor(a,x,y){
+    var mat=new THREE.MeshLambertMaterial(),g=new THREE.Group();g.position.set(x,y,0);
+    var body=part(new THREE.CylinderGeometry(0.3,0.3,0.7,20),mat,a);body.rotation.x=Math.PI/2;body.position.y=0.36;g.add(body);
+    g.add(part(new THREE.BoxGeometry(0.7,0.08,0.6),mat,a)).position.y=0.04;
+    var shaft=new THREE.Group();shaft.position.set(0,0.36,0.42);g.add(shaft);
+    var axle=part(new THREE.CylinderGeometry(0.05,0.05,0.2,10),mat,a);axle.rotation.x=Math.PI/2;shaft.add(axle);
+    var hub=new THREE.Group();hub.position.z=0.12;shaft.add(hub);
+    hub.add(part(new THREE.BoxGeometry(0.56,0.1,0.05),mat,a));
+    hub.add(part(new THREE.BoxGeometry(0.1,0.56,0.05),mat,a));
+    scene.add(g);motor={mat:mat,hub:hub};
+    a.mat=mat;a.center=new THREE.Vector3(x,y+0.36,0);a.top=new THREE.Vector3(x,y+0.72,0);
+  }
+  var B=function(w,h,d){return new THREE.BoxGeometry(w,h,d)},C=function(r,h,n){return new THREE.CylinderGeometry(r,r,h,n||14)};
+  function put(g,a,geo,x,y,z,mat){var m=part(geo,mat||a.mat,a);m.position.set(x,y,z);g.add(m);return m}
+  function monitor(g,a,x){
+    put(g,a,B(0.82,0.52,0.06),x,0.56,0);put(g,a,B(0.7,0.4,0.02),x,0.56,0.04,scrMat);
+    put(g,a,B(0.08,0.28,0.08),x,0.16,0);put(g,a,B(0.42,0.04,0.26),x,0.02,0);
+  }
+  function rail(g,a,n,hs){
+    put(g,a,B(n*0.24+0.1,0.06,0.3),0,0.03,0);
+    for(var i=0;i<n;i++)put(g,a,B(0.2,hs[i],0.4),(i-(n-1)/2)*0.24,0.06+hs[i]/2,0);
+  }
+  var SHAPES={
+    pc:function(g,a){monitor(g,a,0);return 0.82},
+    ws:function(g,a){monitor(g,a,-0.2);put(g,a,B(0.26,0.6,0.5),0.5,0.3,0);put(g,a,B(0.14,0.04,0.02),0.5,0.5,0.26,scrMat);return 0.82},
+    hmi:function(g,a){
+      put(g,a,B(0.16,0.4,0.16),0,0.2,0);var t=new THREE.Group();t.position.y=0.62;t.rotation.x=-0.3;g.add(t);
+      put(t,a,B(0.92,0.62,0.12),0,0,0);put(t,a,B(0.74,0.44,0.02),0,0.02,0.07,scrMat);return 0.95},
+    server:function(g,a){
+      put(g,a,B(0.6,1.1,0.7),0,0.55,0);
+      [0.25,0.45,0.65,0.85].forEach(function(y){put(g,a,B(0.5,0.05,0.02),0,y,0.36,scrMat)});return 1.1},
+    db:function(g,a){[0.13,0.43,0.73].forEach(function(y){put(g,a,C(0.38,0.26,22),0,y,0)});return 0.86},
+    plc:function(g,a){rail(g,a,4,[0.62,0.5,0.5,0.5]);put(g,a,B(0.12,0.14,0.02),-0.36,0.5,0.21,scrMat);return 0.68},
+    io:function(g,a){rail(g,a,3,[0.34,0.34,0.34]);return 0.4},
+    rtu:function(g,a){put(g,a,B(0.7,0.8,0.4),0,0.4,0);put(g,a,B(0.5,0.3,0.02),0,0.5,0.21,scrMat);put(g,a,C(0.02,0.5,8),0.25,1.05,0);return 1.3},
+    vfd:function(g,a){put(g,a,B(0.45,0.85,0.4),0,0.425,0);put(g,a,B(0.26,0.2,0.02),0,0.6,0.21,scrMat);put(g,a,B(0.35,0.08,0.3),0,0.89,0);return 0.93},
+    gw:function(g,a){put(g,a,B(0.6,0.2,0.4),0,0.1,0);put(g,a,C(0.02,0.4,8),-0.22,0.4,0);put(g,a,C(0.02,0.4,8),0.22,0.4,0);return 0.6},
+    router:function(g,a){put(g,a,B(0.85,0.2,0.45),0,0.1,0);put(g,a,B(0.6,0.04,0.02),0,0.1,0.23,scrMat);
+      [-0.3,0,0.3].forEach(function(x){put(g,a,C(0.02,0.42,8),x,0.41,-0.1)});return 0.62},
+    cloud:function(g,a){
+      [[-0.32,0.42,0.3],[0,0.55,0.4],[0.34,0.42,0.28]].forEach(function(c){put(g,a,new THREE.SphereGeometry(c[2],18,14),c[0],c[1],0)});return 0.95}
+  };
+  function makeShape(a,x,y){
+    a.mat=new THREE.MeshLambertMaterial();var g=new THREE.Group();g.position.set(x,y,0);
+    var top=SHAPES[a.kind](g,a);scene.add(g);
+    a.center=new THREE.Vector3(x,y+top/2,0);a.top=new THREE.Vector3(x,y+top,0);
+  }
+  LEVELS.forEach(function(l){
+    var group=ASSETS.filter(function(a){return a.level===l.id}),gap=Math.min(2.3,7.2/Math.max(1,group.length-1));
+    group.forEach(function(a,i){
+      var x=(i-(group.length-1)/2)*gap,y=levelY[l.id];
+      if(a.kind==="robot")makeRobot(a,x,y);else if(a.kind==="motor")makeMotor(a,x,y);else makeShape(a,x,y);
+      a.lab=addLabel(a.name,a.top,"asset");
+    });
+  });
+  /* firewalls sit between levels, on the conduit that joins them */
+  FWS.forEach(function(f){
+    var x=-3.3,z=-1.5;f.mat=new THREE.MeshLambertMaterial();
+    var pipe=new THREE.Mesh(C(0.035,Math.abs(f.ya-f.yb),8),pipeMat);pipe.position.set(x,f.fy,z);scene.add(pipe);
+    var g=new THREE.Group();g.position.set(x,f.fy,z);
+    [-0.19,0,0.19].forEach(function(y,r){
+      if(r%2===0)[-0.4,0,0.4].forEach(function(bx){put(g,f,B(0.37,0.16,0.16),bx,y,0)});
+      else{[-0.2,0.2].forEach(function(bx){put(g,f,B(0.37,0.16,0.16),bx,y,0)});[-0.5,0.5].forEach(function(bx){put(g,f,B(0.17,0.16,0.16),bx,y,0)})}
+    });
+    scene.add(g);f.center=new THREE.Vector3(x,f.fy,z);f.top=new THREE.Vector3(x,f.fy+0.3,z);
+    f.lab=addLabel(f.name,f.top,"asset");
+  });
+  var ALL=ASSETS.concat(FWS);
+
+  var temp=new THREE.Group();scene.add(temp);
+  var pulse=null,curve=null,ghostLab=null,selAsset=null;
+  var reduce=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var auto=!reduce;
+
+  function clearTemp(){
+    while(temp.children.length){var c=temp.children.pop();if(c.geometry)c.geometry.dispose();if(c.material&&c.material!==ghostMat)c.material.dispose()}
+    pulse=null;curve=null;
+    if(ghostLab){labels.removeChild(ghostLab.el);labs.splice(labs.indexOf(ghostLab),1);ghostLab=null}
+  }
+  function update(){
+    slabMat.color.set(css("--slab"));edgeMat.color.set(css("--line"));ghostMat.color.set(css("--ink"));
+    scrMat.color.set(css("--ink"));pipeMat.color.set(css("--line"));
+    clearTemp();
+    var base=css("--box"),ink=css("--ink"),alarmCol=css("--alarm");
+    ALL.forEach(function(a){a.mat.color.set(a===selAsset?ink:(a.kind==="fw"?css("--mute"):base));a.lab.el.classList.toggle("hot",a===selAsset)});
+    if(!st.robot){byName["ROBOT-Pick-1"].mat.color.set(alarmCol);byName["ROBOT-Pick-1"].lab.el.classList.add("hot")}
+    var tr=active?active.trace:(selRec?selRec.trace:null);
+    if(tr){
+      var col=css(tr.cvar),dst=byIp[tr.dst],from,to=dst.center.clone();
+      dst.mat.color.set(col);dst.lab.el.classList.add("hot");
+      crossed(tr).forEach(function(f){f.mat.color.set(col);f.lab.el.classList.add("hot")});
+      if(byIp[tr.src]){var src=byIp[tr.src];src.mat.color.set(col);src.lab.el.classList.add("hot");from=src.center.clone()}
+      else{
+        var y=levelY[tr.unk.level],gp=new THREE.Vector3(SLAB_W/2-0.8,y+0.31,SLAB_D/2-0.75);
+        var ghost=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(0.95,0.62,0.95)),ghostMat);
+        ghost.position.copy(gp);temp.add(ghost);from=gp.clone();
+        ghostLab=addLabel(tr.unk.label,new THREE.Vector3(gp.x,y+0.62,gp.z),"asset hot");
+      }
+      var mid=from.clone().add(to).multiplyScalar(0.5);mid.z+=3.4;
+      curve=new THREE.QuadraticBezierCurve3(from,mid,to);
+      temp.add(new THREE.Mesh(new THREE.TubeGeometry(curve,48,0.05,8,false),new THREE.MeshBasicMaterial({color:col})));
+      pulse=new THREE.Mesh(new THREE.SphereGeometry(0.17,16,12),new THREE.MeshBasicMaterial({color:col}));
+      pulse.position.copy(reduce?to:from);temp.add(pulse);
+    }
+    showLabels();
+  }
+  function showLabels(){
+    var wide=stage.clientWidth>620;
+    labs.forEach(function(l){if(l.cls.indexOf("asset")<0)return;l.el.style.display=(wide||l.el.classList.contains("hot"))?"":"none"});
+  }
+
+  var th0=0.62,theta=th0,phi=1.18,zoom=1,dist=20,holdUntil=0;
+  function resize(){
+    var w=stage.clientWidth,h=stage.clientHeight;if(!w||!h)return;
+    renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();
+    dist=Math.max(22.5,20.5/camera.aspect);showLabels();
+  }
+  var ptrs={},moved=0,pinch=0;
+  canvas.addEventListener("pointerdown",function(e){ptrs[e.pointerId]={x:e.clientX,y:e.clientY};moved=0;try{canvas.setPointerCapture(e.pointerId)}catch(_){}});
+  canvas.addEventListener("pointermove",function(e){
+    var p=ptrs[e.pointerId];if(!p)return;
+    var ids=Object.keys(ptrs);holdUntil=performance.now()+2500;
+    if(ids.length===2){
+      p.x=e.clientX;p.y=e.clientY;
+      var a=ptrs[ids[0]],b=ptrs[ids[1]],dd=Math.hypot(a.x-b.x,a.y-b.y);
+      if(pinch)zoom=Math.min(2.4,Math.max(0.6,zoom*dd/pinch));pinch=dd;moved=99;return;
+    }
+    var dx=e.clientX-p.x,dy=e.clientY-p.y;moved+=Math.abs(dx)+Math.abs(dy);
+    theta-=dx*0.008;if(e.pointerType==="mouse")phi=Math.min(1.5,Math.max(0.35,phi-dy*0.006));
+    p.x=e.clientX;p.y=e.clientY;
+  });
+  var ray=new THREE.Raycaster(),ndc=new THREE.Vector2();
+  function up(e){
+    var had=ptrs[e.pointerId];delete ptrs[e.pointerId];pinch=0;
+    if(!had||moved>=7||e.type!=="pointerup")return;
+    var r=canvas.getBoundingClientRect();
+    ndc.set(((e.clientX-r.left)/r.width)*2-1,-((e.clientY-r.top)/r.height)*2+1);
+    ray.setFromCamera(ndc,camera);
+    var hit=ray.intersectObjects(pick)[0];
+    selAsset=hit?hit.object.userData.asset:null;showCard(selAsset);update();
+  }
+  canvas.addEventListener("pointerup",up);canvas.addEventListener("pointercancel",up);
+  canvas.addEventListener("keydown",function(e){
+    var k=e.key,used=true;holdUntil=performance.now()+2500;
+    if(k==="ArrowLeft")theta-=0.12;else if(k==="ArrowRight")theta+=0.12;
+    else if(k==="ArrowUp")phi=Math.max(0.35,phi-0.08);else if(k==="ArrowDown")phi=Math.min(1.5,phi+0.08);
+    else if(k==="+"||k==="=")zoom=Math.min(2.4,zoom*1.15);else if(k==="-")zoom=Math.max(0.6,zoom/1.15);
+    else used=false;
+    if(used)e.preventDefault();
+  });
+  $("#zin").addEventListener("click",function(){zoom=Math.min(2.4,zoom*1.2)});
+  $("#zout").addEventListener("click",function(){zoom=Math.max(0.6,zoom/1.2)});
+  var spinBtn=$("#spin");
+  function spinLabel(){spinBtn.textContent=auto?"Pause rotation":"Rotate plant"}
+  spinBtn.addEventListener("click",function(){auto=!auto;spinLabel()});spinLabel();
+  $("#card").addEventListener("click",function(){if($("#card").hidden){selAsset=null;update()}});
+
+  var v=new THREE.Vector3(),last=performance.now(),t0=last;
+  function frame(now){
+    var dt=Math.min(0.05,(now-last)/1000);last=now;
+    if(auto&&now>holdUntil&&!Object.keys(ptrs).length)theta+=dt*0.14;
+    var d=dist/zoom;
+    camera.position.set(TARGET.x+d*Math.sin(phi)*Math.sin(theta),TARGET.y+d*Math.cos(phi),TARGET.z+d*Math.sin(phi)*Math.cos(theta));
+    camera.lookAt(TARGET);
+    if(!reduce){
+      motor.hub.rotation.z-=dt*(st.rpm/1200)*9;
+      if(st.robot){robot.t+=dt;
+        robot.turret.rotation.y=Math.sin(robot.t*1.3)*1.1;
+        robot.shoulder.rotation.z=0.35+Math.sin(robot.t*2.6)*0.25;
+        robot.elbow.rotation.z=-1.25+Math.sin(robot.t*2.6+0.8)*0.35;}
+      if(pulse&&curve)pulse.position.copy(curve.getPoint(((now-t0)%1800)/1800));
+    }else{robot.shoulder.rotation.z=0.35;robot.elbow.rotation.z=-1.25}
+    renderer.render(scene,camera);
+    var w=stage.clientWidth,h=stage.clientHeight;
+    for(var i=0;i<labs.length;i++){
+      var l=labs[i];if(l.el.style.display==="none")continue;
+      v.copy(l.pos).project(camera);
+      var x=(v.x*0.5+0.5)*w,y=(-v.y*0.5+0.5)*h;
+      l.el.style.transform="translate("+x.toFixed(1)+"px,"+y.toFixed(1)+"px)"+(l.cls==="level"?" translate(-50%,-50%)":" translate(-50%,-140%)");
+    }
+    requestAnimationFrame(frame);
+  }
+  if(window.ResizeObserver)new ResizeObserver(resize).observe(stage);else window.addEventListener("resize",resize);
+  if(window.matchMedia)window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change",function(){update()});
+  new MutationObserver(function(){update()}).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+  resize();update();requestAnimationFrame(frame);
+  return {update:update};
+}
+
+/* ================= start ================= */
+for(var i=0;i<40;i++)simulate();
+for(var j=0;j<8;j++)emit(nextPoll());
+paint();paintRecs();
+try{
+  if(!window.THREE)throw new Error("no three");
+  scene3d=build();
+}catch(err){
+  var s=$("#stage");s.textContent="";
+  s.appendChild(el("div","nogl","The 3D view needs WebGL, which isn’t available in this browser. The alarms, traffic and verdicts on this page still work."));
+}
+setInterval(tick,700);
+})();
+</script>
+</body>
+</html>

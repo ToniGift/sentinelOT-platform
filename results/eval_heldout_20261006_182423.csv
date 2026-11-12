@@ -1,0 +1,11 @@
+scenario,verdict,expected_verdict,verdict_ok,priority,techniques,expected_techniques,technique_ok,intel_items,intel_dropped,invalid_ids_dropped,step_failures,seconds,prompt_tokens,completion_tokens
+h01,escalate,escalate,True,P1,T0836,T1692.001 T0836 T0831 T0835,True,6,0,0,0,30.49,12326,5304
+h02,likely_benign,likely_benign,True,P4,,,True,2,0,0,0,18.53,11968,2758
+h03,investigate,investigate,True,P2,T0861,T0801 T0846,False,5,0,0,0,36.35,11474,7525
+h04,investigate,investigate,True,P2,T0822,T0859 T0822 T0886,True,6,0,0,0,27.65,12106,5489
+h05,investigate,escalate,False,P2,T0822,T0859 T0822 T0886,True,7,0,0,0,28.67,12423,6063
+h06,escalate,escalate,True,P1,T0835,T1692.001 T0836 T0831 T0835,True,1,0,0,0,24.56,10364,4843
+h07,escalate,escalate,True,P1,T0843,T0843,True,4,0,0,0,23.34,10027,4476
+h08,likely_benign,likely_benign,True,P4,,,True,2,0,0,0,20.61,11190,3172
+h09,investigate,investigate,True,P2,T0846.002,T0846 T0842,True,7,0,0,0,31.43,11096,6520
+h10,likely_benign,likely_benign,True,P4,,,True,0,0,0,0,11.05,9446,2039

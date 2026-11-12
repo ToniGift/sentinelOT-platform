@@ -1,0 +1,10 @@
+.env
+.git
+.gitignore
+.venv
+__pycache__
+*.pyc
+*.sqlite
+*.csv
+data/cache
+tests

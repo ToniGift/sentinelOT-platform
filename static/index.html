@@ -1,0 +1,1209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SentinelOT: AI-powered OT/ICS security alert triage copilot</title>
+<meta name="description" content="SentinelOT reads an industrial security alert the way a second analyst would, and recommends what to do next. It never touches a controller.">
+<script>try{var t=localStorage.getItem('sot-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Tokens. Grey is the resting state. Red and amber are the only alarm colours. */
+:root{
+  --ui:"Barlow Semi Condensed","Arial Narrow","Roboto Condensed",system-ui,sans-serif;
+  --ground:#C4C9C7; --panel:#E3E6E4; --panel-2:#D3D8D5;
+  --ink:#1B2226; --ink-soft:#4A565B;
+  --rule:#A3ACAA; --rule-strong:#6F7B79;
+  --action:#1C4E80; --on-action:#FFFFFF;
+  --red:#BF2A1E; --on-red:#FFFFFF;
+  --amber:#E3A600; --on-amber:#1B2226;
+  --pad:1.5rem;
+  --wrap:112rem;
+  --gutter:max(var(--pad),calc((100% - var(--wrap)) / 2));
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (min-width:1024px){ :root{--pad:2rem} }
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#1B2023; --panel:#262C2F; --panel-2:#30373B;
+    --ink:#E6EAE8; --ink-soft:#A8B3B7;
+    --rule:#465055; --rule-strong:#7D8B90;
+    --action:#8DBBEA; --on-action:#0E1C2A;
+    --red:#E0483B; --on-red:#FFFFFF;
+    --amber:#E9B52E; --on-amber:#1B2226;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#1B2023; --panel:#262C2F; --panel-2:#30373B;
+  --ink:#E6EAE8; --ink-soft:#A8B3B7;
+  --rule:#465055; --rule-strong:#7D8B90;
+  --action:#8DBBEA; --on-action:#0E1C2A;
+  --red:#E0483B; --on-red:#FFFFFF;
+  --amber:#E9B52E; --on-amber:#1B2226;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none !important}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+@media (prefers-reduced-motion:no-preference){ html{scroll-behavior:smooth} }
+body{margin:0;background:var(--panel);color:var(--ink);font:400 1rem/1.5 var(--ui);-webkit-font-smoothing:antialiased}
+a{color:var(--action)}
+:focus-visible{outline:3px solid var(--action);outline-offset:2px}
+
+.screen{background:var(--panel);min-height:100vh}
+
+/* Header: a status strip over a masthead */
+.top{position:sticky;top:0;z-index:20;background:var(--panel);border-bottom:1px solid var(--rule-strong)}
+.strip{display:flex;align-items:center;gap:1rem;padding:.3rem var(--gutter);background:var(--panel-2);border-bottom:1px solid var(--rule);font-size:.875rem;color:var(--ink-soft)}
+.path{font:500 .8125rem ui-monospace,Menlo,Consolas,"Courier New",monospace;color:var(--ink);white-space:nowrap}
+.path i{font-style:normal;color:var(--ink-soft);padding:0 .1em}
+.strip .right{margin-left:auto;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.api{display:inline-flex;align-items:center;gap:.5rem;padding:.1rem .6rem .1rem .5rem;border:1px solid var(--rule-strong);border-radius:2px;background:var(--panel);color:var(--ink);font-size:.875rem;white-space:nowrap}
+.dot{width:.65rem;height:.65rem;border-radius:50%;border:2px solid var(--ink);background:var(--ink);flex:none}
+.api[data-state="checking"] .dot,.api[data-state="busy"] .dot{background:transparent}
+.api[data-state="busy"] .dot{animation:blink 1s steps(2,jump-none) infinite}
+.api[data-state="sample"] .dot{background:var(--amber)}
+.api[data-state="error"] .dot{background:var(--red)}
+@keyframes blink{50%{opacity:.25}}
+.tool{font:500 .875rem var(--ui);background:transparent;color:var(--ink);border:1px solid var(--rule-strong);border-radius:2px;padding:.1rem .6rem;min-height:28px;cursor:pointer}
+.tool:hover{background:var(--panel)}
+kbd{font:500 .75rem ui-monospace,Menlo,Consolas,monospace;border:1px solid var(--rule-strong);border-bottom-width:2px;border-radius:3px;padding:0 .35rem;background:var(--panel);color:var(--ink)}
+.mast{display:flex;align-items:center;gap:1rem 1.5rem;flex-wrap:wrap;padding:.65rem var(--gutter)}
+.brand{display:flex;align-items:center;gap:.6rem;color:var(--ink);text-decoration:none}
+.brand svg{flex:none}
+.wordmark{font-weight:600;font-size:1.35rem;letter-spacing:.01em}
+.lockup{display:flex;flex-direction:column;line-height:1.15}
+.brand .tag{color:var(--ink-soft);font-size:.875rem}
+.nav{display:flex;gap:.15rem;margin-left:auto}
+.nav a{padding:.45rem .75rem;color:var(--ink);text-decoration:none;border-bottom:3px solid transparent}
+.nav a:hover{background:var(--panel-2)}
+.nav a[aria-current="true"]{border-bottom-color:var(--ink);font-weight:600}
+.start{font:600 .9375rem var(--ui);background:var(--action);color:var(--on-action);border:0;border-radius:2px;padding:.55rem 1rem;min-height:40px;cursor:pointer}
+.start:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+#about,#pickBlock,#processBlock,#alertBlock,#result,#historyBlock{scroll-margin-top:7rem}
+#historyBlock{background:var(--panel-2)}
+#historyBlock .hist-wrap{background:var(--panel)}
+
+dialog{border:2px solid var(--ink);background:var(--panel);color:var(--ink);padding:1.25rem 1.5rem;max-width:26rem;width:calc(100% - 2rem)}
+dialog::backdrop{background:rgba(0,0,0,.5)}
+dialog h2{font:600 1.25rem var(--ui);margin:0 0 .75rem}
+.keylist{display:grid;grid-template-columns:7rem 1fr;gap:.5rem 1rem;margin:0 0 1.25rem}
+.keylist dd{margin:0}
+
+/* Intro */
+.intro{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:2rem 3rem;padding:2.5rem var(--gutter) 2rem}
+.intro h1{font:600 clamp(2rem,4.2vw,2.8rem)/1.08 var(--ui);letter-spacing:-.005em;margin:0 0 1rem;max-width:22ch}
+.intro p{font:400 1.0625rem/1.55 var(--ui);margin:0 0 .8rem;max-width:60ch}
+.builder{border-left:3px solid var(--ink);padding:.1rem 0 .1rem 1rem;align-self:start}
+.builder p{font-size:.98rem;color:var(--ink-soft)}
+.builder .who{font:600 1rem var(--ui);color:var(--ink);margin:0 0 .35rem}
+
+.sample{margin:0 var(--gutter) 1.25rem;padding:.75rem 1rem;border:1px dashed var(--action);background:var(--panel-2)}
+
+/* Blocks */
+.block{padding:1.5rem var(--gutter);border-top:1px solid var(--rule)}
+.block>h2,.process>h2{font:600 1.3rem/1.2 var(--ui);margin:0 0 .3rem}
+.sub{margin:0 0 1rem;color:var(--ink-soft);max-width:70ch}
+
+/* Alarm list */
+.list-wrap{max-height:20rem;overflow:auto;border:1px solid var(--rule-strong);background:var(--panel)}
+.alarms{width:100%;border-collapse:collapse}
+.alarms th{position:sticky;top:0;background:var(--panel-2);text-align:left;font-weight:600;font-size:.9rem;padding:.4rem .75rem;border-bottom:1px solid var(--rule-strong)}
+.alarms td{padding:0;border-bottom:1px solid var(--rule)}
+.alarms td.id,.alarms td.proto{padding:.5rem .75rem;color:var(--ink-soft);white-space:nowrap;font-variant-numeric:tabular-nums}
+.alarms td.id{width:4.5rem}
+.alarms tr{cursor:pointer}
+.alarms tr:hover td{background:var(--panel-2)}
+.alarms tr.sel td{background:var(--panel-2)}
+.alarms tr.sel td:first-child{box-shadow:inset 5px 0 0 var(--ink)}
+.pick{all:unset;display:block;box-sizing:border-box;width:100%;padding:.5rem .75rem;cursor:pointer;font:400 1rem/1.35 var(--ui)}
+.pick:focus-visible{outline:3px solid var(--action);outline-offset:-3px}
+
+/* Selected alert */
+.alert{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1rem 2rem;align-items:start}
+.alert .kicker{margin:0 0 .2rem;color:var(--ink-soft);font-size:.9375rem}
+.alert h2{font:600 1.5rem/1.25 var(--ui);margin:0}
+.desc{font:400 1.0625rem/1.5 var(--ui);margin:.6rem 0 0;max-width:64ch}
+.desc.dim{color:var(--ink-soft);font-style:italic}
+.facts{display:flex;flex-wrap:wrap;gap:.25rem 1.75rem;margin:.9rem 0 0;padding:0}
+.facts div{display:flex;gap:.4rem}
+.facts dt{color:var(--ink-soft)}
+.facts dd{margin:0;font-variant-numeric:tabular-nums}
+.go{font:600 1.0625rem var(--ui);background:var(--action);color:var(--on-action);border:0;border-radius:2px;padding:.75rem 1.4rem;min-height:44px;cursor:pointer}
+.go:disabled{opacity:.5;cursor:default}
+.go:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+
+/* Process drawing */
+.process{background:var(--panel-2);border-top:1px solid var(--rule);padding:1.5rem var(--gutter) 1.25rem}
+.svgwrap{overflow-x:auto;margin-top:.5rem}
+#pid{display:block;width:100%;max-width:86rem;min-width:720px;height:auto}
+#pid text{font-family:var(--ui)}
+.pipe-base{stroke:var(--rule-strong);stroke-width:5;fill:none;stroke-linejoin:round}
+.flow{stroke:var(--ink);stroke-width:2;fill:none;stroke-linejoin:round;opacity:0}
+#pid.flowing .flow{opacity:1;stroke-dasharray:8 8;animation:flow .8s linear infinite}
+#pid.complete .flow{opacity:1}
+@keyframes flow{to{stroke-dashoffset:-16}}
+.st rect{fill:var(--panel);stroke:var(--ink);stroke-width:1.5}
+.st .name{font-size:15px;font-weight:600;fill:var(--ink)}
+.st .sub{font-size:11.5px;fill:var(--ink-soft)}
+.st.done rect{fill:var(--ink)}
+.st.done .name,.st.done .sub{fill:var(--panel)}
+#pid.flowing .st:not(.done) rect{stroke-dasharray:5 3}
+.gate path{fill:var(--panel-2);stroke:var(--ink);stroke-width:1.5}
+.gate.done path{fill:var(--ink)}
+.gate text{font-size:11.5px;fill:var(--ink-soft)}
+.note{font-size:12.5px;font-style:italic;fill:var(--ink-soft)}
+.statusline{display:flex;gap:1rem;flex-wrap:wrap;align-items:baseline;margin:.6rem 0 0}
+.statusline #clock{font-variant-numeric:tabular-nums;color:var(--ink-soft)}
+.steps{margin:.75rem 0 0}
+.steps summary{cursor:pointer;font-weight:600}
+.steps dl{margin:.6rem 0 0;display:grid;grid-template-columns:9rem 1fr;gap:.35rem 1rem;max-width:60rem}
+.steps dt{font-weight:600}
+.steps dd{margin:0;color:var(--ink-soft)}
+
+/* Result console */
+.result{padding-bottom:2rem}
+.dash{display:grid;grid-template-columns:minmax(0,23rem) minmax(0,1fr);gap:2rem;align-items:start}
+.face{border:1px solid var(--rule-strong);background:var(--panel)}
+.verdict{display:grid;grid-template-columns:auto 1fr;border-bottom:2px solid var(--ink)}
+.glyph{width:5rem;display:grid;place-items:center;border-right:2px solid var(--ink);padding:.75rem}
+.v-escalate .glyph{background:var(--red);color:var(--on-red)}
+.v-investigate .glyph{background:var(--amber);color:var(--on-amber)}
+.v-likely_benign .glyph,.v-unknown .glyph{background:var(--panel);color:var(--ink)}
+.vbody{padding:.6rem 1rem;align-self:center}
+.vsub{font-size:.875rem;color:var(--ink-soft)}
+.vword{font:600 1.9rem/1.1 var(--ui)}
+.sect{padding:.8rem 1rem;border-bottom:1px solid var(--rule)}
+.lab{display:flex;justify-content:space-between;margin:0 0 .4rem;font-size:.875rem;color:var(--ink-soft)}
+.lab b{color:var(--ink);font-size:1rem;font-variant-numeric:tabular-nums}
+.small{margin:.45rem 0 0;color:var(--ink-soft);font-size:.875rem}
+.ladder{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.rung{border:1.5px solid var(--rule-strong);padding:.25rem 0;text-align:center;font:600 1rem var(--ui);color:var(--ink-soft)}
+.rung.on{border-color:var(--ink);color:var(--ink);background:var(--panel-2)}
+.rung.on.p1{background:var(--red);color:var(--on-red)}
+.rung.on.p2{background:var(--amber);color:var(--on-amber)}
+.gauge{position:relative;height:.8rem;border:1.5px solid var(--ink);background:var(--panel)}
+.gauge i{position:absolute;inset:0 auto 0 0;background:var(--ink)}
+.stats{display:grid;grid-template-columns:1fr 1fr}
+.stat{padding:.6rem 1rem;border-bottom:1px solid var(--rule)}
+.stat:nth-child(odd){border-right:1px solid var(--rule)}
+.stat b{display:block;font:600 1.5rem/1.1 var(--ui);font-variant-numeric:tabular-nums}
+.stat span{color:var(--ink-soft);font-size:.875rem}
+.face .note{border-bottom:0}
+
+.bt{font:600 1.6rem/1.2 var(--ui);margin:0 0 1rem}
+.bt:focus{outline:none}
+.cb{border-left:4px solid var(--rule-strong);padding:.1rem 0 .1rem 1rem;margin:0 0 1.1rem}
+.v-escalate .cb{border-left-color:var(--red)}
+.v-investigate .cb{border-left-color:var(--amber)}
+.cb h3{font:600 .9375rem var(--ui);color:var(--ink-soft);margin:0 0 .2rem}
+.cb p{margin:0;font:400 1.0625rem/1.5 var(--ui);max-width:76ch}
+
+.sec-h{font:600 1.15rem var(--ui);margin:1.75rem 0 .2rem}
+.sec-s{margin:0 0 .7rem;color:var(--ink-soft);max-width:70ch}
+.board{display:grid;grid-template-columns:1fr 1fr;gap:1rem;align-items:start}
+.lane{border:1px solid var(--rule-strong);background:var(--panel)}
+.lane>header{display:flex;justify-content:space-between;align-items:center;padding:.5rem .85rem;background:var(--panel-2);border-bottom:1px solid var(--rule-strong);font-weight:600}
+.lane.gated>header{background:var(--ink);color:var(--panel)}
+.lane ul{list-style:none;margin:0;padding:0}
+.tile{padding:.7rem .85rem;border-bottom:1px solid var(--rule)}
+.tile:last-child{border-bottom:0}
+.tile .ref{display:block;color:var(--ink-soft);font-size:.875rem;margin-top:.15rem}
+.lane .none{margin:0;padding:.7rem .85rem;color:var(--ink-soft)}
+.cnt{font:600 .8125rem var(--ui);padding:0 .4rem;border:1px solid var(--rule-strong);border-radius:2px;background:var(--panel);color:var(--ink);font-variant-numeric:tabular-nums}
+.cnt.warn{background:var(--amber);color:var(--on-amber);border-color:var(--ink)}
+
+.tabs{margin-top:1.75rem;border:1px solid var(--rule-strong);background:var(--panel)}
+.tablist{display:flex;overflow-x:auto;background:var(--panel-2);border-bottom:1px solid var(--rule-strong)}
+.tab{display:flex;align-items:center;gap:.45rem;font:500 1rem var(--ui);color:var(--ink);background:none;border:0;border-right:1px solid var(--rule);padding:.6rem 1rem;min-height:44px;cursor:pointer;white-space:nowrap}
+.tab:hover{background:var(--panel)}
+.tab[aria-selected="true"]{background:var(--panel);font-weight:600;box-shadow:inset 0 3px 0 var(--ink)}
+.tab:focus-visible{outline:3px solid var(--action);outline-offset:-3px}
+.tabpanel{padding:1rem 1.25rem 1.25rem}
+.lead{margin:0 0 .75rem;max-width:70ch}
+.ev{list-style:none;margin:0;padding:0}
+.ev li{padding:.55rem 0 .55rem 1.1rem;border-top:1px solid var(--rule);position:relative}
+.ev li:first-child{border-top:0}
+.ev li::before{content:"";position:absolute;left:0;top:1.05rem;width:.45rem;height:.45rem;background:var(--ink)}
+.src{padding:.7rem 0;border-top:1px solid var(--rule)}
+.src:first-of-type{border-top:0}
+.src .t{font-weight:600}
+.src .host{color:var(--ink-soft);font-size:.9375rem;margin-left:.5rem}
+.src p{margin:.25rem 0 0;max-width:64ch}
+.badge{display:inline-block;font:600 .8125rem/1.2 var(--ui);padding:.2rem .5rem;border:1.5px solid var(--ink);border-radius:2px;white-space:nowrap;margin-left:.5rem}
+.badge.warn{background:var(--amber);color:var(--on-amber)}
+.tech{display:grid;grid-template-columns:7rem 1fr;gap:.25rem 1rem;padding:.7rem 0;border-top:1px solid var(--rule)}
+.tech:first-of-type{border-top:0}
+.tech .tid{font-weight:600;font-variant-numeric:tabular-nums}
+.kv{display:grid;grid-template-columns:9rem 1fr;gap:.3rem 1rem;margin:0 0 1rem}
+.kv dt{color:var(--ink-soft)}
+.kv dd{margin:0;font-variant-numeric:tabular-nums}
+.tw{overflow-x:auto}
+.trace{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.trace th,.trace td{padding:.4rem .75rem;text-align:right;border-bottom:1px solid var(--rule)}
+.trace th:first-child,.trace td:first-child,.trace th:nth-child(2),.trace td:nth-child(2){text-align:left}
+.trace th{font-weight:600;font-size:.9rem;background:var(--panel-2)}
+.rawd summary{cursor:pointer;font-weight:600;margin:1rem 0 .25rem}
+pre.raw{overflow:auto;max-height:24rem;margin:.5rem 0 0;padding:1rem;background:var(--panel-2);font:.8125rem/1.5 ui-monospace,Menlo,Consolas,monospace}
+.tool:disabled{opacity:.5;cursor:default}
+.totop{position:fixed;right:max(1rem,env(safe-area-inset-right,0px));bottom:max(1rem,env(safe-area-inset-bottom,0px));z-index:30;width:3rem;height:3rem;display:grid;place-items:center;background:var(--ink);color:var(--panel);border:2px solid var(--panel);border-radius:2px;box-shadow:0 0 0 2px var(--ink);cursor:pointer}
+.totop:hover{background:var(--action);color:var(--on-action)}
+.totop:focus-visible{outline:3px solid var(--action);outline-offset:4px}
+.totop svg{width:1.4rem;height:1.4rem}
+.actions{display:flex;flex-direction:column;gap:.5rem;align-items:stretch}
+.actions .tool{min-height:40px;padding:.4rem .9rem;font-size:.9375rem}
+.st.failed rect{stroke:var(--red);stroke-width:3}
+.last{margin:0 0 .75rem;font-size:.9375rem;color:var(--ink-soft)}
+.linkbtn{all:unset;cursor:pointer;color:var(--action);text-decoration:underline}
+.linkbtn:focus-visible{outline:3px solid var(--action);outline-offset:2px}
+.savedbar{display:flex;align-items:center;gap:.75rem 1rem;flex-wrap:wrap;margin:0 0 1.25rem;padding:.55rem .85rem;border:1px solid var(--rule-strong);border-left:5px solid var(--ink);background:var(--panel-2)}
+.savedbar .tool{margin-left:auto}
+.hhead{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap}
+.hbtns{display:flex;gap:.5rem}
+.empty{margin:0;padding:1rem;border:1px dashed var(--rule-strong);color:var(--ink-soft);max-width:62ch}
+.hist-wrap{max-height:22rem;overflow:auto;border:1px solid var(--rule-strong);background:var(--panel)}
+.hist{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.hist th{position:sticky;top:0;background:var(--panel-2);text-align:left;font-weight:600;font-size:.9rem;padding:.4rem .75rem;border-bottom:1px solid var(--rule-strong);white-space:nowrap}
+.hist td{padding:.5rem .75rem;border-bottom:1px solid var(--rule);vertical-align:middle}
+.hist tr[data-ts]{cursor:pointer}
+.hist tr[data-ts]:hover td,.hist tr.sel td{background:var(--panel-2)}
+.hist tr.sel td:first-child{box-shadow:inset 5px 0 0 var(--ink)}
+.hist td:first-child{white-space:nowrap}
+.hist .open{all:unset;cursor:pointer;color:var(--action);text-decoration:underline;font:400 1rem/1.35 var(--ui)}
+.hist .open:focus-visible{outline:3px solid var(--action);outline-offset:2px}
+.hist .badge{margin-left:.5rem}
+.mini{display:inline-grid;place-items:center;width:1.7rem;height:1.7rem;border:1.5px solid var(--ink);vertical-align:middle;margin-right:.5rem;background:var(--panel);color:var(--ink)}
+.mini svg{width:1.1rem;height:1.1rem}
+.mini.v-escalate{background:var(--red);color:var(--on-red)}
+.mini.v-investigate{background:var(--amber);color:var(--on-amber)}
+.err{border:2px solid var(--red);padding:.75rem 1rem;background:var(--panel);max-width:46rem}
+.err p{margin:.25rem 0 0}
+
+.foot{background:var(--ink);color:var(--panel);padding:2.25rem var(--gutter) 1.5rem;font-size:1rem}
+.foot a{color:var(--panel)}
+.foot a:focus-visible{outline-color:var(--panel)}
+.foot-grid{display:grid;grid-template-columns:1.5fr 1fr 1.2fr 1.2fr;gap:2rem}
+.foot h2{font:600 .9375rem var(--ui);margin:0 0 .6rem;opacity:.75}
+.foot p{margin:0 0 .5rem;max-width:46ch}
+.foot ul{list-style:none;margin:0;padding:0}
+.foot li{margin:0 0 .4rem}
+.foot-brand{font:600 1.4rem var(--ui)}
+.foot-name{font:600 1.2rem var(--ui)}
+.foot-small{opacity:.75;font-size:.9375rem}
+.foot-legal{margin:1.75rem 0 0;padding-top:1rem;border-top:1px solid var(--rule-strong);font-size:.875rem;opacity:.8;max-width:none}
+@media (max-width:900px){.foot-grid{grid-template-columns:1fr 1fr}}
+@media (max-width:560px){.foot-grid{grid-template-columns:1fr}}
+
+@media (max-width:760px){
+  :root{--pad:1rem}
+  .intro,.cols{grid-template-columns:1fr}
+  .alert{grid-template-columns:1fr}
+  .act{grid-template-columns:1fr}
+  .act .ref{grid-column:1}
+  .steps dl,.kv{grid-template-columns:1fr}
+  .dash,.board{grid-template-columns:1fr}
+  .tech{grid-template-columns:1fr}
+  .top{position:static}
+  .nav{margin-left:0;width:100%;order:3;overflow-x:auto}
+  .start{flex:1}
+  .tool{min-height:36px}
+  #about,#pickBlock,#processBlock,#alertBlock,#result,#historyBlock{scroll-margin-top:1rem}
+}
+@media (max-width:960px){ .strip-note{display:none} }
+@media (prefers-reduced-motion:reduce){
+  #pid.flowing .flow{animation:none}
+  *{scroll-behavior:auto !important}
+}
+</style>
+</head>
+<body>
+<noscript><p style="padding:1rem">This demo page needs JavaScript to run alerts.</p></noscript>
+<div class="screen" id="top">
+
+  <header class="top">
+    <div class="strip">
+      <code class="path">sentinelot<i>/</i>triage-demo</code>
+      <span class="strip-note">Synthetic alerts only. Recommends, never executes.</span>
+      <div class="right">
+        <span class="api" id="api" data-state="checking"><span class="dot" aria-hidden="true"></span><span id="apiText">Checking the API</span></span>
+        <button type="button" class="tool" id="themeBtn">Theme: Auto</button>
+        <button type="button" class="tool" id="keysBtn" aria-haspopup="dialog">Shortcuts <kbd>?</kbd></button>
+      </div>
+    </div>
+    <div class="mast">
+      <a class="brand" href="#top" aria-label="SentinelOT, AI-powered OT/ICS security alert triage copilot. Back to top.">
+        <svg width="32" height="32" viewBox="0 0 26 26" aria-hidden="true">
+          <circle cx="13" cy="13" r="11" fill="none" stroke="currentColor" stroke-width="2"/>
+          <path d="M2 13h22" stroke="currentColor" stroke-width="2"/>
+        </svg>
+        <span class="lockup">
+          <span class="wordmark">SentinelOT</span>
+          <span class="tag">AI-powered OT/ICS security alert triage copilot</span>
+        </span>
+      </a>
+      <nav class="nav" aria-label="Page sections">
+        <a href="#pickBlock" id="nav-pick">Pick an alert</a>
+        <a href="#processBlock" id="nav-how">How it works</a>
+        <a href="#historyBlock" id="nav-hist">History <span class="cnt" id="histCount">0</span></a>
+        <a href="#about" id="nav-about">Why I built it</a>
+      </nav>
+      <button type="button" class="start" id="startBtn">Start with an example</button>
+    </div>
+  </header>
+
+  <section class="intro">
+    <div>
+      <h1>A first pass on industrial alerts, done the way a second analyst would</h1>
+      <p>When an OT monitor raises an alarm, the hard part is rarely the alarm. It is working out which machine this is, whether the traffic is normal for it, and what it could do to the process.</p>
+      <p>SentinelOT does that first pass. It looks the assets up, reads current advisories, maps the activity to MITRE ATT&amp;CK for ICS, and gives you a verdict you can argue with. Every claim points back to a retrieved source or a field in the alert.</p>
+    </div>
+    <aside class="builder" id="about">
+      <p class="who">Why I built it</p>
+      <p>I have spent about three years on the plant side of OT security, around PLCs, SCADA and HMIs. On almost every alert, most of the time went on gathering context, not on the decision.</p>
+      <p>This is my attempt to hand that first half to a machine and keep the judgement with people. Every plant, address and asset on this page is made up.</p>
+    </aside>
+  </section>
+
+  <div class="sample" id="sampleBanner" hidden>
+    <strong>You are looking at sample data.</strong> This page could not reach the SentinelOT API, so only alerts S01 and S06 will run, using saved results. The layout is the real one.
+  </div>
+
+  <section class="block" id="pickBlock">
+    <h2>Pick an alert</h2>
+    <p class="sub">None of these come from a real plant. The expected answers are not shown, so you can judge the result yourself. Runs are limited per visitor to protect the credits behind this demo.</p>
+    <p class="last" id="lastScan" hidden><span id="lastScanText"></span> <button type="button" class="linkbtn" id="lastOpen">Open it</button></p>
+    <div class="list-wrap" tabindex="0" aria-label="Alert list">
+      <table class="alarms">
+        <thead id="alarmHead"></thead>
+        <tbody id="alarmBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="block" id="alertBlock" hidden>
+    <div class="alert">
+      <div>
+        <p class="kicker" id="alertId"></p>
+        <h2 id="alertTitle"></h2>
+        <div id="alertBody"></div>
+      </div>
+      <div class="actions"><button type="button" class="go" id="go">Triage this alert</button><button type="button" class="tool" id="savedBtn">Show last saved result</button></div>
+    </div>
+  </section>
+
+  <section class="process" id="processBlock">
+    <h2>What happens when you press the button</h2>
+    <p class="sub">Five model calls and one web search, run in order by plain Python. The small valve symbols are checks written in code: they reject sources that were never retrieved, technique IDs that do not exist, and verdicts that contradict their priority.</p>
+    <div class="svgwrap">
+      <svg id="pid" viewBox="0 0 1000 250" role="img" aria-label="Flow diagram. The alert goes to Intake. Tavily search then Intel run beside ATT&amp;CK mapping, and both feed Triage, then Advice, then the result."></svg>
+    </div>
+    <div class="statusline">
+      <span id="status" role="status">Choose an alert above, then run it through these steps.</span>
+      <span id="clock" aria-hidden="true"></span>
+    </div>
+    <details class="steps">
+      <summary>What each step does</summary>
+      <dl>
+        <dt>Intake</dt><dd>Reads the alert and the asset record, pulls out addresses, protocols and function codes, and writes up to three search queries.</dd>
+        <dt>Tavily search</dt><dd>Runs those queries, trusted domains first (CISA, MITRE ATT&amp;CK, NVD, CVE.org). This step is code, not a model.</dd>
+        <dt>Intel</dt><dd>Summarises only what the search returned.</dd>
+        <dt>ATT&amp;CK map</dt><dd>Chooses techniques from the official ICS list, or none if nothing fits.</dd>
+        <dt>Triage</dt><dd>Decides verdict, priority and confidence, and has to cite its evidence.</dd>
+        <dt>Advice</dt><dd>Suggests next steps, each marked as safe to do now or needing an operator's approval.</dd>
+      </dl>
+    </details>
+  </section>
+
+  <section class="block result" id="result" hidden></section>
+
+  <section class="block" id="historyBlock">
+    <div class="hhead">
+      <div>
+        <h2>Scan history</h2>
+        <p class="sub">Every alert you run is saved here, in this browser only and not on the server. The last 20 are kept. Open one to see its full result without running it again.</p>
+      </div>
+      <div class="hbtns">
+        <button type="button" class="tool" id="histExport">Download JSON</button>
+        <button type="button" class="tool" id="histClear">Clear history</button>
+      </div>
+    </div>
+    <div id="histBody"></div>
+  </section>
+
+  <footer class="foot">
+    <div class="foot-grid">
+      <div>
+        <p class="foot-brand">SentinelOT</p>
+        <p>AI-powered OT/ICS security alert triage copilot. It recommends and never executes. Every alert in this demo is synthetic.</p>
+        <p class="foot-small">Your scan history is saved in your own browser only.</p>
+      </div>
+      <div>
+        <h2>Built by</h2>
+        <p class="foot-name">Anthony Afonughe</p>
+        <p>OT/ICS cybersecurity professional, Warsaw, Poland</p>
+        <ul id="aboutLinks" hidden></ul>
+      </div>
+      <div>
+        <h2>Built with</h2>
+        <ul>
+          <li>NVIDIA Nemotron models on Nebius Token Factory</li>
+          <li>Tavily search for live threat intelligence</li>
+          <li>MITRE ATT&amp;CK for ICS technique data</li>
+          <li>FastAPI, SQLite and Docker</li>
+        </ul>
+      </div>
+      <div>
+        <h2>The project</h2>
+        <ul>
+          <li>Built for the <a href="https://nebiusglobalaihackathon.devpost.com" target="_blank" rel="noopener">Nebius and NVIDIA Global AI Hackathon</a></li>
+          <li id="repoItem" hidden><a id="repoLink" href="#" target="_blank" rel="noopener">Source code</a></li>
+          <li>Released under the MIT licence</li>
+        </ul>
+      </div>
+    </div>
+    <p class="foot-legal">MITRE ATT&amp;CK&reg; is a registered trademark of The MITRE Corporation. Technique data comes from MITRE ATT&amp;CK for ICS and is used under MITRE's terms of use.</p>
+  </footer>
+</div>
+
+<button type="button" class="totop" id="toTop" aria-label="Back to top" hidden>
+  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"/></svg>
+</button>
+
+<dialog id="keys" aria-labelledby="keysTitle">
+  <h2 id="keysTitle">Keyboard shortcuts</h2>
+  <dl class="keylist">
+    <dt><kbd>j</kbd> <kbd>k</kbd></dt><dd>Next or previous alert</dd>
+    <dt><kbd>r</kbd></dt><dd>Triage the selected alert</dd>
+    <dt><kbd>/</kbd></dt><dd>Jump to the alert list</dd>
+    <dt><kbd>t</kbd></dt><dd>Switch theme</dd>
+    <dt><kbd>?</kbd></dt><dd>Show this list</dd>
+    <dt><kbd>Esc</kbd></dt><dd>Close this window</dd>
+  </dl>
+  <button type="button" class="tool" id="keysClose">Close</button>
+</dialog>
+
+<script>
+(() => {
+'use strict';
+
+/* ---------- configuration ---------- */
+const API = {
+  scenarios: '/api/scenarios',
+  run:   id => '/api/demo/'  + encodeURIComponent(id),   // returns { job_id }
+  job:   id => '/api/jobs/'  + encodeURIComponent(id),   // returns { status, trace, result, error }
+  saved: id => '/api/saved/' + encodeURIComponent(id)    // last saved result for a scenario
+};
+
+// Footer details. Empty values are simply not shown. Fill them in when you have them.
+const ABOUT = {
+  repoUrl: '',   // for example 'https://github.com/your-name/sentinelot' once the repository is public
+  links: []      // for example [['GitHub', 'https://github.com/your-name'], ['LinkedIn', 'https://www.linkedin.com/in/your-name']]
+};
+function renderAbout() {
+  const safe = u => /^(https?:|mailto:)/i.test(u || '');
+  if (ABOUT.repoUrl && safe(ABOUT.repoUrl)) {
+    $('repoLink').href = ABOUT.repoUrl;
+    $('repoItem').hidden = false;
+  }
+  const ok = (ABOUT.links || []).filter(l => l && l[0] && safe(l[1]));
+  if (ok.length) {
+    $('aboutLinks').innerHTML = ok.map(l => `<li><a href="${esc(l[1])}" target="_blank" rel="noopener">${esc(l[0])}</a></li>`).join('');
+    $('aboutLinks').hidden = false;
+  }
+}
+const TRUSTED = ['cisa.gov', 'attack.mitre.org', 'nvd.nist.gov', 'cve.org'];
+const KNOWN = new Set(['alert','intake','intel','attack','triage','advice','trace','errors','total_seconds']);
+
+const VERDICT = {
+  escalate:      { sentence: 'SentinelOT would escalate this alert.',            word: 'Escalate' },
+  investigate:   { sentence: 'SentinelOT would look into this alert.',           word: 'Investigate' },
+  likely_benign: { sentence: 'SentinelOT thinks this alert is probably routine.', word: 'Likely benign' }
+};
+// Edit these to match your own plant or SOC scale (see the build plan, section 5.4).
+const PRIORITY = {
+  P1: 'Possible unauthorized control of a safety-relevant or production-critical asset.',
+  P2: 'Suspicious activity on a critical asset, control not shown.',
+  P3: 'Anomaly on a non-critical asset.',
+  P4: 'Informational.'
+};
+const GLYPH = {
+  escalate: '<svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true"><path d="M24 6 44 40H4Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><path d="M24 18v12M24 35v1" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/></svg>',
+  investigate: '<svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true"><path d="M24 4 44 24 24 44 4 24Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><circle cx="24" cy="24" r="3.5" fill="currentColor"/></svg>',
+  likely_benign: '<svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="18" fill="none" stroke="currentColor" stroke-width="3"/><path d="M15 25l7 7 12-14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  unknown: '<svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true"><rect x="8" y="8" width="32" height="32" fill="none" stroke="currentColor" stroke-width="3"/></svg>'
+};
+
+/* ---------- process drawing ---------- */
+const ST = [
+  { k:'alert',   x:14,  y:108, w:74,  name:'Alert',         sub:'JSON in',           tip:'The alert as received.' },
+  { k:'intake',  x:128, y:108, w:104, name:'Intake',        sub:'reads the alert',   tip:'Model call. Extracts indicators and writes search queries.' },
+  { k:'search',  x:300, y:42,  w:112, name:'Tavily search', sub:'code, not a model', tip:'Plain code calling the Tavily Search API.' },
+  { k:'intel',   x:452, y:42,  w:96,  name:'Intel',         sub:'reads results',     tip:'Model call. Summarises only what the search returned.' },
+  { k:'mapper',  x:380, y:174, w:104, name:'ATT&CK map',    sub:'picks techniques',  tip:'Model call. Chooses from the official ATT&CK for ICS list.' },
+  { k:'triage',  x:664, y:108, w:104, name:'Triage',        sub:'decides',           tip:'Model call. Verdict, priority, confidence and evidence.' },
+  { k:'advisor', x:840, y:108, w:100, name:'Advice',        sub:'next steps',        tip:'Model call. Recommends actions and labels each one.' }
+];
+const GATES = [
+  { k:'g1', x:590, y:64,  ly:-16, label:'source check',      tip:'Code check: every cited URL must have been retrieved.' },
+  { k:'g2', x:560, y:196, ly:26,  label:'ID check',          tip:'Code check: technique IDs must exist in the official list.' },
+  { k:'g3', x:804, y:130, ly:46,  label:'consistency check', tip:'Code check: verdict and priority must agree, evidence must be cited.' }
+];
+const PIPES = [
+  'M88 130H128', 'M232 130H262V64H300', 'M262 130V196H380', 'M412 64H452',
+  'M548 64H626V130', 'M484 196H626V130', 'M626 130H664', 'M768 130H840', 'M940 130H984'
+];
+const GROUPS = [['alert'],['intake'],['search','mapper'],['intel','g2'],['g1'],['triage'],['g3'],['advisor']];
+
+function buildDiagram() {
+  let s = '<defs><marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 8 4 0 8z" style="fill:var(--rule-strong)"/></marker></defs>';
+  PIPES.forEach((d, i) => { s += `<path class="pipe-base" d="${d}"${i === PIPES.length - 1 ? ' marker-end="url(#arrow)"' : ''}/>`; });
+  PIPES.forEach(d => { s += `<path class="flow" d="${d}"/>`; });
+  ST.forEach(o => {
+    const cx = o.x + o.w / 2;
+    s += `<g class="st" id="st-${o.k}"><title id="ti-${o.k}">${o.tip}</title><rect x="${o.x}" y="${o.y}" width="${o.w}" height="44" rx="2"/><text class="name" x="${cx}" y="${o.y + 19}" text-anchor="middle">${o.name.replace('&','&amp;')}</text><text class="sub" id="sub-${o.k}" x="${cx}" y="${o.y + 35}" text-anchor="middle">${o.sub}</text></g>`;
+  });
+  GATES.forEach(g => {
+    s += `<g class="gate" id="gt-${g.k}" transform="translate(${g.x} ${g.y})"><title>${g.tip}</title><path d="M-9 -8L9 8L9 -8L-9 8Z"/><text x="0" y="${g.ly}" text-anchor="middle">${g.label}</text></g>`;
+  });
+  s += '<text class="note" x="456" y="138" text-anchor="middle">these two run side by side</text><text class="note" x="962" y="172" text-anchor="middle">Result</text>';
+  $('pid').innerHTML = s;
+}
+function resetDiagram() {
+  const pid = $('pid');
+  pid.classList.remove('flowing', 'complete');
+  document.querySelectorAll('.st,.gate').forEach(el => el.classList.remove('done', 'failed'));
+  ST.forEach(o => {
+    $('sub-' + o.k).textContent = o.sub;
+    $('ti-' + o.k).textContent = o.tip;
+  });
+}
+function markDone(key, row) {
+  const el = $('st-' + key) || $('gt-' + key);
+  if (!el) return;
+  if (row && row.status === 'failed') { el.classList.add('failed'); return; }
+  el.classList.add('done');
+  if (row) {
+    const sub = $('sub-' + key), ti = $('ti-' + key);
+    const secs = Number(row.seconds);
+    if (sub && isFinite(secs)) sub.textContent = secs.toFixed(1) + ' s';
+    if (ti && row.model) ti.textContent += ' Model: ' + row.model + '.';
+  }
+}
+async function stamp(trace, instant) {
+  const byStep = {};
+  (Array.isArray(trace) ? trace : []).forEach(r => { byStep[r.step] = r; });
+  for (const group of GROUPS) {
+    group.forEach(k => markDone(k, byStep[k]));
+    if (!reduce && !instant) await sleep(140);
+  }
+  $('pid').classList.remove('flowing');
+  $('pid').classList.add('complete');
+}
+
+/* ---------- small helpers ---------- */
+const $ = id => document.getElementById(id);
+const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+const hostOf = u => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return ''; } };
+const isTrusted = u => { const h = hostOf(u); return TRUSTED.some(d => h === d || h.endsWith('.' + d)); };
+const safeUrl = u => /^https?:\/\//i.test(u || '') ? u : '#';
+const who = (asset, ip) => asset && ip ? asset + ' (' + ip + ')' : (asset || ip || '');
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+
+/* ---------- sample data (only used when the API is unreachable) ---------- */
+const SAMPLE = {
+  scenarios: [
+    ['S01','Modbus write-coil command to a PLC from a workstation that is not an engineering station'],
+    ['S02','Sweep of Modbus unit IDs and ports from a newly seen host'],
+    ['S03','PLC program download from the engineering workstation outside the change window'],
+    ['S04','PLC operating mode changed to program mode'],
+    ['S05','New remote session to the HMI from the VPN subnet'],
+    ['S06','Engineering workstation reads holding registers inside the documented maintenance window'],
+    ['S07','ARP spoofing pattern on the control network'],
+    ['S08','Setpoint register written to a value outside the normal operating range'],
+    ['S09','Repeated failed OPC-UA authentication from one host'],
+    ['S10','DNP3 unsolicited response from an unknown outstation'],
+    ['S11','EtherNet/IP firmware update command to a module'],
+    ['S12','Exploit attempt that references a CVE from a current CISA ICS advisory']
+  ].map(([id, title]) => ({ id, title })),
+  results: {
+    S01: {
+      alert: { alert_id:'S01', timestamp:'2026-10-06 02:14 UTC', title:'Modbus write-coil command to a PLC from a workstation that is not an engineering station', description:'A Modbus write-single-coil command (function code 5) reached the line 1 PLC from a workstation that is not an engineering station. No change window is open.', protocol:'Modbus/TCP', src_ip:'10.10.10.99', dst_ip:'10.10.20.11', src_asset:null, dst_asset:'PLC-Line1' },
+      intake: { summary:'Modbus function code 5 (write single coil) from 10.10.10.99 to PLC-Line1. The source is not an engineering station and no change window is open.', indicators:{ ips:['10.10.10.99','10.10.20.11'], protocols:['Modbus'], function_codes:['5'], cves:[] }, search_queries:['Modbus write single coil unauthorized command ICS','CISA advisory Modbus unauthorized write','ATT&CK ICS unauthorized command message'] },
+      intel: { summary:'Sample text. The retrieved pages describe unauthorized command messages to control devices as a known technique in industrial attacks.', items:[
+        { title:'MITRE ATT&CK for ICS: Unauthorized Message, Command Message', url:'https://attack.mitre.org/techniques/T1692/001/', finding:'Sample text. Describes adversaries sending command messages to control assets outside normal operation.' },
+        { title:'CISA: Industrial control systems', url:'https://www.cisa.gov/topics/industrial-control-systems', finding:'Sample text. General CISA guidance on securing industrial control systems.' } ] },
+      attack: { techniques:[ { id:'T1692.001', name:'Unauthorized Message: Command Message', rationale:'A coil write from a host with no business sending commands is an unauthorized command message.' } ] },
+      triage: { verdict:'escalate', priority:'P1', confidence:0.91,
+        process_impact:'Sample text. A coil write to a line controller could stop the line or leave an output in an unexpected state.',
+        reasoning:'A write command reached a production-critical PLC from a host that is not an engineering station, with no change window open. Nothing in the asset record explains it, and the function code changes outputs directly. That combination is what an unauthorized command looks like.',
+        evidence:['Source 10.10.10.99 is not in the asset inventory.','PLC-Line1 is marked high criticality in the inventory.','No change window is open for PLC-Line1 at the alert time.','Function code 5 writes a coil, so it can change an output.'] },
+      advice: { summary:'Confirm the state of the coil first, then decide with the line engineer whether to isolate the source.', actions:[
+        { action:'Read back the coil on PLC-Line1 and compare it with the expected process state.', type:'read_only', standard_ref:'NIST SP 800-82' },
+        { action:'Keep the Modbus traffic from and to 10.10.10.99 for review.', type:'read_only', standard_ref:'NIST SP 800-82' },
+        { action:'Isolate 10.10.10.99 at the switch.', type:'needs_operator_approval', standard_ref:'IEC 62443' },
+        { action:'Tell the control engineer and the shift supervisor before production on line 1 continues.', type:'needs_operator_approval', standard_ref:'IEC 62443' } ] },
+      trace:[ { step:'intake', model:'nvidia/nemotron-3-super-120b-a12b', seconds:3.4, prompt_tokens:820, completion_tokens:310 }, { step:'intel', model:'nvidia/nemotron-3-super-120b-a12b', seconds:6.9, prompt_tokens:2840, completion_tokens:440 }, { step:'mapper', model:'nvidia/nemotron-3-super-120b-a12b', seconds:4.1, prompt_tokens:2100, completion_tokens:180 }, { step:'triage', model:'nvidia/Nemotron-3-Ultra-550b-a55b', seconds:9.3, prompt_tokens:4200, completion_tokens:620 }, { step:'advisor', model:'nvidia/nemotron-3-super-120b-a12b', seconds:4.1, prompt_tokens:2900, completion_tokens:390 } ],
+      errors:[], total_seconds:27.8
+    },
+    S06: {
+      alert: { alert_id:'S06', timestamp:'2026-10-06 09:22 UTC', title:'Engineering workstation reads holding registers inside the documented maintenance window', description:'The engineering workstation read holding registers from the line 1 PLC. The inventory lists a Tuesday morning change window for this pair.', protocol:'Modbus/TCP', src_ip:'10.10.40.8', dst_ip:'10.10.20.11', src_asset:'ENG-WS-01', dst_asset:'PLC-Line1' },
+      intake: { summary:'Modbus function code 3 (read holding registers) from ENG-WS-01 to PLC-Line1 inside the documented change window.', indicators:{ ips:['10.10.40.8','10.10.20.11'], protocols:['Modbus'], function_codes:['3'], cves:[] }, search_queries:['Modbus read holding registers engineering workstation baseline'] },
+      intel: { summary:'Sample text. Nothing retrieved suggests that reads from a known engineering station are a threat.', items:[] },
+      attack: { techniques:[] },
+      triage: { verdict:'likely_benign', priority:'P4', confidence:0.94,
+        process_impact:'None expected. A read cannot change an output or a parameter.',
+        reasoning:'Both ends are known assets, the function code only reads, and the time falls inside the documented change window for this pair. This is what routine maintenance looks like.',
+        evidence:['ENG-WS-01 is registered as the PLC programming workstation.','The alert time falls inside the change window recorded for this pair.','Function code 3 is read-only.'] },
+      advice: { summary:'No action needed. Log it and close it.', actions:[ { action:'Log the alert as expected maintenance traffic and note the change window.', type:'read_only', standard_ref:'IEC 62443' } ] },
+      trace:[ { step:'intake', model:'nvidia/nemotron-3-super-120b-a12b', seconds:2.9, prompt_tokens:750, completion_tokens:260 }, { step:'intel', model:'nvidia/nemotron-3-super-120b-a12b', seconds:4.4, prompt_tokens:1500, completion_tokens:210 }, { step:'mapper', model:'nvidia/nemotron-3-super-120b-a12b', seconds:3.0, prompt_tokens:1800, completion_tokens:90 }, { step:'triage', model:'nvidia/Nemotron-3-Ultra-550b-a55b', seconds:8.6, prompt_tokens:3100, completion_tokens:450 }, { step:'advisor', model:'nvidia/nemotron-3-super-120b-a12b', seconds:3.2, prompt_tokens:2000, completion_tokens:200 } ],
+      errors:[], total_seconds:22.1
+    }
+  }
+};
+
+/* ---------- state ---------- */
+let scenarios = [], mode = 'live', selected = null, running = false, timer = null;
+
+async function loadScenarios() {
+  setApi('checking');
+  try {
+    const t0 = performance.now();
+    const r = await fetch(API.scenarios, { headers: { Accept: 'application/json' } });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    if (!Array.isArray(data) || !data.length) throw new Error('unexpected response');
+    latency = Math.round(performance.now() - t0);
+    scenarios = data; mode = 'live';
+  } catch (e) {
+    scenarios = SAMPLE.scenarios; mode = 'sample';
+    $('sampleBanner').hidden = false;
+  }
+  setApi('ready');
+  renderTable();
+  renderHistory();
+  if (scans.length) openEntry(scans[0], true);
+}
+
+function renderTable() {
+  const hasProto = scenarios.some(s => s.protocol);
+  const hasGroup = scenarios.some(s => s.group);
+  $('alarmHead').innerHTML = '<tr><th scope="col">No.</th><th scope="col">Alert</th>' + (hasProto ? '<th scope="col">Protocol</th>' : '') + (hasGroup ? '<th scope="col">Set</th>' : '') + '</tr>';
+  const body = $('alarmBody');
+  body.innerHTML = '';
+  scenarios.forEach(s => {
+    const tr = document.createElement('tr');
+    tr.dataset.id = s.id;
+    tr.innerHTML = `<td class="id">${esc(s.id)}</td><td><button type="button" class="pick" aria-pressed="false">${esc(s.title)}</button></td>` + (hasProto ? `<td class="proto">${esc(s.protocol || '')}</td>` : '') + (hasGroup ? `<td class="proto">${esc(cap(String(s.group || '')))}</td>` : '');
+    tr.addEventListener('click', () => select(s));
+    body.appendChild(tr);
+  });
+}
+
+function setAlert(a) {
+  $('alertTitle').textContent = a.title || '';
+  const desc = a.description ? `<p class="desc">${esc(a.description)}</p>` : '<p class="desc dim">The full alert text appears here once it has run.</p>';
+  const f = [];
+  if (a.protocol) f.push(['Protocol', a.protocol]);
+  const src = who(a.src_asset, a.src_ip), dst = who(a.dst_asset, a.dst_ip);
+  if (src) f.push(['From', src]);
+  if (dst) f.push(['To', dst]);
+  if (a.timestamp) f.push(['Time', a.timestamp]);
+  $('alertBody').innerHTML = desc + (f.length ? '<dl class="facts">' + f.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('') + '</dl>' : '');
+}
+
+function select(s, opts) {
+  if (running) return;
+  selected = s;
+  shownTs = null;
+  renderHistory();
+  document.querySelectorAll('#alarmBody tr').forEach(tr => {
+    const on = tr.dataset.id === String(s.id);
+    tr.classList.toggle('sel', on);
+    tr.querySelector('.pick').setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+  $('alertBlock').hidden = false;
+  $('result').hidden = true; $('result').innerHTML = '';
+  $('alertId').textContent = 'Alert ' + s.id;
+  setAlert(s);
+  resetDiagram();
+  $('clock').textContent = '';
+  $('status').textContent = 'Ready. Press the button to run this alert through the steps below.';
+  $('go').disabled = false; $('go').textContent = 'Triage this alert';
+  $('savedBtn').hidden = mode === 'sample';
+  if (!opts || opts.scroll !== false) $('alertBlock').scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'nearest' });
+}
+
+async function failText(r) {
+  let detail = '';
+  try { const j = await r.json(); if (typeof j.detail === 'string') detail = j.detail; } catch (e) {}
+  if (r.status === 429) return detail || 'The run limit has been reached. Please try again later.';
+  return 'The server answered ' + r.status + (detail ? ': ' + detail : '') + '. You can try again.';
+}
+
+function liveMark(trace) {
+  const rows = Array.isArray(trace) ? trace : [];
+  rows.forEach(r => {
+    markDone(r.step, r);
+    if (r.status !== 'failed') {
+      if (r.step === 'intel') markDone('g1');
+      if (r.step === 'mapper') markDone('g2');
+      if (r.step === 'triage') markDone('g3');
+    }
+  });
+  const ok = rows.filter(r => r.status !== 'failed').length;
+  $('status').textContent = 'Working. ' + ok + ' of 6 steps finished.';
+}
+
+async function pollJob(id) {
+  const deadline = performance.now() + 180000;
+  while (performance.now() < deadline) {
+    await sleep(1200);
+    let r;
+    try { r = await fetch(API.job(id), { headers: { Accept: 'application/json' } }); }
+    catch (e) { throw new Error('Lost the connection to the server while the run was in progress.'); }
+    if (r.status === 404) throw new Error('The server no longer knows this run, which can happen if it restarted. Please run it again.');
+    if (!r.ok) throw new Error(await failText(r));
+    const j = await r.json();
+    liveMark(j.trace);
+    if (j.status === 'done') return j.result;
+    if (j.status === 'error') throw new Error('The run failed on the server: ' + (j.error || 'no message was given') + ' You can still open the last saved result.');
+  }
+  throw new Error('The run took longer than three minutes, so the page stopped waiting.');
+}
+
+async function showSaved() {
+  if (!selected || running) return;
+  $('savedBtn').disabled = true;
+  try {
+    const r = await fetch(API.saved(selected.id), { headers: { Accept: 'application/json' } });
+    if (r.status === 404) throw new Error('No saved result for this alert yet. Run it once first.');
+    if (!r.ok) throw new Error(await failText(r));
+    const data = await r.json();
+    if (!data || !data.triage || !data.triage.verdict) throw new Error('The saved result on the server has no verdict.');
+    resetDiagram();
+    await stamp(data.trace, true);
+    $('go').textContent = 'Run it again';
+    $('status').textContent = 'Showing the last saved result from the server. Press the button for a fresh run.';
+    renderResult(data, null, { server: true });
+  } catch (e) {
+    $('result').hidden = false;
+    $('result').innerHTML = `<div class="err" role="alert"><strong>Could not show a saved result.</strong><p>${esc(e.message)}</p></div>`;
+  } finally {
+    $('savedBtn').disabled = false;
+  }
+}
+
+async function run() {
+  if (!selected || running) return;
+  running = true;
+  const btn = $('go');
+  btn.disabled = true; btn.textContent = 'Triaging';
+  setApi('busy');
+  $('result').hidden = true; $('result').innerHTML = '';
+  resetDiagram();
+  $('pid').classList.add('flowing');
+  markDone('alert');
+  $('status').textContent = 'Working. A run usually takes about half a minute.';
+  const t0 = performance.now();
+  const tick = () => { $('clock').textContent = Math.round((performance.now() - t0) / 1000) + ' s'; };
+  tick(); timer = setInterval(tick, 1000);
+  let failed = false;
+  try {
+    let data, live = false;
+    if (mode === 'sample') {
+      await sleep(2200);
+      data = SAMPLE.results[selected.id];
+      if (!data) throw new Error('Sample mode only has saved results for S01 and S06.');
+    } else {
+      let r;
+      try { r = await fetch(API.run(selected.id), { method: 'POST', headers: { Accept: 'application/json' } }); }
+      catch (e) { throw new Error('Could not reach the server. Check the connection and try again.'); }
+      if (!r.ok) throw new Error(await failText(r));
+      const first = await r.json();
+      if (first && first.triage) data = first;                       // a backend that answers with the result itself
+      else if (first && first.job_id) { data = await pollJob(first.job_id); live = true; }
+      else throw new Error('The server returned neither a job id nor a result. Fields it sent: ' + (first && typeof first === 'object' ? (Object.keys(first).join(', ') || 'none') : typeof first) + '.');
+    }
+    if (!data || !data.triage || !data.triage.verdict) {
+      const notes = data && Array.isArray(data.errors) && data.errors.length
+        ? data.errors.map(x => typeof x === 'string' ? x : JSON.stringify(x)).join(' ')
+        : 'The response contained no triage result.';
+      throw new Error('The server answered, but the run did not produce a verdict. Server message: ' + notes);
+    }
+    const secs = Math.round((performance.now() - t0) / 1000);
+    await stamp(data.trace, live);
+    $('status').textContent = 'Finished in ' + secs + ' s.';
+    renderResult(data, secs);
+    addHistory(selected, data, secs);
+    setApi('ready');
+  } catch (e) {
+    failed = true;
+    setApi('error');
+    resetDiagram();
+    $('status').textContent = 'The run did not finish.';
+    $('result').hidden = false;
+    $('result').innerHTML = `<div class="err" role="alert"><strong>This run did not finish.</strong><p>${esc(e.message)}</p></div>`;
+  } finally {
+    clearInterval(timer);
+    running = false;
+    btn.disabled = false;
+    btn.textContent = failed ? 'Try again' : 'Run it again';
+  }
+}
+
+/* ---------- result ---------- */
+function extraNotes(d) {
+  const out = [];
+  Object.entries(d).forEach(([k, v]) => {
+    if (KNOWN.has(k) || v == null) return;
+    const label = cap(k.replace(/_/g, ' '));
+    if (typeof v === 'string' && v.trim()) out.push([label, v]);
+    else if (Array.isArray(v) && v.length && v.every(x => typeof x === 'string')) v.forEach(x => out.push([label, x]));
+    else if (v === true) out.push([label, 'flagged']);
+  });
+  return out;
+}
+
+function renderResult(d, secs, opts) {
+  const savedBar = opts && opts.server
+    ? `<div class="savedbar"><span><strong>Saved on the server.</strong> This is the most recent run of this alert by any visitor. It is not a fresh run.</span><button type="button" class="tool" id="rerun">Run it again</button></div>`
+    : opts && opts.savedTs
+    ? `<div class="savedbar"><span><strong>${opts.sample ? 'Saved sample result' : 'Saved result'}</strong> from ${esc(fmtTime(opts.savedTs))}. This is not a fresh run.</span><button type="button" class="tool" id="rerun">Run it again</button></div>`
+    : '';
+  setAlert(Object.assign({}, selected, d.alert || {}));
+  const t = d.triage || {}, adv = d.advice || {};
+  const vk = VERDICT[t.verdict] ? t.verdict : 'unknown';
+  const v = VERDICT[vk] || { sentence: 'SentinelOT returned a result without a clear verdict.', word: t.verdict ? String(t.verdict) : 'No verdict' };
+  const pct = typeof t.confidence === 'number' ? Math.max(0, Math.min(100, Math.round(t.confidence * 100))) : null;
+  const rungs = ['P1', 'P2', 'P3', 'P4'].map(p => `<span class="rung${t.priority === p ? ' on ' + p.toLowerCase() : ''}">${p}</span>`).join('');
+  const pdef = PRIORITY[t.priority] ? `<p class="small">${esc(PRIORITY[t.priority])}</p>` : '';
+
+  const evidence = t.evidence || [];
+  const items = (d.intel && d.intel.items) || [];
+  const techList = (d.attack && d.attack.techniques) || [];
+  const acts = adv.actions || [];
+  const safe = acts.filter(a => a.type === 'read_only');
+  const gated = acts.filter(a => a.type !== 'read_only');   // anything not clearly read-only is treated as needing approval
+  const tiles = list => list.map(a => `<li class="tile">${esc(a.action)}${a.standard_ref ? `<span class="ref">${esc(a.standard_ref)}</span>` : ''}</li>`).join('');
+  const lane = (title, list, cls) => `<section class="lane ${cls}"><header><span>${title}</span><span class="cnt">${list.length}</span></header>${list.length ? `<ul>${tiles(list)}</ul>` : '<p class="none">Nothing in this group.</p>'}</section>`;
+
+  const errs = Array.isArray(d.errors) ? d.errors : [];
+  const extras = extraNotes(d);
+  const dropNotes = [];
+  if (d.intel && d.intel.dropped_unverified) dropNotes.push(d.intel.dropped_unverified + ' intel item(s) removed because their link was not in the retrieved results.');
+  if (d.attack && d.attack.dropped_invalid) dropNotes.push(d.attack.dropped_invalid + ' technique ID(s) removed because they are not in the official list.');
+  const checkCount = errs.length + extras.length + dropNotes.length;
+  const checkRows = errs.map(e => `<li>${esc(typeof e === 'string' ? e : JSON.stringify(e))}</li>`).join('') + dropNotes.map(e => `<li>${esc(e)}</li>`).join('') + extras.map(([k, val]) => `<li><strong>${esc(k)}:</strong> ${esc(val)}</li>`).join('');
+
+  const evHtml = evidence.length ? `<ul class="ev">${evidence.map(e => `<li>${esc(e)}</li>`).join('')}</ul>` : '<p>No evidence listed.</p>';
+
+  const srcHtml = items.map(it => `<div class="src"><span class="t"><a href="${esc(safeUrl(it.url))}" target="_blank" rel="noopener">${esc(it.title)}</a></span><span class="host">${esc(hostOf(it.url))}</span>${(typeof it.trusted === 'boolean' ? it.trusted : isTrusted(it.url)) ? '<span class="badge">On the trusted list</span>' : '<span class="badge warn">Open web, unverified</span>'}<p>${esc(it.finding)}</p></div>`).join('');
+  const intelHtml = (d.intel && d.intel.summary ? `<p class="lead">${esc(d.intel.summary)}</p>` : '') + (srcHtml || '<p>No relevant sources were retrieved for this alert.</p>');
+
+  const attackHtml = techList.map(x => `<div class="tech"><a class="tid" href="https://attack.mitre.org/techniques/${esc(String(x.id).replace('.', '/'))}/" target="_blank" rel="noopener">${esc(x.id)}</a><div><strong>${esc(x.name)}</strong><br>${esc(x.rationale)}</div></div>`).join('') || '<p>No technique from the ATT&amp;CK for ICS list fit this alert.</p>';
+
+  const ind = (d.intake && d.intake.indicators) || {};
+  const kv = (label, arr) => `<dt>${label}</dt><dd>${arr && arr.length ? esc(arr.join(', ')) : 'none found'}</dd>`;
+  const queries = ((d.intake && d.intake.search_queries) || []).map(q => `<li>${esc(q)}</li>`).join('');
+  const intakeHtml = (d.intake && d.intake.summary ? `<p class="lead">${esc(d.intake.summary)}</p>` : '') +
+    `<dl class="kv">${kv('IP addresses', ind.ips)}${kv('Protocols', ind.protocols)}${kv('Function codes', ind.function_codes)}${kv('CVEs', ind.cves)}</dl>` +
+    (queries ? `<p class="lab">Searches it asked for</p><ul class="ev">${queries}</ul>` : '');
+
+  const checksHtml = `<p class="lead">After every model answer, plain Python checks it: cited sources must have been retrieved, technique IDs must exist in the official list, and the verdict must agree with the priority.</p>` +
+    (checkRows ? `<ul class="ev">${checkRows}</ul>` : '<p>No errors were logged on this run.</p>');
+
+  const trace = Array.isArray(d.trace) ? d.trace : [];
+  const traceRows = trace.map(r => `<tr><td>${esc(r.step)}</td><td>${esc(r.model || '')}</td><td>${r.seconds != null ? esc(Number(r.seconds).toFixed(1)) : ''}</td><td>${r.prompt_tokens != null ? esc(r.prompt_tokens) : ''}</td><td>${r.completion_tokens != null ? esc(r.completion_tokens) : ''}</td><td>${esc(r.status || '')}</td></tr>`).join('');
+  const runHtml = `<div class="tw"><table class="trace"><thead><tr><th>Step</th><th>Model</th><th>Seconds</th><th>Prompt tokens</th><th>Output tokens</th><th>Status</th></tr></thead><tbody>${traceRows}</tbody></table></div><details class="rawd"><summary>Raw result (JSON)</summary><pre class="raw" id="raw"></pre></details>`;
+
+  const TABS = [
+    ['ev', 'Evidence', evidence.length, evHtml, false],
+    ['intel', 'Threat intel', items.length, intelHtml, false],
+    ['attack', 'ATT&amp;CK', techList.length, attackHtml, false],
+    ['intake', 'Intake', null, intakeHtml, false],
+    ['checks', 'Checks', checkCount, checksHtml, checkCount > 0],
+    ['run', 'Timing and raw result', null, runHtml, false]
+  ];
+  const tablist = TABS.map(([id, label, n, , warn]) => `<button type="button" role="tab" class="tab" id="tab-${id}" aria-controls="pan-${id}" aria-selected="false" tabindex="-1">${label}${n != null ? ` <span class="cnt${warn ? ' warn' : ''}">${n}</span>` : ''}</button>`).join('');
+  const panels = TABS.map(([id, , , html]) => `<div role="tabpanel" class="tabpanel" id="pan-${id}" aria-labelledby="tab-${id}" hidden>${html}</div>`).join('');
+
+  $('result').innerHTML = `
+    ${savedBar}
+    <div class="dash v-${vk}">
+      <div class="face">
+        <div class="verdict">
+          <div class="glyph">${GLYPH[vk]}</div>
+          <div class="vbody"><div class="vsub">Verdict</div><div class="vword">${esc(v.word)}</div></div>
+        </div>
+        <div class="sect">
+          <p class="lab">Priority</p>
+          <div class="ladder" role="img" aria-label="Priority ${esc(t.priority || 'unknown')} on a scale from P1, highest, to P4, lowest">${rungs}</div>
+          ${pdef}
+        </div>
+        <div class="sect">
+          <p class="lab"><span>Confidence</span>${pct !== null ? `<b>${pct}%</b>` : ''}</p>
+          ${pct !== null ? `<div class="gauge" role="img" aria-label="Confidence ${pct} percent"><i style="width:${pct}%"></i></div>` : '<p class="small">Not reported.</p>'}
+        </div>
+        <div class="stats">
+          <div class="stat"><b>${items.length}</b><span>Sources found</span></div>
+          <div class="stat"><b>${techList.length}</b><span>Techniques mapped</span></div>
+          <div class="stat"><b>${acts.length}</b><span>Actions suggested</span></div>
+          <div class="stat"><b>${secs != null ? secs + ' s' : 'n/a'}</b><span>Run time</span></div>
+        </div>
+        <div class="sect note"><p class="small" style="margin:0">Amber and red appear only when SentinelOT thinks a person should look.</p></div>
+      </div>
+      <div class="brief">
+        <h2 class="bt" id="resultHeading" tabindex="-1">${esc(v.sentence)}</h2>
+        <div class="cb"><h3>Why</h3><p>${esc(t.reasoning || 'No reasoning returned.')}</p></div>
+        <div class="cb"><h3>What it could do to the process</h3><p>${esc(t.process_impact || 'unknown')}</p></div>
+      </div>
+    </div>
+
+    <h3 class="sec-h">What to do next</h3>
+    <p class="sec-s">${esc(adv.summary || 'SentinelOT recommends; it never executes. A filled lane header means a qualified person has to approve first.')}</p>
+    <div class="board">
+      ${lane('Safe to do now', safe, 'safe')}
+      ${lane('Needs an operator', gated, 'gated')}
+    </div>
+
+    <div class="tabs">
+      <div class="tablist" role="tablist" aria-label="Details behind the verdict">${tablist}</div>
+      ${panels}
+    </div>`;
+
+  $('raw').textContent = JSON.stringify(d, null, 2);
+
+  const tabEls = Array.from($('result').querySelectorAll('.tab'));
+  const showTab = (i, focus) => {
+    tabEls.forEach((b, j) => {
+      const on = i === j;
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+      b.tabIndex = on ? 0 : -1;
+      $(b.getAttribute('aria-controls')).hidden = !on;
+    });
+    if (focus) tabEls[i].focus();
+  };
+  tabEls.forEach((b, i) => {
+    b.addEventListener('click', () => showTab(i));
+    b.addEventListener('keydown', e => {
+      const n = tabEls.length;
+      let k = null;
+      if (e.key === 'ArrowRight') k = (i + 1) % n;
+      else if (e.key === 'ArrowLeft') k = (i - 1 + n) % n;
+      else if (e.key === 'Home') k = 0;
+      else if (e.key === 'End') k = n - 1;
+      if (k !== null) { e.preventDefault(); showTab(k, true); }
+    });
+  });
+  showTab(0);
+
+  const rr = $('rerun');
+  if (rr) rr.addEventListener('click', run);
+  $('result').hidden = false;
+  if (!(opts && opts.restore)) $('resultHeading').focus();
+}
+
+/* ---------- header: API status, theme, shortcuts, section tracking ---------- */
+let latency = null;
+function setApi(state) {
+  if (state === 'ready') state = mode === 'live' ? 'live' : 'sample';
+  $('api').dataset.state = state;
+  $('apiText').textContent = {
+    checking: 'Checking the API',
+    live: 'API connected' + (latency != null ? ', ' + latency + ' ms' : ''),
+    sample: 'Sample data, API not reachable',
+    busy: mode === 'live' ? 'Running triage' : 'Running a saved sample',
+    error: 'Last run failed'
+  }[state];
+}
+
+const THEMES = ['auto', 'light', 'dark'];
+let theme = 'auto';
+try { const saved = localStorage.getItem('sot-theme'); if (THEMES.includes(saved)) theme = saved; } catch (e) {}
+function applyTheme() {
+  const root = document.documentElement;
+  if (theme === 'auto') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', theme);
+  $('themeBtn').textContent = 'Theme: ' + cap(theme);
+  try { localStorage.setItem('sot-theme', theme); } catch (e) {}
+}
+function cycleTheme() { theme = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length]; applyTheme(); }
+
+const dlg = $('keys');
+const openKeys = () => { if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', ''); };
+const closeKeys = () => { if (dlg.close) dlg.close(); else dlg.removeAttribute('open'); };
+
+function focusList() {
+  const el = document.querySelector('#alarmBody tr.sel .pick') || document.querySelector('#alarmBody .pick');
+  if (el) el.focus();
+}
+function stepAlert(dir) {
+  if (running || !scenarios.length) return;
+  const i = selected ? scenarios.findIndex(s => String(s.id) === String(selected.id)) : -1;
+  const n = Math.min(scenarios.length - 1, Math.max(0, i + dir));
+  if (selected && n === i) return;
+  select(scenarios[n], { scroll: false });
+  const row = document.querySelector('#alarmBody tr.sel');
+  if (row) row.scrollIntoView({ block: 'nearest' });
+}
+
+$('themeBtn').addEventListener('click', cycleTheme);
+$('keysBtn').addEventListener('click', openKeys);
+$('keysClose').addEventListener('click', closeKeys);
+$('startBtn').addEventListener('click', () => {
+  if (running || !scenarios.length) return;
+  select(scenarios.find(s => String(s.id).toLowerCase() === 's01') || scenarios[0]);
+});
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey || e.metaKey || e.altKey || dlg.open) return;
+  const tag = (e.target.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+  if (e.key === '?') { e.preventDefault(); openKeys(); }
+  else if (e.key === 't') cycleTheme();
+  else if (e.key === '/') { e.preventDefault(); focusList(); }
+  else if (e.key === 'j') stepAlert(1);
+  else if (e.key === 'k') stepAlert(-1);
+  else if (e.key === 'r' && selected) run();
+});
+
+// Highlight the nav link for the section being read (page order, not nav order).
+const SPY = [['about', 'nav-about'], ['pickBlock', 'nav-pick'], ['processBlock', 'nav-how'], ['historyBlock', 'nav-hist']];
+if ('IntersectionObserver' in window) {
+  const seen = new Set();
+  const io = new IntersectionObserver(entries => {
+    entries.forEach(en => { if (en.isIntersecting) seen.add(en.target.id); else seen.delete(en.target.id); });
+    const first = SPY.find(([id]) => seen.has(id));
+    SPY.forEach(([id, nav]) => {
+      if (first && first[0] === id) $(nav).setAttribute('aria-current', 'true'); else $(nav).removeAttribute('aria-current');
+    });
+  }, { rootMargin: '-20% 0px -60% 0px' });
+  SPY.forEach(([id]) => io.observe($(id)));
+}
+applyTheme();
+
+// Back-to-top button: appears once you have scrolled down a little.
+const toTop = $('toTop');
+let scrollTick = false;
+const updateToTop = () => { scrollTick = false; toTop.hidden = window.scrollY < 400; };
+window.addEventListener('scroll', () => {
+  if (!scrollTick) { scrollTick = true; requestAnimationFrame(updateToTop); }
+}, { passive: true });
+toTop.addEventListener('click', () => {
+  window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
+  const brand = document.querySelector('.brand');
+  if (brand) brand.focus({ preventScroll: true });
+});
+updateToTop();
+
+/* ---------- scan history (saved in this browser only) ---------- */
+const HKEY = 'sot-history-v1', HMAX = 20;
+let scans = [], shownTs = null;
+try {
+  const raw = JSON.parse(localStorage.getItem(HKEY) || '[]');
+  if (Array.isArray(raw)) scans = raw.filter(e => e && e.data && e.data.triage && e.data.triage.verdict && !e.sample && typeof e.ts === 'number');
+} catch (e) {}
+
+const fmtTime = ts => new Date(ts).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+
+function persistScans() {
+  const list = scans.filter(e => !e.sample);   // saved sample runs are never kept between visits
+  while (list.length) {
+    try { localStorage.setItem(HKEY, JSON.stringify(list)); return; }
+    catch (e) { list.pop(); }          // storage full or unavailable: drop the oldest and retry
+  }
+  try { localStorage.removeItem(HKEY); } catch (e) {}
+}
+
+function addHistory(s, data, secs) {
+  const t = data.triage || {};
+  const entry = {
+    ts: Date.now(), id: String(s.id),
+    title: (data.alert && data.alert.title) || s.title || '',
+    sample: mode === 'sample', secs,
+    verdict: t.verdict || '', priority: t.priority || '',
+    confidence: typeof t.confidence === 'number' ? t.confidence : null,
+    data
+  };
+  scans = [entry].concat(scans).slice(0, HMAX);
+  persistScans();
+  shownTs = entry.ts;
+  renderHistory();
+}
+
+function verdictCell(e) {
+  const vk = VERDICT[e.verdict] ? e.verdict : 'unknown';
+  const word = VERDICT[vk] ? VERDICT[vk].word : (e.verdict || 'No verdict');
+  return `<span class="mini v-${vk}">${GLYPH[vk]}</span>${esc(word)}`;
+}
+
+function renderHistory() {
+  const n = scans.length;
+  $('histCount').textContent = n;
+  $('histExport').disabled = !n;
+  $('histClear').disabled = !n;
+  const last = $('lastScan');
+  if (!n) {
+    last.hidden = true;
+    $('histBody').innerHTML = '<p class="empty">Nothing scanned yet. Run an alert above and it will be saved here, so you can reopen it without spending another run.</p>';
+    return;
+  }
+  const e0 = scans[0];
+  $('lastScanText').textContent = 'Last scan: ' + e0.id + ', ' + (VERDICT[e0.verdict] ? VERDICT[e0.verdict].word : 'no verdict') + (e0.priority ? ', ' + e0.priority : '') + ', ' + fmtTime(e0.ts) + '.';
+  last.hidden = false;
+  const rows = scans.map((e, i) => `<tr data-ts="${e.ts}"${e.ts === shownTs ? ' class="sel"' : ''}>
+      <td>${esc(fmtTime(e.ts))}${i === 0 ? ' <span class="cnt">Latest</span>' : ''}</td>
+      <td><button type="button" class="open">${esc(e.id)}: ${esc(e.title)}</button>${e.sample ? '<span class="badge">Sample</span>' : ''}</td>
+      <td>${verdictCell(e)}</td>
+      <td>${esc(e.priority || '')}</td>
+      <td>${e.confidence != null ? Math.round(e.confidence * 100) + '%' : ''}</td>
+      <td>${e.secs != null ? esc(e.secs) + ' s' : ''}</td></tr>`).join('');
+  $('histBody').innerHTML = `<div class="hist-wrap"><table class="hist"><thead><tr><th scope="col">When</th><th scope="col">Alert</th><th scope="col">Verdict</th><th scope="col">Priority</th><th scope="col">Confidence</th><th scope="col">Run time</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function openEntry(e, restore) {
+  if (running || !e || !e.data) return;
+  const s = scenarios.find(x => String(x.id) === String(e.id)) || { id: e.id, title: e.title };
+  select(s, { scroll: false });
+  stamp(e.data.trace, true);
+  $('go').textContent = 'Run it again';
+  $('status').textContent = 'Showing a saved result. Press the button for a fresh run.';
+  renderResult(e.data, e.secs, { savedTs: e.ts, sample: !!e.sample, restore: !!restore });
+  shownTs = e.ts;
+  renderHistory();
+}
+
+$('histBody').addEventListener('click', ev => {
+  const tr = ev.target.closest('tr[data-ts]');
+  if (!tr) return;
+  const e = scans.find(x => String(x.ts) === tr.dataset.ts);
+  if (e) openEntry(e, false);
+});
+$('lastOpen').addEventListener('click', () => { if (scans[0]) openEntry(scans[0], false); });
+$('histClear').addEventListener('click', () => {
+  if (!scans.length || !window.confirm('Remove all saved scans from this browser?')) return;
+  scans = []; shownTs = null; persistScans(); renderHistory();
+});
+$('histExport').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(scans, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'sentinelot-history.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+
+/* ---------- start ---------- */
+buildDiagram();
+$('go').addEventListener('click', run);
+$('savedBtn').addEventListener('click', showSaved);
+renderAbout();
+loadScenarios();
+})();
+</script>
+</body>
+</html>

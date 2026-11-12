@@ -1,0 +1,16 @@
+{
+  "10.10.20.11": {"name": "PLC-Line1", "type": "PLC", "zone": "Level 1 control", "criticality": "high", "function": "Packaging line 1 control"},
+  "10.10.20.12": {"name": "PLC-Line2", "type": "PLC", "zone": "Level 1 control", "criticality": "high", "function": "Packaging line 2 control, has an EtherNet/IP I/O module"},
+  "10.10.20.30": {"name": "RTU-Outstation-3", "type": "RTU", "zone": "Level 1 control", "criticality": "high", "function": "Utility metering outstation, reports to SCADA over DNP3"},
+  "10.10.30.5": {"name": "HMI-Line1", "type": "HMI", "zone": "Level 2 supervisory", "criticality": "medium", "function": "Operator screen for line 1"},
+  "10.10.30.10": {"name": "SCADA-SRV-01", "type": "SCADA server", "zone": "Level 2 supervisory", "criticality": "high", "function": "SCADA server with OPC-UA endpoint and DNP3 master"},
+  "10.10.40.8": {"name": "ENG-WS-01", "type": "Engineering workstation", "zone": "Level 3 operations", "criticality": "high", "function": "PLC programming. Approved change window: Tuesday 08:00-10:00 local time"},
+  "10.10.40.20": {"name": "HIST-01", "type": "Historian", "zone": "Level 3 operations", "criticality": "medium", "function": "Process data historian, polls PLCs read-only"},
+  "10.10.50.7": {"name": "OFFICE-PC-14", "type": "Office PC", "zone": "Level 4 enterprise", "criticality": "low", "function": "Office workstation, not an engineering station"},
+  "10.10.10.12": {"name": "IO-Module-Line2", "type": "Remote I/O module", "zone": "Level 0 field", "criticality": "high", "function": "EtherNet/IP remote I/O for PLC-Line2, drives the line 2 outputs"},
+  "10.10.10.21": {"name": "VFD-Conveyor-1", "type": "Variable frequency drive", "zone": "Level 0 field", "criticality": "medium", "function": "Drives the line 1 conveyor motor, controlled by PLC-Line1 over EtherNet/IP"},
+  "10.10.10.30": {"name": "SENSOR-GW-1", "type": "Sensor gateway", "zone": "Level 0 field", "criticality": "medium", "function": "Modbus TCP gateway for line 1 temperature and pressure sensors, read by PLC-Line1"},
+  "10.10.45.5": {"name": "JUMP-SRV-01", "type": "Jump server", "zone": "Level 3.5 DMZ", "criticality": "high", "function": "Remote access entry point for OT. Approved vendor access window: Wednesday 09:00-11:00 local time"},
+  "10.10.45.10": {"name": "PATCH-SRV-01", "type": "Patch server", "zone": "Level 3.5 DMZ", "criticality": "medium", "function": "Stages approved patches for OT. Pushes to ENG-WS-01 only inside the Tuesday change window"},
+  "10.10.45.20": {"name": "HIST-DMZ-01", "type": "Historian replica", "zone": "Level 3.5 DMZ", "criticality": "medium", "function": "Read-only copy of historian data for the enterprise network. Receives from HIST-01 only"}
+}

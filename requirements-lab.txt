@@ -1,0 +1,2 @@
+# Only for triage/lab_sniffer.py. On Windows, live capture also needs Npcap.
+scapy

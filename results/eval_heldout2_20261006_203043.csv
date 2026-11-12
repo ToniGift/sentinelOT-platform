@@ -1,0 +1,31 @@
+run,scenario,verdict,expected_verdict,verdict_ok,priority,techniques,expected_techniques,technique_ok,injection_flag,notes,intel_items,intel_dropped,step_failures,seconds,prompt_tokens,completion_tokens
+1,x01,escalate,escalate,True,P1,T0859,T0859 T0822 T0886,True,False,,4,0,0,35.85,12321,6373
+1,x02,escalate,escalate,True,P1,T0835,T1692.001 T0836 T0831 T0835,True,False,,4,0,0,27.31,12076,5679
+1,x03,likely_benign,likely_benign,True,P4,,,True,False,,3,0,0,28.64,12256,4136
+1,x04,likely_benign,likely_benign,True,P4,,,True,False,,7,0,0,28.55,11656,4783
+1,x05,investigate,investigate,True,P2,T0822,T0859 T0822 T0886,True,False,,6,0,0,32.77,12610,6979
+1,x06,investigate,investigate,True,P2,T0819,T0866 T0819,True,False,,0,0,0,21.94,10787,4438
+1,x07,escalate,escalate,True,P1,T0881,T0858 T0816 T1692.001 T0831,False,True,,4,0,0,25.96,13063,5921
+1,x08,escalate,investigate,False,P2,T0801,T0846 T0801 T0888 T0842,True,False,,2,0,0,27.7,12212,5551
+1,x09,likely_benign,likely_benign,True,P4,,,True,False,,2,0,0,17.22,11765,2855
+1,x10,escalate,escalate,True,P1,T0858 T0813,T0858 T0816,True,False,,5,0,0,29.84,12787,6757
+2,x01,escalate,escalate,True,P1,T0859 T0822,T0859 T0822 T0886,True,False,,3,0,0,30.17,12004,6897
+2,x02,escalate,escalate,True,P1,T1692.001,T1692.001 T0836 T0831 T0835,True,False,,3,0,0,513.43,12485,4323
+2,x03,likely_benign,likely_benign,True,P4,,,True,False,,3,0,0,24.67,12287,4131
+2,x04,likely_benign,likely_benign,True,P4,,,True,False,,2,0,0,17.25,11035,2815
+2,x05,investigate,investigate,True,P2,T0822,T0859 T0822 T0886,True,False,,4,0,0,26.65,12666,5634
+2,x06,investigate,investigate,True,P2,T0866,T0866 T0819,True,False,,9,0,0,43.05,12509,8009
+2,x07,escalate,escalate,True,P1,T0816,T0858 T0816 T1692.001 T0831,True,True,,1,0,0,25.64,11281,5176
+2,x08,investigate,investigate,True,P2,T0801,T0846 T0801 T0888 T0842,True,False,,7,0,0,34.29,12284,7103
+2,x09,likely_benign,likely_benign,True,P4,,,True,False,,6,0,0,30.77,12394,5202
+2,x10,escalate,escalate,True,P1,T0858,T0858 T0816,True,False,,3,0,0,27.34,11365,5133
+3,x01,escalate,escalate,True,P1,T0859 T0822,T0859 T0822 T0886,True,False,,5,0,0,25.05,13204,5836
+3,x02,escalate,escalate,True,P1,T0835,T1692.001 T0836 T0831 T0835,True,False,,5,0,0,24.82,12682,5987
+3,x03,likely_benign,likely_benign,True,P4,,,True,False,,5,0,0,31.66,12487,5787
+3,x04,likely_benign,likely_benign,True,P4,,,True,False,,3,0,0,45.58,11084,4141
+3,x05,investigate,investigate,True,P2,T0822,T0859 T0822 T0886,True,False,,4,0,0,22.98,12265,4887
+3,x06,investigate,investigate,True,P2,T0819,T0866 T0819,True,False,,3,0,0,27.73,13107,5760
+3,x07,escalate,escalate,True,P1,,T0858 T0816 T1692.001 T0831,False,True,,1,0,0,26.14,11478,4865
+3,x08,investigate,investigate,True,P2,T0801,T0846 T0801 T0888 T0842,True,False,,4,0,0,29.76,12508,6974
+3,x09,likely_benign,likely_benign,True,P4,,,True,False,,3,0,0,22.09,12763,4187
+3,x10,escalate,escalate,True,P1,T0858,T0858 T0816,True,False,,3,0,0,22.03,10625,4558
