@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+.venv/
+venv/
+.env
+out/
+*.zip
+deploy/
+.cache/
+.sbom-env/
+DEMO_SCRIPT.md

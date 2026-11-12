@@ -1,0 +1,10 @@
+# Keep line endings identical on every OS. A CRLF shell script breaks on GitLab's Linux runners,
+# and CRLF vs LF changes file hashes (and so the dataset id shown in reports).
+* text=auto eol=lf
+*.sh text eol=lf
+*.py text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.csv text eol=lf
+*.md text eol=lf
+*.zip binary

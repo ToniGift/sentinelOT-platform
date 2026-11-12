@@ -1,0 +1,7 @@
+# AlarmOps change gate. A merge request FAILS if its rules, replayed against the
+# labelled dataset, breach any threshold below. Thresholds are policy choices
+# for this simulation, not an industry standard.
+min_detection_rate: 0.90          # absolute floor on injected-fault detection
+max_detection_rate_drop: 0.05     # max allowed fall versus the target branch
+max_false_alarms: 3               # absolute ceiling on false alarms
+max_false_alarm_increase: 2       # max allowed rise versus the target branch

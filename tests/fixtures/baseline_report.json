@@ -1,0 +1,267 @@
+{
+  "detection_rate": 1.0,
+  "faults_total": 21,
+  "faults_detected": 21,
+  "false_alarm_count": 0,
+  "alarm_count": 21,
+  "mean_detection_latency_samples": 25.14,
+  "per_tag": {
+    "tank_level": {
+      "faults_total": 7,
+      "faults_detected": 7,
+      "detection_rate": 1.0,
+      "alarms": 7,
+      "false_alarms": 0
+    },
+    "pump_pressure": {
+      "faults_total": 7,
+      "faults_detected": 7,
+      "detection_rate": 1.0,
+      "alarms": 7,
+      "false_alarms": 0
+    },
+    "flow_rate": {
+      "faults_total": 7,
+      "faults_detected": 7,
+      "detection_rate": 1.0,
+      "alarms": 7,
+      "false_alarms": 0
+    }
+  },
+  "per_fault_type": {
+    "drift": {
+      "faults_total": 6,
+      "faults_detected": 6,
+      "detection_rate": 1.0
+    },
+    "spike": {
+      "faults_total": 9,
+      "faults_detected": 9,
+      "detection_rate": 1.0
+    },
+    "stuck": {
+      "faults_total": 6,
+      "faults_detected": 6,
+      "detection_rate": 1.0
+    }
+  },
+  "faults": [
+    {
+      "fault_id": "F01",
+      "tag": "tank_level",
+      "type": "spike",
+      "start": 491,
+      "end": 496,
+      "detected": true,
+      "latency_samples": 2,
+      "level": "low"
+    },
+    {
+      "fault_id": "F08",
+      "tag": "pump_pressure",
+      "type": "stuck",
+      "start": 545,
+      "end": 584,
+      "detected": true,
+      "latency_samples": 1,
+      "level": "high"
+    },
+    {
+      "fault_id": "F15",
+      "tag": "flow_rate",
+      "type": "drift",
+      "start": 771,
+      "end": 880,
+      "detected": true,
+      "latency_samples": 85,
+      "level": "low"
+    },
+    {
+      "fault_id": "F02",
+      "tag": "tank_level",
+      "type": "drift",
+      "start": 1287,
+      "end": 1396,
+      "detected": true,
+      "latency_samples": 82,
+      "level": "low"
+    },
+    {
+      "fault_id": "F09",
+      "tag": "pump_pressure",
+      "type": "stuck",
+      "start": 1490,
+      "end": 1529,
+      "detected": true,
+      "latency_samples": 1,
+      "level": "high"
+    },
+    {
+      "fault_id": "F16",
+      "tag": "flow_rate",
+      "type": "spike",
+      "start": 1522,
+      "end": 1527,
+      "detected": true,
+      "latency_samples": 2,
+      "level": "high"
+    },
+    {
+      "fault_id": "F03",
+      "tag": "tank_level",
+      "type": "drift",
+      "start": 2166,
+      "end": 2275,
+      "detected": true,
+      "latency_samples": 85,
+      "level": "low"
+    },
+    {
+      "fault_id": "F10",
+      "tag": "pump_pressure",
+      "type": "drift",
+      "start": 2279,
+      "end": 2388,
+      "detected": true,
+      "latency_samples": 90,
+      "level": "high"
+    },
+    {
+      "fault_id": "F17",
+      "tag": "flow_rate",
+      "type": "stuck",
+      "start": 2390,
+      "end": 2429,
+      "detected": true,
+      "latency_samples": 2,
+      "level": "high"
+    },
+    {
+      "fault_id": "F04",
+      "tag": "tank_level",
+      "type": "stuck",
+      "start": 2838,
+      "end": 2877,
+      "detected": true,
+      "latency_samples": 2,
+      "level": "high"
+    },
+    {
+      "fault_id": "F11",
+      "tag": "pump_pressure",
+      "type": "drift",
+      "start": 3003,
+      "end": 3112,
+      "detected": true,
+      "latency_samples": 78,
+      "level": "high"
+    },
+    {
+      "fault_id": "F18",
+      "tag": "flow_rate",
+      "type": "spike",
+      "start": 3133,
+      "end": 3138,
+      "detected": true,
+      "latency_samples": 2,
+      "level": "low"
+    },
+    {
+      "fault_id": "F05",
+      "tag": "tank_level",
+      "type": "spike",
+      "start": 3650,
+      "end": 3655,
+      "detected": true,
+      "latency_samples": 2,
+      "level": "high"
+    },
+    {
+      "fault_id": "F12",
+      "tag": "pump_pressure",
+      "type": "spike",
+      "start": 3765,
+      "end": 3770,
+      "detected": true,
+      "latency_samples": 1,
+      "level": "high"
+    },
+    {
+      "fault_id": "F19",
+      "tag": "flow_rate",
+      "type": "spike",
+      "start": 3877,
+      "end": 3882,
+      "detected": true,
+      "latency_samples": 2,
+      "level": "low"
+    },
+    {
+      "fault_id": "F06",
+      "tag": "tank_level",
+      "type": "spike",
+      "start": 4494,
+      "end": 4499,
+      "detected": true,
+      "latency_samples": 2,
+      "level": "high"
+    },
+    {
+      "fault_id": "F13",
+      "tag": "pump_pressure",
+      "type": "spike",
+      "start": 4540,
+      "end": 4545,
+      "detected": true,
+      "latency_samples": 1,
+      "level": "high"
+    },
+    {
+      "fault_id": "F20",
+      "tag": "flow_rate",
+      "type": "drift",
+      "start": 4780,
+      "end": 4889,
+      "detected": true,
+      "latency_samples": 83,
+      "level": "high"
+    },
+    {
+      "fault_id": "F07",
+      "tag": "tank_level",
+      "type": "stuck",
+      "start": 5237,
+      "end": 5276,
+      "detected": true,
+      "latency_samples": 2,
+      "level": "high"
+    },
+    {
+      "fault_id": "F14",
+      "tag": "pump_pressure",
+      "type": "spike",
+      "start": 5389,
+      "end": 5394,
+      "detected": true,
+      "latency_samples": 1,
+      "level": "high"
+    },
+    {
+      "fault_id": "F21",
+      "tag": "flow_rate",
+      "type": "stuck",
+      "start": 5502,
+      "end": 5541,
+      "detected": true,
+      "latency_samples": 2,
+      "level": "low"
+    }
+  ],
+  "meta": {
+    "samples": 6000,
+    "detection_window_samples": 20,
+    "rules_file": "alarms.yaml",
+    "dataset_sha256_16": "56612cdab053f976",
+    "faults_sha256_16": "20a1de7f823c4ec7"
+  }
+}
