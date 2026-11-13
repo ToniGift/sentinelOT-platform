@@ -226,7 +226,6 @@ Then open:
 |---|---|
 | http://localhost | the triage interface |
 | http://localhost/sentinelot.html | the 3D plant |
-| http://localhost:8080 | the AlarmOps page and its own lab |
 
 Stop it with Ctrl+C, then `docker compose down`.
 
@@ -262,7 +261,7 @@ cp .env.example .env
 
 Then open http://localhost:8000 and http://localhost:8000/sentinelot.html.
 
-To run the AlarmOps page as well, from the `alarmops` folder: `pip install -e .`, then `python -m alarmops.web`, and open http://localhost:8080.
+The platform imports AlarmOps directly, so there is no second service to start. The AlarmOps page and its own lab are a separate program: to run them, go to the `alarmops` folder, run `pip install -e .`, then `python -m alarmops.web`, and open http://localhost:8080.
 
 The plant page also opens straight from the file system. The attacks, the 3D view and the What-if sandbox all work that way. Only the gate's **Check change** needs the server, and without it the Limits tab shows a saved answer marked as recorded.
 
