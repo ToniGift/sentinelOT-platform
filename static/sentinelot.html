@@ -2092,8 +2092,12 @@ function build(){
       var keep=l.always&&(!nr||lit||hot||always4||(focusLvl!==null&&l.asset&&
                (l.asset.level===focusLvl||l.asset.lo===focusLvl)));
       l.el.style.display=(hot||lit||keep)?"":"none";
-      /* plates on a dimmed level give way to the level in focus */
-      l.prio=lit?3:(hot?2:(l.el.classList.contains("dim")?0.5:1));
+      /* who wins when two plates collide: lit, then selected, then the four firewalls and
+         PLC-101 (what the traces are about), then everything else. A plate on a dimmed level
+         gives way to the level in focus whatever it is, or jumping to a level would not
+         reliably reveal it. */
+      var key=l.asset&&(l.asset.kind==="fw"||l.asset.tag==="PLC-101");
+      l.prio=lit?3:(hot?2:(l.el.classList.contains("dim")?0.5:(key?1.5:1)));
       if(l.asset&&l.el.style.display===""){
         var t=l.over||(hot?(l.asset.tag?l.asset.tag+" · "+l.asset.name:l.asset.name):l.asset.tag);
         if(l.shown!==t){l.shown=t;l.el.textContent=t}
