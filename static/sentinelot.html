@@ -170,6 +170,16 @@ button,input,select{font-family:inherit}
 .ai .who{font-size:12.5px;color:var(--mute);margin:0 0 4px;font-family:var(--mono)}
 .ai .text{margin:0;white-space:pre-line;font-size:15px}
 .ack{margin-top:10px;margin-right:8px}
+.fold{border-top:1px solid var(--line);margin-top:8px}
+.fold .foldhd{display:flex;align-items:center;gap:8px;cursor:pointer;list-style:none;
+  font-family:var(--head);font-weight:700;letter-spacing:.07em;text-transform:uppercase;font-size:14px;
+  color:var(--mute);padding:7px 0;min-height:34px}
+.fold .foldhd::-webkit-details-marker{display:none}
+.fold .foldhd::after{content:"\2212";margin-left:auto;font-family:var(--mono);font-weight:400}
+.fold:not([open]) .foldhd::after{content:"+"}
+.fold .foldhd:hover,.fold[open] .foldhd{color:var(--ink)}
+.fold .foldhd:focus-visible{outline:2px solid var(--live);outline-offset:2px}
+.fold .ai{border-top:0;padding-top:0;margin-top:0}
 .btnrow{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
 .btnrow .ack{margin:0}
 
@@ -377,6 +387,9 @@ footer p{margin:0;max-width:110ch}
   .tabs button:first-child{border-left:0}
   .panel,.tblock,.logc{border-left:0}
   .panel{height:auto;min-height:0;overflow:visible}
+  /* the strip has no room for its subtitle at tablet width: it wrapped into a tall thin cell */
+  .st-title{display:none}
+  .strip{grid-template-columns:auto 1fr}
   .stage{min-height:0;height:min(66vh,640px)}
   .sec{grid-template-columns:minmax(0,1fr)}
   .sec > h2{margin-bottom:10px}
@@ -396,6 +409,7 @@ footer p{margin:0;max-width:110ch}
   /* every control a thumb has to hit is at least 40px tall */
   .btn,.swt,.sq{min-height:42px;padding-top:9px;padding-bottom:9px}
   .recs button{min-height:44px}
+  .fold .foldhd{min-height:44px;font-size:15px}
   .lims input,.lims select,.sl .nb input{min-height:42px}
   .windows{grid-template-columns:repeat(2,minmax(0,1fr))}
   .win{min-height:84px}
@@ -1216,7 +1230,7 @@ function raise(a){
   if(old){old.count++;old.frames=old.frames.concat(a.frames);refresh();return old}
   a.time=clock();a.seq=++alarmSeq;a.ack=false;a.cleared=false;a.count=1;a.note="";a.who="Writing the analyst note…";
   a.trace=a.trace||{src:a.src.ip,dst:PLC.ip,cvar:a.sev==="crit"?"--alarm":"--warn",unk:byIp[a.src.ip]?null:{label:a.src.name,level:"4"}};
-  alarms.push(a);if(!firstOut)firstOut=a;active=a;selRec=null;
+  alarms.push(a);if(!firstOut)firstOut=a;active=a;selRec=null;cardOpen={facts:null,note:null};
   if(a.kind!=="temp")showTab("live");
   refresh();revealAlarm();
   if(a.kind==="temp"){fallback(a);return a}
@@ -1245,6 +1259,19 @@ function stateWord(a){
   if(a.cleared)return a.ack?"RETURNED · ACK":"RETURNED · UNACK";
   return a.ack?"ALARM · ACK":"ALARM · UNACK";
 }
+/* Which folding sections the reader has opened. Null means "whatever this screen defaults to":
+   open on a wide screen, closed on a phone, where the card was a whole screen tall. A new alarm
+   clears the memory, so each one arrives folded the same way. */
+var cardOpen={facts:null,note:null};
+function foldDefault(){return !(window.matchMedia&&window.matchMedia("(max-width:767px)").matches)}
+function fold(key,label){
+  var d=document.createElement("details");d.className="fold";d.setAttribute("data-fold",key);
+  d.open=cardOpen[key]===null?foldDefault():cardOpen[key];
+  var sm=document.createElement("summary");sm.className="foldhd";sm.textContent=label;
+  d.appendChild(sm);
+  d.addEventListener("toggle",function(){cardOpen[key]=d.open});
+  return d;
+}
 function paintAlarm(){
   var box=$("#alarm"),mark=box.classList.contains("justin");box.textContent="";
   function cls(c){box.className=c+(mark?" justin":"")}
@@ -1254,12 +1281,16 @@ function paintAlarm(){
     cls("alarm quiet");
     box.appendChild(el("span","badge g-rec","Blocked by "+g.fw));
     box.appendChild(el("h3",null,"Stopped at the firewall, not by SentinelOT"));
-    box.appendChild(factsEl([["Time",g.time],["Source",g.src.ip?g.src.ip+" ("+g.src.name+")":g.src.name],
-      ["Denied by",g.fw+" \u00b7 rule "+g.rule],["Rule",g.label],
+    box.appendChild(factsEl([["Source",g.src.ip?g.src.ip+" ("+g.src.name+")":g.src.name],
+      ["Denied by",g.fw+" \u00b7 rule "+g.rule]]));
+    var gd=fold("facts","Alarm detail");
+    gd.appendChild(factsEl([["Time",g.time],["Rule",g.label],
       ["Got as far as",NM.ZONES[NM.zoneIndex(g.reached)].name+" (level "+NM.ZONES[NM.zoneIndex(g.reached)].level+")"],
       ["Reached PLC-101","No frame arrived"]]));
+    box.appendChild(gd);
+    var gn=fold("note","Analyst note");
     var ai=el("div","ai");ai.appendChild(el("p","who",g.who));ai.appendChild(el("p","text",g.note));
-    box.appendChild(ai);
+    gn.appendChild(ai);box.appendChild(gn);
     var cl=el("button","btn ghost ack","Clear");cl.type="button";
     cl.addEventListener("click",function(){segEvent=null;refresh()});box.appendChild(cl);
     return;
@@ -1274,18 +1305,26 @@ function paintAlarm(){
   cls("alarm "+(a.ack?"":"unack ")+(a.sev==="crit"?"crit":"warnbox"));
   box.appendChild(el("span","sev",a.label));
   box.appendChild(el("h3",null,a.title));
-  box.appendChild(factsEl([["Seq",a.seq+(a===firstOut?" · FIRST OUT":"")+(alarms.length>1?" of "+alarms.length+" active":"")],
+  /* what an operator reads first stays in the open: who, and what they touched */
+  box.appendChild(factsEl([["Source",a.src.ip?a.src.ip+" ("+a.src.name+")":a.src.name],
+    ["Target",a.target]]));
+  /* the rest folds away on a phone, where the whole card was a screen tall */
+  var det=fold("facts","Alarm detail");
+  det.appendChild(factsEl([["Seq",a.seq+(a===firstOut?" · FIRST OUT":"")+(alarms.length>1?" of "+alarms.length+" active":"")],
     ["State",stateWord(a)+(a.count>1?" · "+a.count+" occurrences":"")],
-    ["Time",a.time],["Source",a.src.ip?a.src.ip+" ("+a.src.name+")":a.src.name],["Target",a.target],["Rule",a.rule],["Crossed",fwNames(a.trace)]]));
+    ["Time",a.time],["Rule",a.rule],["Crossed",fwNames(a.trace)]]));
+  box.appendChild(det);
+  var note=fold("note","Analyst note");
   var ai=el("div","ai"),who=el("p","who",a.who),txt=el("p","text",a.note);who.id="ai-who";txt.id="ai-text";
-  ai.appendChild(who);ai.appendChild(txt);box.appendChild(ai);
+  ai.appendChild(who);ai.appendChild(txt);note.appendChild(ai);
   if(a.kind==="setpoint"){
     /* the link to AlarmOps: one sentence and a jump to the blocked change. The attack itself is not sent to AlarmOps. */
     var lk=el("div","ai");
     lk.appendChild(el("p","text","The 190 °C high limit still fires because AlarmOps blocked the change that would have widened it."));
     var jb=el("button","btn ghost ack","See the blocked change");jb.type="button";
-    jb.addEventListener("click",function(){showTab("lim");limPreset()});lk.appendChild(jb);box.appendChild(lk);
+    jb.addEventListener("click",function(){showTab("lim");limPreset()});lk.appendChild(jb);note.appendChild(lk);
   }
+  box.appendChild(note);
   var row=el("div","btnrow");
   if(!a.ack){var b=el("button","btn ack","Acknowledge");b.type="button";b.addEventListener("click",function(){ackAlarm(a)});row.appendChild(b)}
   if(!a.cleared&&a.kind!=="temp"){var r=el("button","btn ghost ack","Restore from HMI-Line1");r.type="button";r.disabled=queue.length>0;r.addEventListener("click",function(){restore(a)});row.appendChild(r)}
@@ -1307,7 +1346,7 @@ function resetAlarms(){
   if(alarms.indexOf(active)<0)active=alarms.length?alarms[alarms.length-1]:null;
   refresh();
 }
-function selectAlarm(a){active=a;refresh()}
+function selectAlarm(a){active=a;cardOpen={facts:null,note:null};refresh()}
 /* is there anything drawn on the plant right now that the reader would want to look at? */
 function traceLive(){
   return !!(alarms.length||segEvent||selRec||(curTab==="lim"&&LIM.trace));
@@ -1985,7 +2024,7 @@ function build(){
       var o=list[n],L=o.l,ww=L.w||60,hh=L.h||16;
       var cx=Math.min(w-ww/2-4,Math.max(gutter+ww/2+6,o.x)),cy=o.y-hh*1.4;
       var box=null;
-      for(var t=0;t<4;t++){
+      for(var t=0;t<7;t++){
         box={x:cx-ww/2,y:cy,w:ww,h:hh,prio:L.prio||1};
         var hit=overlap(box,placed);
         if(!hit)break;
@@ -2027,7 +2066,8 @@ function build(){
       var keep=l.always&&(!nr||lit||hot||always4||(focusLvl!==null&&l.asset&&
                (l.asset.level===focusLvl||l.asset.lo===focusLvl)));
       l.el.style.display=(hot||lit||keep)?"":"none";
-      l.prio=lit?3:(hot?2:1);
+      /* plates on a dimmed level give way to the level in focus */
+      l.prio=lit?3:(hot?2:(l.el.classList.contains("dim")?0.5:1));
       if(l.asset&&l.el.style.display===""){
         var t=l.over||(hot?(l.asset.tag?l.asset.tag+" · "+l.asset.name:l.asset.name):l.asset.tag);
         if(l.shown!==t){l.shown=t;l.el.textContent=t}

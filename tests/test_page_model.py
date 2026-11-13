@@ -1105,3 +1105,196 @@ def test_show_trace_still_works_under_reduced_motion(browser):
     assert stage_view(page)["visible"] > 300
     assert page.errors == []
     page.close()
+
+
+# ---------------- no plate is hidden for good; tablet widths; the compact alarm card ----------------
+
+SHOWN_PLATES = """() => [...document.querySelectorAll('#labels .lab')]
+    .filter(e => !e.classList.contains('level') && e.style.display !== 'none')
+    .map(e => e.textContent)"""
+
+
+def test_every_plate_can_be_made_visible_on_a_wide_screen(browser):
+    """Collision handling may hide a plate at one angle, but never for good: jumping to its
+    level, with a zoom if that is not enough, brings every tagged item's plate back. Signal
+    tags and the untagged internet show when lit or selected, which other tests cover."""
+    page = open_page(browser)
+    tags = page.evaluate("""() => { const o = [];
+        document.querySelectorAll('#eq tbody tr').forEach(tr => {
+          const t = tr.dataset.tag, type = tr.children[2].textContent.trim();
+          if (t && t !== '-' && type !== 'Signal tag')
+            o.push({tag: t, level: tr.children[3].textContent.trim().replace('L', '').split(' /')[0]}) });
+        return o }""")
+    assert len(tags) == 31                                 # 27 tagged assets and 4 firewalls
+    page.click("#front")
+    page.wait_for_timeout(1200)
+    front = page.evaluate(SHOWN_PLATES)
+    stuck = []
+    for t in tags:
+        if any(x.startswith(t["tag"]) for x in front):
+            continue                                       # already visible at Front view
+        key = f"#levels button:text-is('L{t['level']}')"
+        page.click("#front")
+        page.click(key)
+        page.wait_for_timeout(1300)
+        seen = any(x.startswith(t["tag"]) for x in page.evaluate(SHOWN_PLATES))
+        for _ in range(4):
+            if seen:
+                break
+            page.click("#zin")
+            page.wait_for_timeout(400)
+            seen = any(x.startswith(t["tag"]) for x in page.evaluate(SHOWN_PLATES))
+        page.click(key)                                    # undim again
+        if not seen:
+            stuck.append(t["tag"])
+    assert stuck == [], stuck
+    assert page.errors == []
+    page.close()
+
+
+def test_a_rotated_view_hides_nothing_that_its_level_key_cannot_bring_back(browser):
+    """The same check from an angle where plates do collide."""
+    page = open_page(browser)
+    page.click("#spin")                                    # stop the rotation where it is
+    page.focus("#gl")
+    for _ in range(6):
+        page.keyboard.press("ArrowRight")                  # turn the plant side-on
+    page.wait_for_timeout(900)
+    for level, tags in (("3", ("WS-601", "DB-601", "SRV-601", "SRV-602")),
+                        ("0", ("VFD-101", "M-101", "RB-101", "IO-201", "GW-101", "SL-101"))):
+        key = f"#levels button:text-is('L{level}')"
+        page.click(key)
+        page.wait_for_timeout(1300)
+        shown = page.evaluate(SHOWN_PLATES)
+        for _ in range(4):
+            if all(any(x.startswith(t) for x in shown) for t in tags):
+                break
+            page.click("#zin")
+            page.wait_for_timeout(400)
+            shown = page.evaluate(SHOWN_PLATES)
+        for t in tags:
+            assert any(x.startswith(t) for x in shown), (t, level)
+        page.click(key)
+    assert page.errors == []
+    page.close()
+
+
+def test_the_tablet_layout_at_820px(browser):
+    page = browser.new_page(viewport={"width": 820, "height": 1180})
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    page.goto(PAGE, wait_until="domcontentloaded")
+    page.wait_for_function("() => window.ProcessModel && window.__sentinelot")
+    page.wait_for_timeout(1200)
+    m = page.evaluate("""() => { const t = s => Math.round(document.querySelector(s).getBoundingClientRect().top + scrollY);
+        const tabs = [...document.querySelectorAll('#tabs button')].map(b => b.innerText.replace(/\\s+/g, ' ').trim().toLowerCase());
+        return {stage: t('#stage'), tabs: t('#tabs'), attacks: t('.attacks'), anun: t('#windows'),
+                noSideScroll: document.documentElement.scrollWidth <= innerWidth,
+                tabsFit: document.querySelector('#tabs').scrollWidth <= document.querySelector('#tabs').clientWidth + 1,
+                labels: tabs, seg: document.querySelector('#segbox').open,
+                panelScrolls: getComputedStyle(document.querySelector('#panel')).overflowY,
+                plates: [...document.querySelectorAll('#labels .lab')]
+                    .filter(e => !e.classList.contains('level') && e.style.display !== 'none').length} }""")
+    assert m["stage"] < m["tabs"] < m["attacks"] < m["anun"]      # one column, plant first
+    assert m["noSideScroll"] and m["tabsFit"]
+    assert [l.lstrip("0123456789 ") for l in m["labels"]] == ["live attack", "recorded", "limits", "what-if"]
+    assert m["seg"] is True                                       # folded only on a phone
+    assert m["panelScrolls"] == "visible"                         # no nested scroll area here
+    assert m["plates"] >= 24                                      # all plates, not the phone set
+    # Show trace: hidden while the plant is in view, there once an alarm has scrolled it away
+    assert page.evaluate("() => document.querySelector('#showtrace').hidden") is True
+    page.click('[data-atk="setpoint"]')
+    page.wait_for_selector("#alarm.crit", timeout=20000)
+    page.wait_for_timeout(1500)                                   # let the scroll to the plant finish
+    page.evaluate("() => scrollTo(0, document.querySelector('#windows').getBoundingClientRect().top + scrollY)")
+    page.wait_for_timeout(900)
+    b = page.locator("#showtrace")
+    assert b.is_visible()
+    box = b.bounding_box()
+    assert box["height"] >= 40 and box["x"] + box["width"] <= 820
+    b.click()
+    page.wait_for_timeout(1300)
+    s = stage_view(page)
+    assert s["visible"] > 300 and s["button"] is False
+    assert errors == []
+    page.close()
+
+
+def card(page):
+    return page.evaluate("""() => { const a = document.querySelector('#alarm');
+        const vis = e => !!e && e.checkVisibility();
+        return {h: Math.round(a.getBoundingClientRect().height),
+                sev: vis(a.querySelector('.sev')), title: vis(a.querySelector('h3')),
+                open: [...a.querySelectorAll('details.fold')].map(d => [d.dataset.fold, d.open]),
+                shown: [...a.querySelectorAll('.facts dt')].filter(vis).map(d => d.textContent),
+                note: vis(document.querySelector('#ai-text')),
+                buttons: [...a.querySelectorAll('.btnrow button')].filter(vis).map(b => b.textContent)} }""")
+
+
+def test_the_alarm_card_is_compact_on_a_phone(browser):
+    page = phone_page(browser)
+    launch_from_the_controls(page)
+    page.wait_for_selector("#alarm.crit", timeout=20000)
+    page.wait_for_timeout(800)
+    c = card(page)
+    assert c["sev"] and c["title"]
+    assert c["shown"] == ["Source", "Target"], c                 # what an operator reads first
+    assert c["open"] == [["facts", False], ["note", False]]      # the rest folded, closed by default
+    assert c["note"] is False
+    assert c["buttons"] == ["Acknowledge", "Restore from HMI-Line1"]   # never folded away
+    assert c["h"] < 844 * 0.6, c["h"]                            # well under a screen
+    # the ids and the text the other tests read are all still in the page
+    assert "TIC-101 SP changed" in page.text_content("#alarm h3")
+    assert page.text_content("#ai-who") and page.text_content("#ai-text")
+    assert "FIRST OUT" in page.text_content("#alarm")
+    assert page.errors == []
+    page.close()
+
+
+def test_the_folded_sections_open_from_the_keyboard_and_stay_open(browser):
+    page = phone_page(browser)
+    launch_from_the_controls(page, "robot")               # no follow-on alarm to take the card over
+    page.wait_for_selector("#alarm.crit", timeout=20000)
+    page.wait_for_timeout(800)
+    page.focus('#alarm details[data-fold="note"] summary')
+    page.keyboard.press("Enter")
+    page.wait_for_timeout(300)
+    assert card(page)["note"] is True
+    page.focus('#alarm details[data-fold="facts"] summary')
+    page.keyboard.press("Space")
+    page.wait_for_timeout(300)
+    c = card(page)
+    assert c["open"] == [["facts", True], ["note", True]]
+    assert c["shown"] == ["Source", "Target", "Seq", "State", "Time", "Rule", "Crossed"]
+    # the card is redrawn as the plant ticks: what the reader opened must stay open
+    page.wait_for_timeout(3200)
+    assert card(page)["open"] == [["facts", True], ["note", True]]
+    page.click("#an-ack")                                        # a full repaint
+    assert card(page)["open"] == [["facts", True], ["note", True]]
+    assert page.errors == []
+    page.close()
+
+
+def test_the_alarm_card_is_fully_open_on_a_wide_screen(browser):
+    page = open_page(browser)
+    page.click('[data-atk="setpoint"]')
+    page.wait_for_selector("#alarm.crit", timeout=20000)
+    c = card(page)
+    assert c["open"] == [["facts", True], ["note", True]]
+    assert c["note"] is True and len(c["shown"]) == 7
+    assert page.errors == []
+    page.close()
+
+
+def test_the_blocked_attempt_card_folds_the_same_way_on_a_phone(browser):
+    page = phone_page(browser)
+    set_rule(page, "FW-303", "deny")
+    launch_from_the_controls(page)
+    page.wait_for_function("() => window.__sentinelot.live().blocked", timeout=20000)
+    page.wait_for_timeout(800)
+    c = card(page)
+    assert c["shown"] == ["Source", "Denied by"]
+    assert c["open"] == [["facts", False], ["note", False]]
+    assert page.text_content("#alarm .who") == "Not seen by SentinelOT · simulated firewall log"
+    assert page.errors == []
+    page.close()
