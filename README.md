@@ -20,7 +20,7 @@ The second problem is quieter. A control system raises an alarm when a measureme
 | Lab feeds: Elasticsearch adapter and passive Modbus sniffer | `triage/lab_elk.py`, `triage/lab_sniffer.py` | Built, not yet run against a lab. Unit tested. No lab results exist |
 | AlarmOps: alarm-limit change gate | `alarmops/`, `plant/`, `triage/alarm_limits.py` | Built and tested, connected to the showcase page. Simulated data. Its GitLab pipeline runs only in its original repository |
 | Showcase page: 3D plant, simulated attacks, alarm-limit check | `static/sentinelot.html` | Built. Checked in a headless browser at 390 and 1280 px |
-| Docker | `Dockerfile`, `docker-compose.yml`, `Caddyfile` | Tested on 12 November 2026 with Docker Desktop on Windows (Docker 29.9.3, Compose 5.7.0). `docker compose up --build` built both images and started three containers. Through Caddy on port 80, `/api/health`, `/`, `/sentinelot.html`, `/api/scenarios`, `/api/alarmops/baseline` and `/api/alarmops/compare` returned 200, and the app's health check reported healthy. The AlarmOps page answered on port 8080. Placeholder API keys were used, so no triage run was made through Docker |
+| Docker | `Dockerfile`, `docker-compose.yml`, `Caddyfile` | Tested on 12 and 13 November 2026 with Docker Desktop on Windows (Docker 29.9.3, Compose 5.7.0). `docker compose up --build` built both images and started three containers (`app`, `alarmops`, `caddy`). Through Caddy on port 80, `/api/health`, `/`, `/sentinelot.html`, `/api/scenarios`, `/api/alarmops/baseline` (35 faults, 35 detected) and `/api/alarmops/compare` for the sealer preset (blocked, 30 of 35) returned 200, and the app's health check reported healthy. The AlarmOps page answered on port 8080. Both runs used placeholder API keys and model names, so no triage run was made through Docker. On 13 November the first pull failed with "lookup registry-1.docker.io: no such host"; adding `"dns"` servers to Docker's `daemon.json` fixed it (see Quick start) |
 | SentinelOT-to-AlarmOps feed | not started | Planned. Today no data passes between the two |
 | Shadow-mode trial on a company's past alerts | not started | Planned |
 
@@ -196,6 +196,8 @@ Then open:
 | http://localhost:8080 | AlarmOps's own page, with its "Try it yourself" lab |
 
 Stop with Ctrl+C, then `docker compose down`.
+
+If the build fails with `lookup registry-1.docker.io: no such host` while Windows itself resolves names, Docker's own network cannot reach a DNS server. Add `"dns": ["1.1.1.1", "8.8.8.8"]` to `%USERPROFILE%\.docker\daemon.json`, keeping the settings already in the file, then quit Docker Desktop from the tray icon and reopen it. The server also refuses to start while any `MODEL_*` setting in `.env` is empty, and the container keeps restarting until they are filled in.
 
 ### Without Docker
 
