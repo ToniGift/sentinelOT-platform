@@ -5,3 +5,4 @@ __pycache__/
 data/cache/
 .pytest_cache/
 .claude/
+screenshots/

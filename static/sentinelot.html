@@ -3,17 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>SentinelOT: live OT security demo by Anthony Afonughe</title>
+<title>SentinelOT: OT security demo, simulated plant</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Text:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
+/* Engineering drawing meets control room. Light = drawing sheet (paper, ink). Dark = night-shift control room (near-black, amber, one alarm red).
+   Text contrast is at least 4.5:1 in both: tests/test_palette_contrast.py reads the tokens below and checks every pair. */
 :root{
-  --bg:#CDD2D5; --panel:#E0E4E6; --well:#EFF1F2; --ink:#1B2428; --mute:#515E66;
-  --line:#A6AFB5; --live:#0E5A75; --alarm:#BE1529; --warn:#9A5D00; --on-alarm:#FFFFFF;
-  --alarm-tint:#F3D3D7; --slab:#B4BCC1; --box:#7C8990;
-  --sans:"Barlow","Segoe UI",Helvetica,Arial,sans-serif;
-  --cond:"Barlow Condensed","Arial Narrow","Segoe UI",Arial,sans-serif;
+  --bg:#F4F1E8; --panel:#FBF9F3; --well:#FBF9F3; --ink:#14171A; --mute:#4A4F55;
+  --line:#8E8A7C; --rule:#14171A; --live:#1F4E8C; --alarm:#B3261E; --on-alarm:#F4F1E8;
+  --warn:#F2B33D; --on-warn:#14171A; --alarm-tint:#F1D9D3;
+  --slab:#8E8A7C; --box:#E1DBC8; --fwfill:#C9C2AC; --edge:#14171A;
+  --head:"Big Shoulders Text","Arial Narrow","Liberation Sans Narrow","Segoe UI Semibold",Arial,sans-serif;
+  --sans:"IBM Plex Sans","Segoe UI",Helvetica,Arial,sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
   box-sizing:border-box;
   padding-top:env(safe-area-inset-top,0px);
@@ -22,243 +25,392 @@
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     color-scheme:dark;
-    --bg:#1D2326; --panel:#283034; --well:#20272A; --ink:#E5E9EB; --mute:#9BA7AE;
-    --line:#45515A; --live:#74C6E0; --alarm:#E0475B; --warn:#EDB040; --on-alarm:#FFFFFF;
-    --alarm-tint:#4A2229; --slab:#3A454B; --box:#8A979E;
+    --bg:#0B0C0D; --panel:#151719; --well:#101214; --ink:#E8E4D8; --mute:#A8A495;
+    --line:#3A3A36; --rule:#6E6B60; --live:#FFB000; --alarm:#FF4B3E; --on-alarm:#0B0C0D;
+    --warn:#FFB000; --on-warn:#0B0C0D; --alarm-tint:#3A1512;
+    --slab:#6E6B60; --box:#1E2124; --fwfill:#33362F; --edge:#FFB000;
   }
 }
 :root[data-theme="dark"]{
   color-scheme:dark;
-  --bg:#1D2326; --panel:#283034; --well:#20272A; --ink:#E5E9EB; --mute:#9BA7AE;
-  --line:#45515A; --live:#74C6E0; --alarm:#E0475B; --warn:#EDB040; --on-alarm:#FFFFFF;
-  --alarm-tint:#4A2229; --slab:#3A454B; --box:#8A979E;
+  --bg:#0B0C0D; --panel:#151719; --well:#101214; --ink:#E8E4D8; --mute:#A8A495;
+  --line:#3A3A36; --rule:#6E6B60; --live:#FFB000; --alarm:#FF4B3E; --on-alarm:#0B0C0D;
+  --warn:#FFB000; --on-warn:#0B0C0D; --alarm-tint:#3A1512;
+  --slab:#6E6B60; --box:#1E2124; --fwfill:#33362F; --edge:#FFB000;
 }
-*,*::before,*::after{box-sizing:inherit}
+*,*::before,*::after{box-sizing:inherit;border-radius:0}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:17px;line-height:1.5}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15.5px;line-height:1.45}
 a{color:inherit}
-:focus-visible{outline:3px solid var(--live);outline-offset:2px}
-.wrap{padding:0 24px}
+:focus-visible{outline:2px solid var(--live);outline-offset:2px}
+h1,h2,h3{font-family:var(--head);font-weight:700;letter-spacing:.02em;text-transform:uppercase}
+button,input,select{font-family:inherit}
 
-.top{display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap;padding:18px 0;border-bottom:1px solid var(--line)}
-.mark{font-family:var(--cond);font-weight:600;font-size:26px;text-decoration:none}
-.top nav{display:flex;gap:20px;flex-wrap:wrap;font-size:16px}
-.top nav a{text-decoration:none;border-bottom:1px solid transparent}
-.top nav a:hover{border-bottom-color:var(--ink)}
+/* the sheet: an outer rule and an inner rule, as on a drawing border */
+.sheet{margin:10px;border:2px solid var(--rule);position:relative}
+.sheet::after{content:"";position:absolute;inset:4px;border:1px solid var(--rule);pointer-events:none;z-index:5}
+.in{padding:10px 14px 0}
 
-.hero{padding:40px 0 24px}
-.hero h1{font-family:var(--cond);font-weight:600;font-size:clamp(40px,7.2vw,80px);line-height:.98;margin:0 0 16px;max-width:15ch}
-.hero p{margin:0;max-width:62ch;font-size:19px;color:var(--mute)}
-.hero p strong{color:var(--ink);font-weight:600}
+/* title strip */
+.strip{display:grid;grid-template-columns:auto 1fr auto;gap:0;border-bottom:1px solid var(--rule);margin:4px 4px 0}
+.strip > *{padding:8px 12px;border-right:1px solid var(--rule);min-width:0}
+.strip > *:last-child{border-right:0}
+.mark{font-family:var(--head);font-weight:800;font-size:24px;letter-spacing:.06em;text-decoration:none;line-height:1}
+.st-title{display:flex;flex-direction:column;justify-content:center;font-family:var(--head);font-weight:700;font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);line-height:1.2}
+.st-title b{color:var(--ink);font-size:17px;font-weight:700}
+.st-meta{display:grid;grid-template-columns:repeat(5,auto);gap:0 18px;margin:0;font-size:12.5px;align-items:center}
+.st-meta div{display:grid;gap:0}
+.st-meta dt{font-family:var(--head);font-size:11px;letter-spacing:.1em;color:var(--mute);text-transform:uppercase}
+.st-meta dd{margin:0;font-family:var(--mono);font-size:13px}
+.st-nav{display:flex;gap:14px;align-items:center;font-family:var(--head);font-weight:700;font-size:15px;letter-spacing:.06em;text-transform:uppercase}
+.st-nav a{text-decoration:none;border-bottom:1px solid transparent}
+.st-nav a:hover{border-bottom-color:var(--ink)}
+.sq{font-family:var(--head);font-weight:700;font-size:14px;letter-spacing:.08em;text-transform:uppercase;border:1px solid var(--rule);background:transparent;color:var(--ink);padding:3px 9px;cursor:pointer}
+.sq:hover{background:var(--ink);color:var(--bg)}
+.st-right{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.st-meta .sm,.simtag .sm{display:none}
+.simtag{font-family:var(--head);font-weight:800;font-size:14px;letter-spacing:.1em;border:1px solid var(--rule);padding:2px 7px;color:var(--ink);white-space:nowrap}
+
+/* first screen: one plain sentence */
+.intro{display:grid;grid-template-columns:minmax(0,26ch) minmax(0,66ch);gap:6px 28px;padding:14px 14px 12px;align-items:baseline}
+.intro h1{margin:0;font-size:clamp(26px,3.2vw,36px);line-height:1;letter-spacing:.03em}
+.intro p{margin:0;font-size:16.5px}
+.intro p b{font-weight:600}
 
 /* board */
-.board{background:var(--panel);border:1px solid var(--line);border-radius:4px;margin-bottom:56px}
-.board-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--line);font-size:15px}
-.board-head b{font-family:var(--cond);font-size:20px;font-weight:600}
-.sim{border:1px dashed var(--mute);border-radius:3px;padding:2px 8px;color:var(--mute)}
-.grid{display:grid;grid-template-columns:minmax(0,1fr) clamp(380px,34vw,560px)}
-.cell{padding:16px 14px;min-width:0;border-bottom:1px solid var(--line)}
-.cell.l{border-right:1px solid var(--line)}
-.cell.b{border-bottom:0}
-.cell h2{font-family:var(--cond);font-weight:600;font-size:21px;margin:0 0 10px}
-.note{font-size:14.5px;color:var(--mute);margin:0 0 12px}
+.board{margin:0 4px;border-top:1px solid var(--rule)}
+.sg{display:grid;grid-template-columns:152px minmax(0,1fr) clamp(380px,32vw,520px);
+  grid-template-areas:"rail stage panel" "anun anun tblock" "proc proc log"}
+.rail{grid-area:rail;border-right:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+.stage{grid-area:stage;position:relative;min-height:clamp(640px,50vw,820px);overflow:hidden;border-bottom:1px solid var(--rule)}
+.panel{grid-area:panel;border-left:1px solid var(--rule);border-bottom:1px solid var(--rule);padding:12px 14px;min-width:0}
+.anun{grid-area:anun;padding:12px 14px;border-bottom:1px solid var(--rule);min-width:0}
+.tblock{grid-area:tblock;border-left:1px solid var(--rule);border-bottom:1px solid var(--rule);padding:12px 14px;min-width:0}
+.proc{grid-area:proc;padding:12px 14px;border-bottom:1px solid var(--rule);min-width:0}
+.logc{grid-area:log;border-left:1px solid var(--rule);padding:12px 14px;border-bottom:1px solid var(--rule);min-width:0}
+.sg h2{font-size:17px;margin:0 0 8px;letter-spacing:.08em}
+.sg h2 span{font-family:var(--mono);font-weight:400;font-size:12px;letter-spacing:0;color:var(--mute);text-transform:none;margin-left:6px}
+.note{font-size:14px;color:var(--mute);margin:0 0 10px}
+
+/* rail: views, as an index */
+.rail h2{padding:10px 12px 0}
+.tabs{display:flex;flex-direction:column;margin:0}
+.tabs button{display:flex;gap:8px;align-items:baseline;text-align:left;font-family:var(--head);font-weight:700;font-size:17px;letter-spacing:.05em;text-transform:uppercase;padding:9px 12px;border:0;border-top:1px solid var(--line);background:transparent;color:var(--ink);cursor:pointer}
+.tabs button .n{font-family:var(--mono);font-weight:500;font-size:11px;color:var(--mute);letter-spacing:0}
+.tabs button .sm{display:none}
+.tabs button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.tabs button[aria-pressed="true"] .n{color:var(--bg)}
+.railnote{padding:10px 12px;font-size:12.5px;color:var(--mute);border-top:1px solid var(--line)}
+.pane[hidden]{display:none}
 
 /* 3D stage */
-.stage{position:relative;padding:0;min-height:clamp(540px,38vw,760px);overflow:hidden}
 .stage canvas{position:absolute;inset:0;display:block;width:100%;height:100%;touch-action:pan-y;cursor:grab}
 .stage canvas:active{cursor:grabbing}
 .labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
-.lab{position:absolute;left:0;top:0;font-size:12.5px;line-height:1.1;white-space:nowrap;color:var(--ink);background:var(--well);border:1px solid var(--line);border-radius:2px;padding:1px 5px;will-change:transform}
-.lab.level{background:var(--panel);border:0;color:var(--mute);font-family:var(--cond);font-weight:600;font-size:15px;padding:0 4px}
-.lab.hot{border-color:var(--ink);font-weight:600;z-index:3}
-.tools{position:absolute;right:10px;bottom:10px;display:flex;gap:6px}
+.lab{position:absolute;left:0;top:0;font-family:var(--mono);font-size:11.5px;line-height:1.1;white-space:nowrap;color:var(--ink);background:var(--panel);border:1px solid var(--rule);padding:1px 4px;will-change:transform}
+.lab.level{background:var(--bg);border:0;color:var(--mute);font-family:var(--head);font-weight:700;font-size:14px;letter-spacing:.08em;text-transform:uppercase;padding:0 4px}
+.lab.hot{background:var(--ink);color:var(--bg);font-weight:500;z-index:3}
+.lab.sig{border-style:dashed}
+.lab.lit{background:var(--alarm);color:var(--on-alarm);border-color:var(--alarm);z-index:4}
+.lab.dim{opacity:.32}
+.tools{position:absolute;right:10px;bottom:10px;display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;max-width:calc(100% - 64px)}
+.tools button,.proj button,.levels button{font-family:var(--head);font-weight:700;letter-spacing:.05em;text-transform:uppercase;font-size:15px;min-width:38px;height:36px;padding:0 9px;border:1px solid var(--rule);background:var(--panel);color:var(--ink);cursor:pointer}
+.tools button:hover,.levels button:hover,.proj button:hover{background:var(--ink);color:var(--bg)}
 .tools .sm{display:none}
-.levels{position:absolute;left:10px;top:10px;display:flex;gap:4px}
-.levels button{font:inherit;font-weight:600;font-size:14px;min-width:38px;height:34px;padding:0 6px;border:1px solid var(--line);background:var(--well);color:var(--ink);border-radius:3px;cursor:pointer}
-.levels button:hover{border-color:var(--ink)}
-.tools button{font:inherit;font-weight:600;font-size:15px;min-width:40px;height:40px;padding:0 10px;border:1px solid var(--ink);background:var(--well);color:var(--ink);border-radius:3px;cursor:pointer}
-.card{position:absolute;left:10px;top:52px;max-width:min(300px,calc(100% - 20px));background:var(--well);border:1px solid var(--ink);border-radius:3px;padding:10px 12px;font-size:15px}
+.proj{position:absolute;right:10px;top:10px;display:flex}
+.proj button + button{border-left:0}
+.proj button[aria-pressed="true"],.levels button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.levels{position:absolute;left:10px;top:10px;display:flex;flex-direction:column;gap:3px}
+.levels button{min-width:44px;height:32px;font-size:14px;padding:0 6px}
+.cap{position:absolute;left:10px;bottom:10px;max-width:calc(100% - 330px);font-size:12.5px;color:var(--mute);background:var(--bg);padding:2px 6px 2px 0}
+.card{position:absolute;left:66px;top:10px;max-width:min(300px,calc(100% - 150px));background:var(--panel);border:1px solid var(--rule);padding:10px 12px;font-size:14px;z-index:6}
 .card[hidden]{display:none}
-.card h3{font-family:var(--cond);font-weight:600;font-size:21px;margin:0 28px 4px 0;line-height:1.1}
+.card h3{font-size:19px;margin:0 28px 4px 0;line-height:1.1}
 .card p{margin:0 0 6px}
-.card .x{position:absolute;right:4px;top:4px;width:32px;height:32px;border:0;background:transparent;color:var(--ink);font:inherit;font-size:20px;cursor:pointer}
+.card .x{position:absolute;right:2px;top:2px;width:32px;height:32px;border:0;background:transparent;color:var(--ink);font-size:20px;cursor:pointer}
 .nogl{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;color:var(--mute)}
 
-/* tabs + side */
-.tabs{display:flex;gap:0;margin-bottom:14px;border:1px solid var(--ink);border-radius:3px;overflow:hidden}
-.tabs button{flex:1;font:inherit;font-weight:600;font-size:16px;padding:9px 8px;border:0;background:transparent;color:var(--ink);cursor:pointer}
-.tabs button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
-.pane[hidden]{display:none}
-.btn{font:inherit;font-weight:600;font-size:16px;border:1px solid var(--ink);background:var(--ink);color:var(--bg);border-radius:3px;padding:9px 14px;cursor:pointer;text-align:left}
+/* buttons */
+.btn{font-family:var(--head);font-weight:700;font-size:16px;letter-spacing:.05em;text-transform:uppercase;border:1px solid var(--rule);background:var(--ink);color:var(--bg);padding:8px 14px;cursor:pointer;text-align:left}
 .btn.ghost{background:transparent;color:var(--ink)}
+.btn.ghost:hover{background:var(--ink);color:var(--bg)}
 .btn:disabled{opacity:.4;cursor:not-allowed}
-.attacks{display:grid;gap:8px;margin-bottom:14px}
-.attacks .btn span{display:block;font-weight:400;font-size:14.5px;opacity:.85}
+.attacks{display:grid;gap:6px;margin-bottom:12px}
+.attacks .btn span{display:block;font-family:var(--sans);font-weight:400;font-size:13.5px;letter-spacing:0;text-transform:none;opacity:.9}
 
-.alarm{border:1px solid var(--line);border-radius:3px;background:var(--well);padding:12px}
+/* the alarm detail for the selected alarm */
+.alarm{border:1px solid var(--rule);background:var(--well);padding:10px 12px}
+.alarm.quiet{border-style:dashed;border-color:var(--line)}
 .alarm.quiet p{margin:0;color:var(--mute)}
-.sev{display:inline-block;font-weight:600;font-size:15px;padding:2px 9px;border-radius:3px;background:var(--alarm);color:var(--on-alarm)}
-.alarm.warnbox .sev{background:var(--warn);color:var(--well)}
+.sev{display:inline-block;font-family:var(--head);font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-size:15px;padding:1px 8px;background:var(--alarm);color:var(--on-alarm)}
+.alarm.warnbox .sev{background:var(--warn);color:var(--on-warn)}
 .alarm.crit{border-color:var(--alarm);border-width:2px}
 .alarm.warnbox{border-color:var(--warn);border-width:2px}
-.alarm.unack .sev{animation:flash 1s steps(2,jump-none) infinite}
-@keyframes flash{50%{opacity:.35}}
-@media (prefers-reduced-motion: reduce){.alarm.unack .sev{animation:none}}
-.alarm h3,.detail h3{font-family:var(--cond);font-weight:600;font-size:25px;line-height:1.1;margin:8px 0}
-.facts{margin:0 0 10px;display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:15px}
-.facts dt{color:var(--mute)}
+.alarm h3,.detail h3{font-size:21px;line-height:1.1;margin:8px 0}
+.facts{margin:0 0 10px;display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:13.5px}
+.facts dt{color:var(--mute);font-family:var(--head);font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:12.5px}
 .facts dd{margin:0;overflow-wrap:anywhere}
 .ai{border-top:1px solid var(--line);padding-top:10px;margin-top:6px}
-.ai .who{font-size:14px;color:var(--mute);margin:0 0 4px}
-.ai .text{margin:0;white-space:pre-line;font-size:16px}
-.ack{margin-top:12px}
+.ai .who{font-size:12.5px;color:var(--mute);margin:0 0 4px;font-family:var(--mono)}
+.ai .text{margin:0;white-space:pre-line;font-size:15px}
+.ack{margin-top:10px;margin-right:8px}
+.btnrow{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.btnrow .ack{margin:0}
 
-.recs{display:grid;gap:6px;margin-bottom:12px}
-.recs button{font:inherit;font-size:15.5px;text-align:left;display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);background:var(--well);color:var(--ink);border-radius:3px;cursor:pointer}
-.recs button[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 4px 0 0 var(--ink)}
+/* recorded alerts */
+.recs{display:grid;gap:0;margin-bottom:10px;border:1px solid var(--rule)}
+.recs button{font-size:14.5px;text-align:left;display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center;padding:7px 10px;border:0;border-bottom:1px solid var(--line);background:var(--well);color:var(--ink);cursor:pointer}
+.recs button:last-child{border-bottom:0}
+.recs button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
 .recs button:disabled{opacity:.45;cursor:not-allowed}
-.dot{width:12px;height:12px;border-radius:50%}
+.dot{width:10px;height:10px;border:1px solid var(--rule)}
 .v-escalate{background:var(--alarm)} .v-investigate{background:var(--warn)} .v-likely_benign{background:var(--live)}
-.detail{background:var(--well);border:1px solid var(--line);border-radius:3px;padding:12px}
+.detail{background:var(--well);border:1px solid var(--rule);padding:10px 12px}
 .detail .empty{margin:0;color:var(--mute)}
-.detail p{margin:0 0 10px;font-size:16px}
-.badge{display:inline-block;font-weight:600;font-size:15px;padding:2px 9px;border-radius:3px;color:var(--on-alarm)}
-.badge.v-investigate,.badge.v-likely_benign{color:var(--well)}
-.badge.g-pass{background:var(--live);color:var(--well)}
-.badge.g-block{background:var(--alarm)}
-.badge.g-rec{background:var(--mute);color:var(--well)}
+.detail p{margin:0 0 10px;font-size:15px}
+.badge{display:inline-block;font-family:var(--head);font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-size:14px;padding:1px 8px;color:var(--on-alarm)}
+.badge.v-investigate{color:var(--on-warn)}
+.badge.v-likely_benign{color:var(--bg)}
+.badge.g-pass{background:var(--live);color:var(--bg)}
+.badge.g-block{background:var(--alarm);color:var(--on-alarm)}
+.badge.g-rec{background:var(--mute);color:var(--bg)}
 .lims{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px}
-.lims label{display:grid;gap:3px;font-size:14.5px;color:var(--mute)}
+.lims label{display:grid;gap:3px;font-size:13px;color:var(--mute);font-family:var(--head);font-weight:700;letter-spacing:.06em;text-transform:uppercase}
 .lims label.wide{grid-column:1/-1}
-.lims input,.lims select{font:inherit;font-size:16px;color:var(--ink);background:var(--well);border:1px solid var(--line);border-radius:3px;padding:7px 9px;min-width:0;width:100%;box-sizing:border-box}
-.limbtns{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.lims input,.lims select{font-family:var(--mono);font-size:15px;text-transform:none;letter-spacing:0;color:var(--ink);background:var(--well);border:1px solid var(--rule);padding:6px 8px;min-width:0;width:100%}
+.limbtns{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
 .sim-ctl{display:grid;gap:10px;margin-bottom:10px}
-.sl{display:grid;grid-template-columns:1fr auto;gap:3px 10px;align-items:center;font-size:15px}
-.sl label{grid-column:1/-1;color:var(--mute);font-size:14.5px}
+.sl{display:grid;grid-template-columns:1fr auto;gap:3px 10px;align-items:center;font-size:14px}
+.sl label{grid-column:1/-1;color:var(--mute);font-size:13px;font-family:var(--head);font-weight:700;letter-spacing:.06em;text-transform:uppercase}
 .sl input[type=range]{width:100%;min-width:0;height:28px;accent-color:var(--ink)}
 .sl .nb{white-space:nowrap}
-.sl .nb input{font:inherit;font-size:16px;width:78px;box-sizing:border-box;color:var(--ink);background:var(--well);border:1px solid var(--line);border-radius:3px;padding:5px 7px}
+.sl .nb input{font-family:var(--mono);font-size:15px;width:78px;color:var(--ink);background:var(--well);border:1px solid var(--rule);padding:4px 6px}
 .simrow{display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:space-between}
-.chk{display:flex;gap:8px;align-items:center;font-size:16px}
-.chk input{width:20px;height:20px;accent-color:var(--ink)}
-.note.model{border-left:3px solid var(--mute);padding-left:9px}
-.sub{font-family:var(--cond);font-weight:600;font-size:19px;margin:14px 0 6px}
-.fx{list-style:none;margin:0;padding:0;display:grid;gap:6px}
-.fx li{background:var(--well);border:1px solid var(--line);border-left-width:4px;border-radius:3px;padding:7px 10px;font-size:15px}
+.chk{display:flex;gap:8px;align-items:center;font-size:15px}
+.chk input{width:18px;height:18px;accent-color:var(--ink)}
+.note.model{border-left:3px solid var(--rule);padding-left:9px}
+.sub{font-size:16px;margin:14px 0 6px}
+.fx{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.fx li{background:var(--well);border:1px solid var(--line);border-left:4px solid var(--line);padding:6px 9px;font-size:14px}
 .fx li.warn{border-left-color:var(--warn)}
 .fx li.alarm{border-left-color:var(--alarm)}
-.fx li span{display:block;color:var(--mute);font-size:14px}
-.cmp{width:100%;border-collapse:collapse;font-size:14.5px;margin-bottom:6px}
-.cmp th,.cmp td{text-align:left;padding:5px 6px 5px 0;border-bottom:1px solid var(--line);vertical-align:top}
-.cmp th{color:var(--mute);font-weight:400}
-.cmp small{display:block;color:var(--mute);font-size:12.5px}
-.pill{display:inline-block;font-weight:600;padding:1px 7px;border-radius:3px;border:1px solid var(--line);white-space:nowrap}
-.pill.warn{background:var(--warn);color:var(--well);border-color:var(--warn)}
+.fx li span{display:block;color:var(--mute);font-size:13px;font-family:var(--mono)}
+.cmp{width:100%;border-collapse:collapse;font-size:13.5px;margin-bottom:6px}
+.cmp th,.cmp td{text-align:left;padding:4px 6px 4px 0;border-bottom:1px solid var(--line);vertical-align:top}
+.cmp th{color:var(--mute);font-weight:500;font-family:var(--head);letter-spacing:.06em;text-transform:uppercase;font-size:12.5px}
+.cmp small{display:block;color:var(--mute);font-size:12px;font-family:var(--mono)}
+.pill{display:inline-block;font-family:var(--head);font-weight:800;letter-spacing:.06em;text-transform:uppercase;font-size:13px;padding:0 6px;border:1px solid var(--rule);white-space:nowrap}
+.pill.warn{background:var(--warn);color:var(--on-warn);border-color:var(--warn)}
 .pill.alarm{background:var(--alarm);color:var(--on-alarm);border-color:var(--alarm)}
-.miss{border:2px solid var(--alarm);border-radius:3px;background:var(--well);padding:9px 11px;margin:8px 0;font-size:16px}
-.miss b{display:block;margin-bottom:2px}
+.miss{border:2px solid var(--alarm);background:var(--well);padding:8px 10px;margin:8px 0;font-size:15px}
+.miss b{display:block;margin-bottom:2px;font-family:var(--head);letter-spacing:.06em;text-transform:uppercase}
 
-/* process */
-.tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
-.tile{background:var(--well);border:1px solid var(--line);border-radius:3px;padding:8px 10px}
-.tile .tag{font-size:14px;color:var(--mute);display:flex;justify-content:space-between;gap:8px}
-.tile .val{font-family:var(--cond);font-weight:600;font-size:34px;line-height:1.1;color:var(--live);font-variant-numeric:tabular-nums}
-.tile .val small{font-size:17px;font-weight:500;color:var(--mute)}
-.tile.bad{background:var(--alarm-tint);border-color:var(--alarm)}
+/* annunciator: one window per alarm */
+.anun-h{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin-bottom:8px}
+.anun-h h2{margin:0}
+.an-st{font-family:var(--mono);font-size:12.5px;color:var(--mute);flex:1 1 200px}
+.anun-btns{display:flex;gap:6px}
+.windows{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.win{position:relative;display:grid;grid-template-rows:auto 1fr auto;gap:2px;width:100%;min-height:92px;text-align:left;padding:7px 9px;border:1px solid var(--rule);background:var(--panel);color:var(--ink);cursor:pointer}
+.win .w-tag{font-family:var(--mono);font-size:12px}
+.win .w-txt{font-family:var(--head);font-weight:800;font-size:22px;line-height:1;letter-spacing:.04em;text-transform:uppercase;align-self:center}
+.win .w-st{font-family:var(--mono);font-size:11.5px;letter-spacing:.02em}
+.win .w-fo{position:absolute;right:0;top:0;font-family:var(--head);font-weight:800;font-size:12px;letter-spacing:.08em;padding:1px 6px;background:var(--ink);color:var(--bg);display:none}
+.win.fo .w-fo{display:block}
+.win.sel{outline:2px solid var(--live);outline-offset:1px}
+/* alarm: filled in the alarm colour (red) or the warning colour (amber), with the state in words as well */
+.win.on.crit{background:var(--alarm);color:var(--on-alarm);border-color:var(--alarm)}
+.win.on.warn{background:var(--warn);color:var(--on-warn);border-color:var(--warn)}
+.win.on.crit .w-fo,.win.on.warn .w-fo{background:var(--on-alarm);color:var(--alarm)}
+.win.on.unack{border-width:3px;padding:5px 7px}
+.win.on.unack.warn .w-fo{color:var(--on-warn);background:var(--bg)}
+/* acknowledged and still active: steady. Returned to normal: outlined, with the word RETURNED. */
+.win.ret{background:var(--panel);color:var(--ink);border-style:dashed}
+@keyframes flash{50%{background:var(--panel);color:var(--alarm)}}
+@keyframes flashw{50%{background:var(--panel);color:var(--ink)}}
+.win.on.unack.crit{animation:flash 1s steps(2,jump-none) infinite}
+.win.on.unack.warn{animation:flashw 1s steps(2,jump-none) infinite}
+@media (prefers-reduced-motion: reduce){.win.on.unack.crit,.win.on.unack.warn{animation:none}}
+
+/* process, log */
+.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;border:1px solid var(--rule)}
+.tile{background:var(--well);border-right:1px solid var(--line);padding:6px 10px}
+.tile:last-child{border-right:0}
+.tile .tag{font-family:var(--head);font-weight:700;letter-spacing:.05em;text-transform:uppercase;font-size:12.5px;color:var(--mute);display:flex;justify-content:space-between;gap:8px}
+.tile .val{font-family:var(--head);font-weight:700;font-size:32px;line-height:1.1;color:var(--live);font-variant-numeric:tabular-nums}
+.tile .val small{font-size:15px;font-weight:500;color:var(--mute)}
+.tile.bad{background:var(--alarm-tint)}
 .tile.bad .val,.tile.bad .state{color:var(--alarm)}
-.tile .state{font-weight:600}
-.coils{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 12px}
-.coil{background:var(--well);border:1px solid var(--line);border-radius:3px;padding:4px 10px;font-size:15px}
-.coil b{color:var(--live);font-weight:600}
+.tile .state{font-weight:800}
+.coils{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 10px}
+.coil{background:var(--well);border:1px solid var(--rule);padding:3px 9px;font-size:13.5px;font-family:var(--mono)}
+.coil b{color:var(--live);font-weight:500}
 .coil.bad{background:var(--alarm-tint);border-color:var(--alarm)}
 .coil.bad b{color:var(--alarm)}
-.trend{background:var(--well);border:1px solid var(--line);border-radius:3px;padding:8px 10px}
-.trend svg{display:block;width:100%;height:92px}
-.key{display:flex;gap:14px;flex-wrap:wrap;font-size:13.5px;color:var(--mute);margin-top:4px}
+.trend{background:var(--well);border:1px solid var(--rule);padding:6px 10px}
+.trend svg{display:block;width:100%;height:84px}
+.key{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--mute);margin-top:4px;font-family:var(--mono)}
 .key i{display:inline-block;width:18px;border-top:2px solid var(--live);vertical-align:middle;margin-right:5px}
 .key i.sp{border-top:2px dashed var(--mute)}
 .key i.hi{border-top:2px solid var(--alarm)}
-
-.log{height:318px;overflow-y:auto;background:var(--well);border:1px solid var(--line);border-radius:3px}
-.row{padding:6px 10px;border-bottom:1px solid var(--line);font-size:14.5px}
-.row .meta{display:flex;gap:10px;flex-wrap:wrap;color:var(--mute)}
-.row .meta .fc{color:var(--ink);font-weight:600}
-.row .hex{font-family:var(--mono);font-size:12.5px;color:var(--mute);overflow-x:auto;white-space:nowrap}
+.log{height:300px;overflow-y:auto;background:var(--well);border:1px solid var(--rule)}
+.row{padding:5px 10px;border-bottom:1px solid var(--line);font-size:13px}
+.row .meta{display:flex;gap:10px;flex-wrap:wrap;color:var(--mute);font-family:var(--mono);font-size:12px}
+.row .meta .fc{color:var(--ink);font-weight:500}
+.row .hex{font-family:var(--mono);font-size:11.5px;color:var(--mute);overflow-x:auto;white-space:nowrap}
 .row.flag{background:var(--alarm-tint);box-shadow:inset 4px 0 0 var(--alarm)}
 .row.flag .meta,.row.flag .hex{color:var(--ink)}
 
-/* sections */
-.sec{padding:8px 0 52px}
-.sec > h2{font-family:var(--cond);font-weight:600;font-size:clamp(30px,4.6vw,46px);line-height:1.05;margin:0 0 18px}
-.steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,1fr);border-top:2px solid var(--ink)}
-.steps li{padding:14px 18px 0 0}
-.steps li + li{padding-left:18px;border-left:1px solid var(--line)}
-.steps .n{font-family:var(--cond);font-weight:600;font-size:22px;color:var(--mute)}
-.steps h3{font-family:var(--cond);font-weight:600;font-size:26px;margin:0 0 6px}
-.steps p{margin:0;font-size:16.5px;max-width:60ch}
-.rule{margin:22px 0 0;font-size:19px;max-width:66ch}
-.about{display:grid;grid-template-columns:minmax(0,62ch) minmax(0,640px);gap:clamp(36px,5vw,96px)}
-.about p{margin:0 0 14px;max-width:62ch}
-.cv{margin:0;border-top:2px solid var(--ink)}
-.cv div{display:grid;grid-template-columns:110px 1fr;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:16px}
-.cv dt{color:var(--mute)}
-.cv dd{margin:0}
-.contact{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-.contact .btn{text-decoration:none;display:inline-block}
-.todo{font-size:15px;color:var(--mute);margin:12px 0 0}
-footer{border-top:1px solid var(--line);padding:18px 0 28px;font-size:14.5px;color:var(--mute)}
-footer p{margin:0;max-width:66ch}
+/* title block and revisions */
+.tb{width:100%;border-collapse:collapse;font-size:13px}
+.tb th,.tb td{border:1px solid var(--rule);padding:4px 7px;text-align:left;vertical-align:top}
+.tb th{font-family:var(--head);font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:12px;color:var(--mute);width:5.5em}
+.tb td{font-family:var(--mono);font-size:12.5px}
+.rev{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:10px}
+.rev th,.rev td{border:1px solid var(--rule);padding:3px 6px;text-align:left;vertical-align:top}
+.rev th{font-family:var(--head);font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:11.5px;color:var(--mute)}
+.rev td.d{font-family:var(--mono);white-space:nowrap}
+.rev td.blank{min-width:3.2em}
 
-@media (max-width:600px){
-  .wrap{padding:0 16px}
-  .tools{gap:5px}
-  .tools button{font-size:14px;padding:0 8px}
+/* sections */
+.sec{margin:0 4px;border-top:1px solid var(--rule);padding:14px 14px 18px;display:grid;grid-template-columns:152px minmax(0,1fr);gap:0 24px}
+.sec > h2{margin:0;font-size:22px;line-height:1;letter-spacing:.06em}
+.sec > h2 .n{display:block;font-family:var(--mono);font-weight:500;font-size:12px;letter-spacing:0;color:var(--mute);margin-bottom:4px}
+.sec .body{min-width:0;max-width:112ch}
+.notes{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+.notes li{display:grid;grid-template-columns:2.2em minmax(0,1fr);gap:0 10px;padding:8px 0;border-bottom:1px solid var(--line)}
+.notes .n{font-family:var(--mono);color:var(--mute);font-size:13px}
+.notes h3{margin:0 0 2px;font-size:18px}
+.notes p{margin:0;max-width:78ch}
+.rule{margin:14px 0 0;font-size:15.5px;max-width:78ch}
+.about{display:grid;grid-template-columns:minmax(0,60ch) minmax(0,1fr);gap:22px 48px}
+.about p{margin:0 0 12px;max-width:62ch}
+.cv{margin:0;border-top:1px solid var(--rule)}
+.cv div{display:grid;grid-template-columns:104px 1fr;gap:12px;padding:7px 0;border-bottom:1px solid var(--line);font-size:14.5px}
+.cv dt{color:var(--mute);font-family:var(--head);font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:13px}
+.cv dd{margin:0}
+.contact{display:flex;gap:8px;flex-wrap:wrap}
+.contact .btn{text-decoration:none;display:inline-block}
+.tagline{margin:0 0 8px;font-size:14px}
+.eqwrap{overflow-x:auto}
+.eq{width:100%;border-collapse:collapse;font-size:13px;min-width:620px}
+.eq th,.eq td{text-align:left;padding:4px 8px 4px 0;border-bottom:1px solid var(--line);vertical-align:top}
+.eq th{font-family:var(--head);font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:12.5px;color:var(--mute);border-bottom:1px solid var(--rule)}
+.eq td.tg{font-family:var(--mono);font-weight:500;white-space:nowrap}
+.eq td.mono{font-family:var(--mono);font-size:12px;color:var(--mute)}
+.eq tr.sig td{background:var(--panel)}
+.eq tr.lit td{background:var(--alarm);color:var(--on-alarm)}
+.eq tr.lit td.mono{color:var(--on-alarm)}
+.eq .why{font-family:var(--head);font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+.eqnote{font-size:13.5px;color:var(--mute);margin:8px 0 0;max-width:90ch}
+footer{margin:0 4px;border-top:1px solid var(--rule);padding:12px 14px 16px;font-size:13px;color:var(--mute)}
+footer p{margin:0;max-width:110ch}
+
+@media (max-width:1180px){
+  .st-meta{grid-template-columns:repeat(3,auto)}
+  .st-meta .x2{display:none}
+}
+@media (max-width:1000px){
+  .sg{grid-template-columns:minmax(0,1fr);grid-template-areas:"stage" "anun" "rail" "panel" "proc" "log" "tblock"}
+  .rail{border-right:0;border-bottom:1px solid var(--rule)}
+  .rail h2,.railnote{display:none}
+  .tabs{flex-direction:row}
+  .tabs button{flex:1;justify-content:center;border-top:0;border-left:1px solid var(--line);padding:9px 4px;font-size:16px}
+  .tabs button:first-child{border-left:0}
+  .panel,.tblock,.logc{border-left:0}
+  .stage{min-height:0;height:min(66vh,640px)}
+  .sec{grid-template-columns:minmax(0,1fr)}
+  .sec > h2{margin-bottom:10px}
+  .sec > h2 .n{display:inline;margin:0 8px 0 0}
+  .about{grid-template-columns:1fr}
+  .intro{grid-template-columns:1fr}
+  .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .tile:nth-child(2){border-right:0}
+  .tile:nth-child(-n+2){border-bottom:1px solid var(--line)}
+  .cap{display:none}
+}
+@media (max-width:767px){
+  .tabs button .lg{display:none}
+  .tabs button .sm{display:inline}
+  .tabs button .n{display:none}
+  .tabs button{font-size:15px;padding:10px 2px;letter-spacing:.03em}
+  .windows{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .win{min-height:84px}
+  .win .w-txt{font-size:20px}
+  .strip{grid-template-columns:auto 1fr}
+  .st-title,.st-nav,.st-meta .x3{display:none}
+  .st-right{flex-wrap:nowrap;gap:8px;justify-content:flex-end}
+  .st-meta .lg,.simtag .lg{display:none}
+  .st-meta .sm,.simtag .sm{display:inline}
+  .st-meta{grid-template-columns:repeat(2,auto)}
+  .sq{padding:3px 7px;font-size:13px}
+  .simtag{font-size:13px;padding:2px 5px}
+  .levels{left:10px;top:auto;bottom:54px;flex-direction:row}
+  .st-meta{grid-template-columns:repeat(2,auto);gap:0 10px}
+  .strip > *{padding:6px 8px}
+  .mark{font-size:20px}
+  .intro{padding:10px 12px}
+  .intro p{font-size:15.5px}
   .tools .lg{display:none}
   .tools .sm{display:inline}
-}
-@media (max-width:860px){
-  .grid{grid-template-columns:1fr}
-  .cell.l{border-right:0}
-  .cell.b{border-bottom:1px solid var(--line)}
-  .cell.end{border-bottom:0}
-  .stage{min-height:0;height:62vh}
-  .steps{grid-template-columns:1fr}
-  .steps li + li{padding-left:0;border-left:0;border-top:1px solid var(--line);margin-top:14px}
-  .about{grid-template-columns:1fr;gap:20px}
-  .hero{padding-top:28px}
+  .tools button{min-width:34px;padding:0 6px;font-size:14px;height:34px}
+  .lab{font-size:10px;padding:0 3px}
+  .levels button{min-width:36px;height:30px;font-size:13px;padding:0 4px}
+  .card{left:56px;max-width:calc(100% - 66px)}
+  .sheet{margin:6px}
+  .lims{grid-template-columns:1fr 1fr}
 }
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="sheet">
 
-<header class="top">
-  <a class="mark" href="#demo">SentinelOT</a>
-  <nav aria-label="Sections">
-    <a href="#demo">Live demo</a>
-    <a href="#method">How it works</a>
-    <a href="#about">About Anthony</a>
-    <a href="#contact">Contact</a>
-  </nav>
+<header class="strip">
+  <a class="mark" href="#demo">SENTINELOT</a>
+  <div class="st-title"><b>OT security demo</b><span>Packaging plant, line 1</span></div>
+  <div class="st-right">
+    <dl class="st-meta">
+      <div class="x3"><dt>Dwg</dt><dd>SOT-0001</dd></div>
+      <div><dt>Rev</dt><dd>D</dd></div>
+      <div class="x2"><dt>Scale</dt><dd>NTS</dd></div>
+      <div><dt>Sheet</dt><dd><span class="lg">1 of 1</span><span class="sm">1/1</span></dd></div>
+      <div class="x2 x3"><dt>Drawn</dt><dd>ToniGift</dd></div>
+    </dl>
+    <nav class="st-nav" aria-label="Sections"><a href="#demo">Plant</a><a href="#equipment">Tags</a><a href="#method">Method</a><a href="#about">About</a></nav>
+    <span class="simtag"><span class="lg">SIMULATED</span><span class="sm">SIM</span></span>
+    <button type="button" class="sq" id="theme" aria-label="Switch colour scheme"></button>
+  </div>
 </header>
 
-<section class="hero">
-  <h1>Catch the write that should never reach the PLC.</h1>
-  <p>SentinelOT watches industrial traffic, flags commands that don’t belong and explains them in plain language. <strong>The plant below is running now on simulated Modbus data. Launch an attack and watch which firewalls it crosses on its way down.</strong></p>
+<section class="intro">
+  <h1>PLC-101 write watch</h1>
+  <p><b>SentinelOT watches a simulated plant’s Modbus traffic, flags writes that don’t belong and checks alarm-limit changes. It recommends, never acts:</b> a person acknowledges every alarm. The plant is running now. Launch an attack and watch which firewalls it crosses.</p>
 </section>
 
 <section class="board" id="demo" aria-label="Live demo">
-  <div class="board-head">
-    <b>Packaging plant, line 1</b>
-    <span class="sim">Simulated data, no real plant connected</span>
-  </div>
-  <div class="grid">
+  <div class="sg">
 
-    <div class="cell l stage" id="stage">
+    <nav class="rail" aria-label="Views">
+      <h2>Views</h2>
+      <div class="tabs" id="tabs">
+        <button type="button" id="tab-live" aria-pressed="true" aria-label="Live attack"><span class="n">01</span><span class="lg">Live attack</span><span class="sm">Live</span></button>
+        <button type="button" id="tab-rec" aria-pressed="false" aria-label="Recorded alerts"><span class="n">02</span>Recorded</button>
+        <button type="button" id="tab-lim" aria-pressed="false" aria-label="Alarm limits"><span class="n">03</span>Limits</button>
+        <button type="button" id="tab-sim" aria-pressed="false" aria-label="What-if process sandbox"><span class="n">04</span>What-if</button>
+      </div>
+      <p class="railnote">Tag plates are ISA-style on the plant; names show when you select equipment. Simulated.</p>
+    </nav>
+
+    <div class="stage" id="stage">
       <canvas id="gl" tabindex="0" aria-label="3D model of the plant. Drag or use the arrow keys to rotate. Shift and drag, right-drag or Page Up and Page Down move the view."></canvas>
       <div class="labels" id="labels" aria-hidden="true"></div>
       <div class="card" id="card" hidden></div>
       <div class="levels" id="levels" role="group" aria-label="Jump to a level"></div>
+      <div class="proj" role="group" aria-label="Camera">
+        <button type="button" id="persp" aria-pressed="true" aria-label="Perspective camera">Persp</button>
+        <button type="button" id="isob" aria-pressed="false" aria-label="Orthographic isometric camera">Iso</button>
+      </div>
+      <p class="cap">Tags are ISA-style. IT equipment uses plain asset-class prefixes.</p>
       <div class="tools">
         <button type="button" id="zin" aria-label="Zoom in">+</button>
         <button type="button" id="zout" aria-label="Zoom out">−</button>
@@ -269,20 +421,13 @@ footer p{margin:0;max-width:66ch}
       </div>
     </div>
 
-    <div class="cell">
-      <div class="tabs">
-        <button type="button" id="tab-live" aria-pressed="true" aria-label="Live attack">Live</button>
-        <button type="button" id="tab-rec" aria-pressed="false" aria-label="Recorded alerts">Recorded</button>
-        <button type="button" id="tab-lim" aria-pressed="false" aria-label="Alarm limits">Limits</button>
-        <button type="button" id="tab-sim" aria-pressed="false" aria-label="What-if process sandbox">What-if</button>
-      </div>
-
+    <div class="panel">
       <div class="pane" id="pane-live">
-        <p class="note">Each button sends real Modbus frames to PLC-Line1 from a host that isn’t an approved master.</p>
+        <p class="note">Each button sends simulated Modbus frames to PLC-101 (PLC-Line1) from a host that isn’t an approved master. Start a second attack before acknowledging the first and both alarms stay active.</p>
         <div class="attacks">
-          <button class="btn atk" data-atk="setpoint">Raise the sealer setpoint<span>Office PC writes register 40001 to 240 °C</span></button>
-          <button class="btn atk" data-atk="robot">Stop the packing robot<span>Office PC writes coil 00003 to off</span></button>
-          <button class="btn atk" data-atk="scan">Scan the register map<span>A new host reads address ranges until something answers</span></button>
+          <button class="btn atk" data-atk="setpoint">Raise the sealer setpoint<span>OFFICE-PC-14 writes register 40001 (TIC-101 setpoint) to 240 °C</span></button>
+          <button class="btn atk" data-atk="robot">Stop the packing robot<span>OFFICE-PC-14 writes coil 00003 (RB-101 enable) to off</span></button>
+          <button class="btn atk" data-atk="scan">Scan the register map<span>A new host reads address ranges on PLC-101 until something answers</span></button>
         </div>
         <div class="alarm quiet" id="alarm" aria-live="polite">
           <p>No active alarm. Only HMI-Line1 and the historian are talking to the PLC.</p>
@@ -341,12 +486,45 @@ footer p{margin:0;max-width:66ch}
       </div>
     </div>
 
-    <div class="cell l b">
+    <section class="anun" aria-label="Annunciator">
+      <div class="anun-h">
+        <h2>Annunciator<span>ISA-style, simulated</span></h2>
+        <span class="an-st" id="an-st" role="status"></span>
+        <div class="anun-btns">
+          <button type="button" class="btn ghost" id="an-ack">Ack all</button>
+          <button type="button" class="btn ghost" id="an-reset">Reset</button>
+        </div>
+      </div>
+      <ul class="windows" id="windows"></ul>
+      <p class="note" style="margin:8px 0 0">First out marks the alarm that came first and stays on it until Reset. Acknowledge stops the flashing and nothing else. Reset clears acknowledged alarms whose condition has returned to normal.</p>
+    </section>
+
+    <section class="tblock" aria-label="Title block and revisions">
+      <h2>Title block</h2>
+      <table class="tb">
+        <tr><th scope="row">Dwg no.</th><td>SOT-0001</td><th scope="row">Rev</th><td>D</td></tr>
+        <tr><th scope="row">Title</th><td colspan="3">OT security demo, packaging plant line 1, simulated</td></tr>
+        <tr><th scope="row">Drawn</th><td>ToniGift</td><th scope="row">Scale</th><td>NTS</td></tr>
+        <tr><th scope="row">Checked</th><td></td><th scope="row">Sheet</th><td>1 of 1</td></tr>
+        <tr><th scope="row">Approved</th><td></td><th scope="row">Date</th><td>2026-11-13</td></tr>
+      </table>
+      <table class="rev">
+        <thead><tr><th scope="col">Rev</th><th scope="col">Date</th><th scope="col">Description</th><th scope="col"><abbr title="Checked">Chk</abbr></th><th scope="col"><abbr title="Approved">App</abbr></th></tr></thead>
+        <tbody>
+          <tr><td>A</td><td class="d">2026-10-06</td><td>Hackathon build: triage and its evaluation run</td><td class="blank"></td><td class="blank"></td></tr>
+          <tr><td>B</td><td class="d">2026-11-12</td><td>Imported here; 3D plant; AlarmOps connected as a module</td><td class="blank"></td><td class="blank"></td></tr>
+          <tr><td>C</td><td class="d">2026-11-13</td><td>Pan; What-if sandbox; README</td><td class="blank"></td><td class="blank"></td></tr>
+          <tr><td>D</td><td class="d">2026-11-13</td><td>Drawing-sheet layout; annunciator; tag plates</td><td class="blank"></td><td class="blank"></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="proc">
       <h2 id="proc-h">Line 1 process</h2>
       <div class="tiles">
-        <div class="tile" id="t-sp"><div class="tag"><span>Sealer setpoint</span><span class="state"></span></div><div class="val"><span class="v">160.0</span> <small>°C</small></div></div>
-        <div class="tile" id="t-pv"><div class="tag"><span>Sealer temperature</span><span class="state"></span></div><div class="val"><span class="v">160.0</span> <small>°C</small></div></div>
-        <div class="tile" id="t-rpm"><div class="tag"><span>Conveyor motor</span><span class="state"></span></div><div class="val"><span class="v">1200</span> <small>rpm</small></div></div>
+        <div class="tile" id="t-sp"><div class="tag"><span>Sealer setpoint <span style="font-family:var(--mono);font-weight:400">TIC-101</span></span><span class="state"></span></div><div class="val"><span class="v">160.0</span> <small>°C</small></div></div>
+        <div class="tile" id="t-pv"><div class="tag"><span>Sealer temp <span style="font-family:var(--mono);font-weight:400">TT-101</span></span><span class="state"></span></div><div class="val"><span class="v">160.0</span> <small>°C</small></div></div>
+        <div class="tile" id="t-rpm"><div class="tag"><span>Conveyor <span style="font-family:var(--mono);font-weight:400">ST-101</span></span><span class="state"></span></div><div class="val"><span class="v">1200</span> <small>rpm</small></div></div>
         <div class="tile" id="t-ppm"><div class="tag"><span>Packs per minute</span><span class="state"></span></div><div class="val"><span class="v">42</span></div></div>
       </div>
       <div class="coils">
@@ -360,31 +538,48 @@ footer p{margin:0;max-width:66ch}
           <line id="l-sp" x1="0" x2="300" y1="0" y2="0" stroke="var(--mute)" stroke-width="1.2" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>
           <polyline id="l-pv" fill="none" stroke="var(--live)" stroke-width="2" vector-effect="non-scaling-stroke" points=""/>
         </svg>
-        <div class="key"><span><i></i>Sealer temperature</span><span><i class="sp"></i>Setpoint</span><span><i class="hi"></i>High limit 190 °C</span></div>
+        <div class="key"><span><i></i>TT-101 sealer temperature</span><span><i class="sp"></i>TIC-101 setpoint</span><span><i class="hi"></i>High limit 190 °C</span></div>
       </div>
-    </div>
+    </section>
 
-    <div class="cell b end">
+    <section class="logc">
       <h2 id="log-h">Modbus/TCP traffic</h2>
       <div class="log" id="log" tabindex="0" aria-label="Frame log, newest first"></div>
-    </div>
+    </section>
 
   </div>
 </section>
 
+<section class="sec" id="equipment">
+  <h2><span class="n">05</span>Equipment list</h2>
+  <div class="body">
+    <p class="tagline">Tags are ISA-style. IT equipment uses plain asset-class prefixes. The first digit of a number is the area: 1 line 1, 2 line 2, 3 network security, 4 enterprise and DMZ, 5 utilities, 6 operations and supervisory servers and workstations.</p>
+    <div class="eqwrap">
+      <table class="eq" id="eq">
+        <thead><tr><th scope="col">Tag</th><th scope="col">Name</th><th scope="col">Type</th><th scope="col">Level</th><th scope="col">AlarmOps tag</th><th scope="col">Origin</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="eqnote">FT-501 is a drawn device, so it has an asset tag. LT-501, PT-501, TT-101 and ST-101 are signal tags: a measurement on a drawn device, read through another one. TIC-101 is the sealer temperature controller, a function inside PLC-101. A highlighted row is a tag in alarm, or one whose limit change is blocked or would miss an alarm.</p>
+  </div>
+</section>
+
 <section class="sec" id="method">
-  <h2>How it works</h2>
-  <ol class="steps">
-    <li><span class="n">1</span><h3>Listen</h3><p>A sensor on a mirror port reads every frame between the masters and the PLC. It never writes to the control network.</p></li>
-    <li><span class="n">2</span><h3>Judge</h3><p>Rules check who is talking, which function code they used and whether the value fits the engineering limits.</p></li>
-    <li><span class="n">3</span><h3>Explain</h3><p>AI adds asset context, maps the activity to MITRE ATT&amp;CK for ICS and tells the analyst what to do first. It recommends and never acts.</p></li>
-  </ol>
-  <p class="rule">In the live demo a fixed rule raises the alarm and the AI only explains it. The recorded alerts come from the full project, where five AI agents triage each alert and code checks their output. <a href="https://github.com/ToniGift/sentinelOT" target="_blank" rel="noopener">Read the code on GitHub</a>.</p>
+  <h2><span class="n">06</span>How it works</h2>
+  <div class="body">
+    <ol class="notes">
+      <li><span class="n">N1</span><div><h3>Listen</h3><p>A sensor on a mirror port reads every frame between the masters and the PLC. It never writes to the control network.</p></div></li>
+      <li><span class="n">N2</span><div><h3>Judge</h3><p>Rules check who is talking, which function code they used and whether the value fits the engineering limits.</p></div></li>
+      <li><span class="n">N3</span><div><h3>Explain</h3><p>AI adds asset context, maps the activity to MITRE ATT&amp;CK for ICS and tells the analyst what to do first. It recommends and never acts.</p></div></li>
+    </ol>
+    <p class="rule">In the live demo a fixed rule raises the alarm and the AI only explains it. The recorded alerts come from the full project, where five AI agents triage each alert and code checks their output. <a href="https://github.com/ToniGift/sentinelOT" target="_blank" rel="noopener">Read the code on GitHub</a>.</p>
+  </div>
 </section>
 
 <section class="sec" id="about">
-  <h2>Built by Anthony Afonughe</h2>
-  <div class="about">
+  <h2><span class="n">07</span>Built by Anthony Afonughe</h2>
+  <div class="body about">
+
     <div>
       <p>I’m an OT/ICS security engineer based in Bydgoszcz, Poland. I spent about three years on the floor of a manufacturing plant, working across PLC, SCADA, HMI, DCS and RTU systems, so I build security tools around how plants really run.</p>
       <p>SentinelOT is my prototype for OT security a small factory can install without a security team.</p>
@@ -400,14 +595,17 @@ footer p{margin:0;max-width:66ch}
 </section>
 
 <section class="sec" id="contact">
-  <h2>Hiring for OT security, or running a plant?</h2>
-  <div class="contact">
-    <a class="btn" href="mailto:anthonygift2019@gmail.com?subject=OT%20security%20role">Email me about a role</a>
-    <a class="btn ghost" href="mailto:anthonygift2019@gmail.com?subject=SentinelOT%20pilot">Ask about a SentinelOT pilot</a>
+  <h2><span class="n">08</span>Contact</h2>
+  <div class="body">
+    <p class="tagline">Hiring for OT security, or running a plant?</p>
+    <div class="contact">
+      <a class="btn" href="mailto:anthonygift2019@gmail.com?subject=OT%20security%20role">Email me about a role</a>
+      <a class="btn ghost" href="mailto:anthonygift2019@gmail.com?subject=SentinelOT%20pilot">Ask about a SentinelOT pilot</a>
+    </div>
   </div>
 </section>
 
-<footer><p>The plant, hosts and traffic on this page are invented and simulated in your browser. No real control system is connected. The recorded verdicts are the ones SentinelOT returned in its evaluation run on 6 October 2026. Level 5, the firewalls, the ERP server, the MES server, the OT domain controller, the DCS (DCS-CTRL-01, its server and operator station), the utilities tank, pump and flow meter, the sealer, the robot and the conveyor motor were added for this demo and aren’t in the project’s asset file. The Alarm limits results come from replaying a generated dataset with labelled faults. They are not measurements from a plant. The What-if tab runs a simplified demo model in your browser, not plant physics: the tank fill, the pump and flow response, the sealer lag and the conveyor backlog are invented for the demo, and nothing is sent anywhere.</p></footer>
+<footer><p>The plant, hosts and traffic on this page are invented and simulated in your browser. No real control system is connected. The recorded verdicts are the ones SentinelOT returned in its evaluation run on 6 October 2026. Demo only, not in the project’s asset file: the internet and VPN-GW-01 (level 5), the four firewalls FW-Edge, FW-IT-DMZ, FW-DMZ-OT and FW-Cell-1, ERP-SRV-01, MES-SRV-01, AD-OT-01, DCS-OPS-01, DCS-SRV-01 and DCS-CTRL-01 (the DCS and its server and operator station), TANK-Utility-1, PUMP-Utility-1, FLOW-Meter-1, SEALER-Line1, ROBOT-Pick-1 and MOTOR-Conveyor-1. The signal tags TT-101, ST-101, LT-501, PT-501 and TIC-101 are drawn for the demo too. The other 14 assets come from the project’s asset file. The Alarm limits results come from replaying a generated dataset with labelled faults. They are not measurements from a plant. The What-if tab runs a simplified demo model in your browser, not plant physics: the tank fill, the pump and flow response, the sealer lag and the conveyor backlog are invented for the demo, and nothing is sent anywhere. Tags are ISA-style, assigned for this demo.</p></footer>
 </div>
 
 <script id="process-model">
@@ -566,7 +764,7 @@ var FWS=[
  ["FW-DMZ-OT","3.5","3","Separates the DMZ from operations. No direct path from the office network to the plant floor"],
  ["FW-Cell-1","2","1","Line 1 cell firewall. Only HMI-Line1, the historian and the engineering workstation may reach PLC-Line1"]
 ].map(function(f){return {ip:"",name:f[0],type:"Firewall",level:f[1],crit:"high",fn:f[3],kind:"fw",
-  zone:"Between level "+f[1]+" and level "+f[2],fy:(levelY[f[1]]+levelY[f[2]])/2,ya:levelY[f[1]],yb:levelY[f[2]]}});
+  zone:"Between level "+f[1]+" and level "+f[2],lo:f[2],fy:(levelY[f[1]]+levelY[f[2]])/2,ya:levelY[f[1]],yb:levelY[f[2]]}});
 /* a trace names its ends by address (src, dst) or, for items with no address, by asset (srcA, dstA) */
 function traceEnd(tr,which){return tr[which+"A"]||byIp[tr[which]]||null}
 function traceY(tr,which){var a=traceEnd(tr,which);return a?levelY[a.level]:levelY[tr.unk.level]}
@@ -575,6 +773,62 @@ function crossed(tr){var y1=traceY(tr,"src"),y2=traceY(tr,"dst"),lo=Math.min(y1,
 var byIp={},byName={};ASSETS.forEach(function(a){if(a.ip)byIp[a.ip]=a;byName[a.name]=a});
 /* field devices with no network address: [device, what its signal cable runs to] */
 var WIRED={"TANK-Utility-1":"DCS-CTRL-01","PUMP-Utility-1":"PLC-Line2","FLOW-Meter-1":"PLC-Line2","SEALER-Line1":"SENSOR-GW-1"};
+
+/* ISA-style tags. A tag is a letter code and a three-digit number; the first digit is the area:
+   1 line 1, 2 line 2, 3 network security, 4 enterprise and DMZ, 5 utilities, 6 operations and supervisory servers and workstations.
+   IT equipment uses plain asset-class prefixes (SRV, WS, DB, PC). A transmitter prefix (TT, LT, PT, FT, ST) goes only on a measuring device. */
+var TAGOF={"VPN-GW-01":"VPN-301","OFFICE-PC-14":"PC-401","ERP-SRV-01":"SRV-401","JUMP-SRV-01":"SRV-402","PATCH-SRV-01":"SRV-403","HIST-DMZ-01":"DB-401",
+  "ENG-WS-01":"WS-601","HIST-01":"DB-601","MES-SRV-01":"SRV-601","AD-OT-01":"SRV-602","SCADA-SRV-01":"SRV-603",
+  "HMI-Line1":"HMI-101","DCS-OPS-01":"WS-501","DCS-SRV-01":"SRV-501","DCS-CTRL-01":"DCS-501",
+  "PLC-Line1":"PLC-101","PLC-Line2":"PLC-201","RTU-Outstation-3":"RTU-501",
+  "TANK-Utility-1":"T-501","VFD-Conveyor-1":"VFD-101","MOTOR-Conveyor-1":"M-101","ROBOT-Pick-1":"RB-101","IO-Module-Line2":"IO-201",
+  "PUMP-Utility-1":"P-501","FLOW-Meter-1":"FT-501","SEALER-Line1":"SL-101","SENSOR-GW-1":"GW-101",
+  "FW-Edge":"FW-301","FW-IT-DMZ":"FW-302","FW-DMZ-OT":"FW-303","FW-Cell-1":"FW-304"};
+/* the assets that are in the project's own asset file (data/assets.json); every other item was added for this demo */
+var IN_FILE={"PLC-Line1":1,"PLC-Line2":1,"RTU-Outstation-3":1,"HMI-Line1":1,"SCADA-SRV-01":1,"ENG-WS-01":1,"HIST-01":1,"OFFICE-PC-14":1,
+  "IO-Module-Line2":1,"VFD-Conveyor-1":1,"SENSOR-GW-1":1,"JUMP-SRV-01":1,"PATCH-SRV-01":1,"HIST-DMZ-01":1};
+ASSETS.concat(FWS).forEach(function(a){a.tag=TAGOF[a.name]||"";a.demo=!IN_FILE[a.name]});
+/* the five AlarmOps tags, each mapped to a tag on the plant. FT-501 is a drawn device (the flow meter); the others are signal tags. */
+var ALARM_TAG={sealer_temperature:"TT-101",conveyor_speed:"ST-101",tank_level:"LT-501",pump_pressure:"PT-501",flow_rate:"FT-501"};
+var SIGS=[
+  {tag:"TT-101",what:"Sealer temperature",on:"SEALER-Line1",via:"SENSOR-GW-1",lim:"sealer_temperature"},
+  {tag:"ST-101",what:"Conveyor speed",on:"MOTOR-Conveyor-1",via:"VFD-Conveyor-1",lim:"conveyor_speed"},
+  {tag:"LT-501",what:"Utilities tank level",on:"TANK-Utility-1",via:"DCS-CTRL-01",lim:"tank_level"},
+  {tag:"PT-501",what:"Pump pressure",on:"PUMP-Utility-1",via:"PLC-Line2",lim:"pump_pressure"},
+  {tag:"TIC-101",what:"Sealer temperature controller, setpoint",on:"PLC-Line1",via:"inside PLC-Line1",lim:null}
+];
+SIGS.forEach(function(s){s.asset=byName[s.on]});
+function tagName(n){var a=byName[n];return a&&a.tag?a.tag+" ("+n+")":n}
+function litSet(){
+  var m={};
+  if((curTab==="lim"||curTab==="sim")&&LIM.blocked&&ALARM_TAG[LIM.blocked])m[ALARM_TAG[LIM.blocked]]="limit change blocked";
+  if(curTab==="sim"&&SB.missed)SB.missed.forEach(function(x){if(ALARM_TAG[x.tag]&&!m[ALARM_TAG[x.tag]])m[ALARM_TAG[x.tag]]="alarm missed"});
+  alarms.forEach(function(a){if(a.cleared)return;if(a.kind==="setpoint")m["TIC-101"]="SP changed";if(a.kind==="temp")m["TT-101"]="high"});
+  return m;
+}
+function buildEq(){
+  var tb=$("#eq tbody");tb.textContent="";
+  var limOf={};Object.keys(ALARM_TAG).forEach(function(k){limOf[ALARM_TAG[k]]=k});
+  function row(cls,key,cells,origin){
+    var tr=el("tr",cls);tr.setAttribute("data-tag",key);
+    cells.forEach(function(c){tr.appendChild(el("td",c[1]||null,c[0]))});
+    var td=el("td",null,origin);td.appendChild(el("span","why"));tr.appendChild(td);tb.appendChild(tr);
+  }
+  ASSETS.concat(FWS).forEach(function(a){
+    row("",a.tag||"-",[[a.tag||"-","tg"],[a.name],[a.type],[a.kind==="fw"?"L"+a.level+" / L"+a.lo:"L"+a.level],[limOf[a.tag]||"","mono"]],a.demo?"Demo only":"Project asset file");
+  });
+  SIGS.forEach(function(s){
+    row("sig",s.tag,[[s.tag,"tg"],[s.what+", on "+tagName(s.on)+", "+(s.via.indexOf("inside")===0?s.via:"read through "+tagName(s.via))],["Signal tag"],["L"+s.asset.level],[s.lim||"","mono"]],"Signal, demo only");
+  });
+}
+function paintEq(){
+  var lit=litSet();
+  document.querySelectorAll("#eq tbody tr").forEach(function(tr){
+    var on=lit[tr.getAttribute("data-tag")];tr.classList.toggle("lit",!!on);
+    tr.querySelector(".why").textContent=on?" · "+on.toUpperCase():"";
+  });
+}
+
 
 var RECS=[
  {title:"Modbus write coil to PLC from an office PC",v:"escalate",p:"P1",t:"T0835",src:"10.10.50.7",dst:"10.10.20.11",
@@ -606,7 +860,7 @@ var WRITE_FC={5:1,6:1,15:1,16:1};
 var HI_SEAL=190,SP_NORMAL=160;
 var st={sp:SP_NORMAL,pv:159.7,rpm:1200,ppm:42,heater:1,conv:1,robot:1};
 var hist=[],queue=[],rows=[],tid=0x1A00,lastTid=0,step=0,ticks=0;
-var active=null,selRec=null,scan={addrs:[],frames:[]},runId=0,scene3d=null,curTab="live";
+var alarms=[],alarmSeq=0,firstOut=null,active=null,selRec=null,scan={addrs:[],frames:[]},scene3d=null,curTab="live";
 
 var samplePromise=(window.claude&&typeof window.claude.use==="function")
   ? window.claude.use("sample").catch(function(){return null}) : Promise.resolve(null);
@@ -646,29 +900,31 @@ var ATTACKS={
 };
 
 function detect(f){
-  if(active||f.resp||f.dst!==PLC||APPROVED[f.src.ip])return;
+  /* runs on every frame, whether or not an alarm is already active */
+  if(f.resp||f.dst!==PLC||APPROVED[f.src.ip])return;
   if(WRITE_FC[f.fc]){
     f.flag=true;
     raise({sev:"crit",kind:f.kind,label:"Critical",
-      title:f.kind==="robot"?"Unapproved host stopped the packing robot":"Unapproved host changed the sealer setpoint",
+      title:f.kind==="robot"?"RB-101 stopped by an unapproved host":"TIC-101 SP changed by an unapproved host",
       rule:"Write command from a host that is not an approved master",
-      src:f.src,target:(f.fc===5?"Coil ":"Register ")+f.addr+" on PLC-Line1",frames:[f]});
+      src:f.src,target:(f.fc===5?"Coil ":"Register ")+f.addr+" on PLC-101 (PLC-Line1)",frames:[f]});
     return;
   }
+  if(alarmOf("scan")){f.flag=true;return}
   scan.addrs.push(f.start);scan.frames.push(f);
   if(scan.addrs.length>=3){
     scan.frames.forEach(function(x){x.flag=true});
     raise({sev:"warn",kind:"scan",label:"Warning",
-      title:"New host is scanning the PLC register map",
+      title:"New host is scanning the PLC-101 register map",
       rule:"Three or more reads of unmapped address ranges from one unapproved host",
-      src:f.src,target:"Holding registers 40101 onwards on PLC-Line1",frames:scan.frames.slice()});
+      src:f.src,target:"Holding registers 40101 onwards on PLC-101 (PLC-Line1)",frames:scan.frames.slice()});
   }
 }
 function emit(f){
   if(f.resp){f.tid=lastTid}else{tid=(tid+1)&0xFFFF;f.tid=lastTid=tid}
   f.time=clock();f.hex=hx(adu(f.tid,f.pdu));
   if(f.effect)f.effect();
-  if(active&&active.kind==="scan"&&!f.resp&&f.kind==="scan")f.flag=true;
+  if(alarmOf("scan")&&!f.resp&&f.kind==="scan")f.flag=true;
   detect(f);
   rows.unshift(f);if(rows.length>60)rows.pop();
 }
@@ -681,6 +937,7 @@ function simulate(){
 }
 
 var SCRIPTED={
+  temp:"TT-101, the sealer temperature, is over its 190 °C high limit. The limit still fires because AlarmOps blocked the change that would have widened it.\n\nThe film can scorch on the bars. This alarm is a consequence: look at the first-out alarm to find the cause.\n\nRestore the setpoint from HMI-Line1 and let the sealer cool.",
   setpoint:"OFFICE-PC-14, an office workstation, wrote 240 °C to the sealer setpoint on PLC-Line1. Only HMI-Line1 is allowed to write to this PLC.\n\nThe sealer will climb past its 190 °C high limit. Film can burn or melt onto the sealing bars and the line may need to stop for cleaning.\n\nPut the setpoint back to 160 °C from the HMI, block 10.10.50.7 from the control network and find out who or what is using that PC.",
   robot:"OFFICE-PC-14, an office workstation, forced the robot enable coil off on PLC-Line1. Only HMI-Line1 is allowed to write to this PLC.\n\nThe packing robot has stopped while the conveyor keeps running, so product will pile up at the end of line 1.\n\nCheck the cell is safe, re-enable the robot from the HMI and block 10.10.50.7 from the control network.",
   scan:"A host first seen today, 10.10.50.99, is reading address ranges PLC-Line1 doesn’t use, and the PLC is answering with exception 02 each time.\n\nNothing in the process has changed yet. This is how someone maps a controller before sending a write.\n\nBlock 10.10.50.99 from the control network, find out what that host is and watch for write commands from it."
@@ -693,30 +950,54 @@ function buildPrompt(a){
     "Alarm: "+a.title+"\nRule that fired: "+a.rule+"\nSource: "+a.src.ip+" ("+a.src.name+")\nFrames:\n"+lines+"\n\n"+
     "Write exactly three short paragraphs in plain text, no headings, no markdown, no lists, 80 words at most in total: first what happened, then what it could do to the process, then what the operator should do first. Use plain words. Do not invent facts beyond what is given.";
 }
+/* ---- alarms: several can be active at once ----
+   alarms[] holds every alarm that has been raised and not yet reset, in the order raised (seq 1, 2, ...).
+   firstOut is the alarm that came first in the current sequence. It stays marked until Reset, whatever else happens.
+   Acknowledge only stops the flashing. Restore (from HMI-Line1) puts the plant back. Reset removes alarms that are both
+   acknowledged and restored, and clears the first-out mark. `active` is the alarm shown in the detail box. */
+var KINDS={
+  setpoint:{tag:"TIC-101",txt:"SP changed",sev:"crit"},
+  robot:{tag:"RB-101",txt:"Robot stopped",sev:"crit"},
+  scan:{tag:"PLC-101",txt:"Register scan",sev:"warn"},
+  temp:{tag:"TT-101",txt:"High 190 °C",sev:"warn"}
+};
+var KIND_ORDER=["setpoint","robot","scan","temp"];
+function alarmOf(kind){for(var i=0;i<alarms.length;i++)if(alarms[i].kind===kind)return alarms[i];return null}
+function alive(a){return alarms.indexOf(a)>=0}
 function raise(a){
-  a.time=clock();a.note="";a.who="Writing the analyst note…";active=a;selRec=null;
-  a.trace={src:a.src.ip,dst:PLC.ip,cvar:a.sev==="crit"?"--alarm":"--warn",unk:byIp[a.src.ip]?null:{label:a.src.name,level:"4"}};
-  showTab("live");paintRecs();
-  var my=++runId;
+  var old=alarmOf(a.kind);
+  if(old){old.count++;old.frames=old.frames.concat(a.frames);refresh();return old}
+  a.time=clock();a.seq=++alarmSeq;a.ack=false;a.cleared=false;a.count=1;a.note="";a.who="Writing the analyst note…";
+  a.trace=a.trace||{src:a.src.ip,dst:PLC.ip,cvar:a.sev==="crit"?"--alarm":"--warn",unk:byIp[a.src.ip]?null:{label:a.src.name,level:"4"}};
+  alarms.push(a);if(!firstOut)firstOut=a;active=a;selRec=null;
+  if(a.kind!=="temp")showTab("live");
+  refresh();
+  if(a.kind==="temp"){fallback(a);return a}
   samplePromise.then(function(sample){
-    if(my!==runId)return;
+    if(!alive(a))return;
     if(!sample){fallback(a);return}
     return sample(buildPrompt(a),{modelTier:"quick",onText:function(e){
-      if(my!==runId)return;a.who="Analyst note, written live by AI";a.note=e.text;paintNote();
+      if(!alive(a))return;a.who="Analyst note, written live by AI";a.note=e.text;paintNote(a);
     }}).then(function(r){
-      if(my!==runId)return;
-      if(r&&r.text){a.who="Analyst note, written live by AI";a.note=r.text;paintNote()}else fallback(a);
+      if(!alive(a))return;
+      if(r&&r.text){a.who="Analyst note, written live by AI";a.note=r.text;paintNote(a)}else fallback(a);
     });
-  }).catch(function(){if(my===runId)fallback(a)});
+  }).catch(function(){if(alive(a))fallback(a)});
+  return a;
 }
-function fallback(a){a.who="Analyst note (pre-written, live AI isn’t available in this view)";a.note=SCRIPTED[a.kind];paintNote()}
-function paintNote(){
+function fallback(a){a.who="Analyst note (pre-written, live AI isn’t available in this view)";a.note=SCRIPTED[a.kind];paintNote(a)}
+function paintNote(a){
   var who=$("#ai-who"),t=$("#ai-text");
-  if(who&&active)who.textContent=active.who;
-  if(t&&active)t.textContent=active.note;
+  if(a!==active)return;
+  if(who)who.textContent=a.who;
+  if(t)t.textContent=a.note;
 }
 function fwNames(tr){var c=crossed(tr).map(function(f){return f.name});return c.length?c.join(", "):"No firewall"}
 function factsEl(pairs){var dl=el("dl","facts");pairs.forEach(function(p){dl.appendChild(el("dt",null,p[0]));dl.appendChild(el("dd",null,p[1]))});return dl}
+function stateWord(a){
+  if(a.cleared)return a.ack?"RETURNED · ACK":"RETURNED · UNACK";
+  return a.ack?"ALARM · ACK":"ALARM · UNACK";
+}
 function paintAlarm(){
   var box=$("#alarm");box.textContent="";
   if(!active){
@@ -725,10 +1006,12 @@ function paintAlarm(){
     return;
   }
   var a=active;
-  box.className="alarm unack "+(a.sev==="crit"?"crit":"warnbox");
+  box.className="alarm "+(a.ack?"":"unack ")+(a.sev==="crit"?"crit":"warnbox");
   box.appendChild(el("span","sev",a.label));
   box.appendChild(el("h3",null,a.title));
-  box.appendChild(factsEl([["Time",a.time],["Source",a.src.ip+" ("+a.src.name+")"],["Target",a.target],["Rule",a.rule],["Crossed",fwNames(a.trace)]]));
+  box.appendChild(factsEl([["Seq",a.seq+(a===firstOut?" · FIRST OUT":"")+(alarms.length>1?" of "+alarms.length+" active":"")],
+    ["State",stateWord(a)+(a.count>1?" · "+a.count+" occurrences":"")],
+    ["Time",a.time],["Source",a.src.ip?a.src.ip+" ("+a.src.name+")":a.src.name],["Target",a.target],["Rule",a.rule],["Crossed",fwNames(a.trace)]]));
   var ai=el("div","ai"),who=el("p","who",a.who),txt=el("p","text",a.note);who.id="ai-who";txt.id="ai-text";
   ai.appendChild(who);ai.appendChild(txt);box.appendChild(ai);
   if(a.kind==="setpoint"){
@@ -738,18 +1021,66 @@ function paintAlarm(){
     var jb=el("button","btn ghost ack","See the blocked change");jb.type="button";
     jb.addEventListener("click",function(){showTab("lim");limPreset()});lk.appendChild(jb);box.appendChild(lk);
   }
-  var b=el("button","btn ack","Acknowledge and restore");b.type="button";b.addEventListener("click",restore);box.appendChild(b);
+  var row=el("div","btnrow");
+  if(!a.ack){var b=el("button","btn ack","Acknowledge");b.type="button";b.addEventListener("click",function(){ackAlarm(a)});row.appendChild(b)}
+  if(!a.cleared&&a.kind!=="temp"){var r=el("button","btn ghost ack","Restore from HMI-Line1");r.type="button";r.disabled=queue.length>0;r.addEventListener("click",function(){restore(a)});row.appendChild(r)}
+  if(row.children.length)box.appendChild(row);
 }
-function restore(){
-  runId++;active=null;queue.length=0;scan={addrs:[],frames:[]};
-  st.sp=SP_NORMAL;st.robot=1;
-  rows.unshift({time:clock(),text:"Operator acknowledged the alarm. Setpoint and robot restored from HMI-Line1.",hex:"",note:true});
-  setButtons();paintAlarm();paint();if(scene3d)scene3d.update();
+function ackAlarm(a){a.ack=true;refresh()}
+function ackAll(){alarms.forEach(function(a){a.ack=true});refresh()}
+function restore(a){
+  if(queue.length)return;
+  if(a.kind==="setpoint"){st.sp=SP_NORMAL;rows.unshift({time:clock(),text:"Operator restored the sealer setpoint (TIC-101) from HMI-Line1.",hex:"",note:true})}
+  else if(a.kind==="robot"){st.robot=1;rows.unshift({time:clock(),text:"Operator restored the packing robot (RB-101) from HMI-Line1.",hex:"",note:true})}
+  else if(a.kind==="scan"){scan={addrs:[],frames:[]};rows.unshift({time:clock(),text:"Operator cleared the scan alarm on PLC-101.",hex:"",note:true})}
+  a.cleared=true;refresh();paint();
+}
+function resetAlarms(){
+  alarms=alarms.filter(function(a){return !(a.ack&&a.cleared)});
+  firstOut=null;if(!alarms.length)alarmSeq=0;
+  if(alarms.indexOf(active)<0)active=alarms.length?alarms[alarms.length-1]:null;
+  refresh();
+}
+function selectAlarm(a){active=a;refresh()}
+function buildWindows(){
+  var ul=$("#windows");ul.textContent="";
+  KIND_ORDER.forEach(function(k){
+    var K=KINDS[k],li=el("li"),b=el("button","win "+K.sev);b.type="button";b.setAttribute("data-kind",k);
+    b.appendChild(el("span","w-tag",K.tag));b.appendChild(el("span","w-txt",K.txt));b.appendChild(el("span","w-st","NORMAL"));b.appendChild(el("span","w-fo","FIRST OUT"));
+    b.addEventListener("click",function(){var a=alarmOf(k);if(a)selectAlarm(a)});
+    li.appendChild(b);ul.appendChild(li);K.el=b;
+  });
+}
+function paintWindows(){
+  KIND_ORDER.forEach(function(k){
+    var K=KINDS[k],a=alarmOf(k),b=K.el;
+    b.className="win "+K.sev+(a?(a.cleared?" ret":" on"+(a.ack?"":" unack")):"")+(a&&a===firstOut?" fo":"")+(a&&a===active?" sel":"");
+    b.querySelector(".w-st").textContent=a?"#"+a.seq+" "+stateWord(a):"NORMAL";
+    b.setAttribute("aria-label",K.tag+" "+K.txt+": "+(a?"seq "+a.seq+", "+stateWord(a)+(a===firstOut?", first out":""):"normal"));
+  });
+  var n=alarms.length,un=alarms.filter(function(a){return !a.ack}).length,st=$("#an-st");
+  st.textContent=n?n+" ACTIVE · "+un+" UNACK"+(firstOut?" · FIRST OUT: "+KINDS[firstOut.kind].tag+" "+KINDS[firstOut.kind].txt.toUpperCase():""):"NO ALARM";
+  $("#an-ack").disabled=!un;$("#an-reset").disabled=!n;
+}
+/* every view of the alarms in one place */
+function refresh(){
+  paintAlarm();paintWindows();setButtons();paintEq();paintRecs();
+  if(scene3d)scene3d.update();
 }
 function setButtons(){
-  var off=!!active||queue.length>0;
-  document.querySelectorAll(".atk").forEach(function(b){b.disabled=off});
-  document.querySelectorAll("#recs button").forEach(function(b){b.disabled=off});
+  var off=queue.length>0;
+  document.querySelectorAll(".atk").forEach(function(b){b.disabled=off||!!alarmOf(b.getAttribute("data-atk"))});
+  document.querySelectorAll("#recs button").forEach(function(b){b.disabled=off||alarms.length>0});
+}
+/* the process alarm that follows from the setpoint attack: TT-101 over its high limit */
+function procAlarms(){
+  var t=alarmOf("temp");
+  if(st.pv>HI_SEAL&&!t){
+    var T=byName["SENSOR-GW-1"];
+    raise({sev:"warn",kind:"temp",label:"Warning",title:"TT-101 high: sealer above its 190 °C limit",
+      rule:"Process value over the high limit (190 °C)",src:{ip:"",name:"TT-101 via GW-101"},target:"SL-101 sealer, read by PLC-101",frames:[],
+      trace:{srcA:T,dstA:byName["PLC-Line1"],cvar:"--warn"}});
+  }else if(t&&!t.cleared&&st.pv<=HI_SEAL-10){t.cleared=true;refresh()}
 }
 function tile(id,val,bad,state){var t=$(id);t.classList.toggle("bad",!!bad);t.querySelector(".v").textContent=val;t.querySelector(".state").textContent=state||""}
 function coil(id,txt,bad){var c=$(id);c.classList.toggle("bad",!!bad);c.querySelector("b").textContent=txt}
@@ -789,15 +1120,16 @@ function tick(){
   /* What-if open: step the sandbox only. The live plant, its queue and any active alarm are left untouched. */
   if(curTab==="sim"){sbTick();return}
   simulate();
-  var before=active,robotBefore=st.robot;
+  var robotBefore=st.robot,qBefore=queue.length;
   emit(queue.length?queue.shift():nextPoll());
-  if(active!==before)paintAlarm();
-  if((active!==before||st.robot!==robotBefore)&&scene3d)scene3d.update();
+  procAlarms();
+  if(qBefore>0&&queue.length===0)paintAlarm();
+  if(st.robot!==robotBefore&&scene3d)scene3d.update();
   setButtons();paint();
 }
 document.querySelectorAll(".atk").forEach(function(b){
   b.addEventListener("click",function(){
-    if(active||queue.length)return;
+    var kind=b.getAttribute("data-atk");if(queue.length||alarmOf(kind))return;
     selRec=null;paintRecs();if(scene3d)scene3d.update();
     ATTACKS[b.getAttribute("data-atk")]();setButtons();
     if(window.matchMedia("(max-width:860px)").matches)$("#stage").scrollIntoView({block:"start",behavior:"smooth"});
@@ -811,7 +1143,7 @@ function showTab(which){
   $("#tab-lim").setAttribute("aria-pressed",which==="lim"?"true":"false");
   $("#tab-sim").setAttribute("aria-pressed",which==="sim"?"true":"false");
   $("#pane-live").hidden=which!=="live";$("#pane-rec").hidden=which!=="rec";$("#pane-lim").hidden=which!=="lim";$("#pane-sim").hidden=which!=="sim";
-  curTab=which;
+  curTab=which;paintEq();
   if(which==="sim"){if(!SB.hist.length)SB.hist.push(SB.st.pv);SB.sig="";sbPaint()}
   paint();if(scene3d)scene3d.update();
 }
@@ -823,7 +1155,7 @@ function hostName(ip,a){return byIp[ip]?byIp[ip].name+" ("+ip+")":(a.unk?a.unk.l
 RECS.forEach(function(a){
   var b=el("button");b.type="button";b.setAttribute("aria-pressed","false");
   b.appendChild(el("i","dot v-"+a.v));b.appendChild(el("span",null,a.title));
-  b.addEventListener("click",function(){if(active)return;selRec=(selRec===a?null:a);paintRecs();if(scene3d)scene3d.update()});
+  b.addEventListener("click",function(){if(alarms.length)return;selRec=(selRec===a?null:a);paintRecs();if(scene3d)scene3d.update()});
   a.btn=b;a.trace={src:a.src,dst:a.dst,cvar:VVAR[a.v],unk:a.unk||null};
   $("#recs").appendChild(b);
 });
@@ -841,8 +1173,8 @@ function showCard(s){
   var c=$("#card");c.textContent="";
   if(!s){c.hidden=true;return}
   var x=el("button","x","×");x.type="button";x.setAttribute("aria-label","Close");x.addEventListener("click",function(){showCard(null)});
-  c.appendChild(x);c.appendChild(el("h3",null,s.name));c.appendChild(el("p",null,s.fn+"."));
-  c.appendChild(factsEl([["Type",s.type],["Address",s.ip||"None, wired to "+(WIRED[s.name]||"the drive")],["Zone",s.zone],["Criticality",s.crit.charAt(0).toUpperCase()+s.crit.slice(1)]]));
+  c.appendChild(x);c.appendChild(el("h3",null,(s.tag?s.tag+" · ":"")+s.name));c.appendChild(el("p",null,s.fn+"."));
+  c.appendChild(factsEl([["Type",s.type],["Address",s.ip||"None, wired to "+(WIRED[s.name]||"the drive")],["Zone",s.zone],["Origin",s.demo?"Demo only, not in the project asset file":"Project asset file"],["Criticality",s.crit.charAt(0).toUpperCase()+s.crit.slice(1)]]));
   c.hidden=false;
 }
 
@@ -852,7 +1184,7 @@ function showCard(s){
 var LIM_RECORDED={"baseline":{"simulated":true,"dataset":{"samples":6000,"faults":35,"source":"plant"},"gate":{"min_detection_rate":0.9,"max_detection_rate_drop":0.05,"max_false_alarms":3.0,"max_false_alarm_increase":2.0},"baseline":{"detection_rate":1.0,"faults_detected":35,"faults_total":35,"false_alarm_count":0},"tags":{"tank_level":{"unit":"percent","low_low":10.0,"low":20.0,"high":80.0,"high_high":90.0,"deadband":2.0,"delay_samples":3,"faults_total":7,"faults_detected":7,"false_alarms":0,"assets":["TANK-Utility-1","DCS-CTRL-01"]},"pump_pressure":{"unit":"bar","low_low":2.0,"low":3.0,"high":7.0,"high_high":8.0,"deadband":0.2,"delay_samples":2,"faults_total":7,"faults_detected":7,"false_alarms":0,"assets":["PUMP-Utility-1","PLC-Line2"]},"flow_rate":{"unit":"m3/h","low_low":60.0,"low":80.0,"high":160.0,"high_high":180.0,"deadband":3.0,"delay_samples":3,"faults_total":7,"faults_detected":7,"false_alarms":0,"assets":["FLOW-Meter-1","PLC-Line2"]},"sealer_temperature":{"unit":"°C","low_low":100.0,"low":120.0,"high":190.0,"high_high":205.0,"deadband":2.0,"delay_samples":3,"faults_total":7,"faults_detected":7,"false_alarms":0,"assets":["SENSOR-GW-1","PLC-Line1"]},"conveyor_speed":{"unit":"rpm","low_low":600.0,"low":900.0,"high":1500.0,"high_high":1650.0,"deadband":20.0,"delay_samples":3,"faults_total":7,"faults_detected":7,"false_alarms":0,"assets":["VFD-Conveyor-1","PLC-Line1"]}}},"preset":{"simulated":true,"dataset":{"samples":6000,"faults":35,"source":"plant"},"tag":"sealer_temperature","assets":["SENSOR-GW-1","PLC-Line1"],"unit":"°C","limits":{"low_low":100.0,"low":120.0,"high":250.0,"high_high":265.0},"current":{"low_low":100.0,"low":120.0,"high":190.0,"high_high":205.0},"base":{"detection_rate":1.0,"faults_detected":35,"faults_total":35,"false_alarm_count":0},"head":{"detection_rate":0.8571,"faults_detected":30,"faults_total":35,"false_alarm_count":0},"passed":false,"violations":["detection rate 85.7% is below the minimum 90.0%","detection rate fell by 14.3%, more than the allowed 5.0%"],"newly_missed":[{"fault_id":"F22","tag":"sealer_temperature","type":"spike","start":896,"end":901},{"fault_id":"F24","tag":"sealer_temperature","type":"drift","start":2453,"end":2562},{"fault_id":"F25","tag":"sealer_temperature","type":"spike","start":3308,"end":3313},{"fault_id":"F26","tag":"sealer_temperature","type":"spike","start":4115,"end":4120},{"fault_id":"F28","tag":"sealer_temperature","type":"stuck","start":5656,"end":5695}],"newly_detected":[]}};
 var LIM_KEYS=["low_low","low","high","high_high"],LIM_API="/api/alarmops/";
 /* proposed: limits typed into the four boxes, kept per tag, so the What-if tab can compare them with the current ones */
-var LIM={data:null,live:false,trace:null,run:0,proposed:{}};
+var LIM={data:null,live:false,trace:null,run:0,proposed:{},blocked:null};
 function pct(x){return (x*100).toFixed(1)+"%"}
 function limTag(){return $("#lim-tag").value}
 function limFill(){
@@ -873,7 +1205,7 @@ function limSetTrace(tag,on){
 }
 function limDataset(d){return "Simulated dataset: "+d.samples+" samples, "+d.faults+" labelled faults."}
 function limShowBaseline(){
-  var o=$("#lim-out"),d=LIM.data,b=d.baseline,t=d.tags[limTag()];o.textContent="";
+  var o=$("#lim-out"),d=LIM.data,b=d.baseline,t=d.tags[limTag()];o.textContent="";LIM.blocked=null;paintEq();
   o.appendChild(el("span","badge g-rec",LIM.live?"Current limits":"Recorded"));
   o.appendChild(el("h3",null,"Baseline replay"));
   o.appendChild(factsEl([["Detection",pct(b.detection_rate)+" ("+b.faults_detected+" of "+b.faults_total+" faults)"],
@@ -883,7 +1215,7 @@ function limShowBaseline(){
     :"Recorded result, saved from the baseline replay. "+limDataset(d.dataset)+" You can still edit the limits and compare them on the What-if tab. Check change needs the platform server, which isn’t running in this view."));
 }
 function limShowResult(r,recorded){
-  var o=$("#lim-out"),u=r.unit?" "+r.unit:"";o.textContent="";
+  var o=$("#lim-out"),u=r.unit?" "+r.unit:"";o.textContent="";LIM.blocked=r.passed?null:r.tag;paintEq();
   o.appendChild(el("span","badge "+(r.passed?"g-pass":"g-block"),(r.passed?"Passes the gate":"Blocked")+(recorded?" (recorded)":"")));
   o.appendChild(el("h3",null,r.tag+": "+LIM_KEYS.map(function(k){return r.limits[k]}).join(" / ")+u));
   var rows=[["Detection",pct(r.base.detection_rate)+" to "+pct(r.head.detection_rate)+" ("+r.head.faults_detected+" of "+r.head.faults_total+" faults)"],
@@ -974,7 +1306,7 @@ function pill(a){var e=el("span","pill"+(a?(a==="high_high"||a==="low_low"?" ala
 function sbPaint(){
   var cur=sbCurLimits(),prop=sbPropLimits(),v=PM.values(SB.inp,SB.st),ac=PM.evaluate(v,cur),ap=PM.evaluate(v,prop);
   SB.view=PM.effects(SB.inp,SB.st,cur);
-  var miss=PM.allMissed(v,cur,prop);
+  var miss=PM.allMissed(v,cur,prop);SB.missed=miss;
   /* rebuild the DOM only when something a reader would notice has changed */
   var sig=JSON.stringify([PM.TAGS.map(function(t){return PM.fmt(t,v[t])}),ac,ap,prop,Math.round(SB.st.picked),Math.round(SB.st.backlog),SB.view]);
   if(sig!==SB.sig){
@@ -1002,6 +1334,7 @@ function sbPaint(){
     var m=$("#sim-missed");m.textContent="";
     miss.forEach(function(x){var d=el("div","miss");d.appendChild(el("b",null,"Missed alarm"));d.appendChild(el("span",null,x.text));m.appendChild(d)});
   }
+  paintEq();
   if(scene3d&&curTab==="sim")scene3d.update();
 }
 SB_CTL.forEach(function(c){
@@ -1025,30 +1358,43 @@ function build(){
   var stage=$("#stage"),canvas=$("#gl"),labels=$("#labels");
   var renderer=new THREE.WebGLRenderer({canvas:canvas,antialias:true,alpha:true});
   renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
-  var scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(35,1,0.1,200);
+  var scene=new THREE.Scene(),pcam=new THREE.PerspectiveCamera(35,1,0.1,200),ocam=new THREE.OrthographicCamera(-1,1,1,-1,0.1,200),camera=pcam,iso=false;
+  var FLAT=function(){return new THREE.MeshLambertMaterial({flatShading:true})};
   scene.add(new THREE.AmbientLight(0xffffff,0.78));
   var sun=new THREE.DirectionalLight(0xffffff,0.55);sun.position.set(6,14,9);scene.add(sun);
 
   var SLAB_W=9,SLAB_D=4.6,TARGET=new THREE.Vector3(0,GAP*3,0);
-  var scrMat=new THREE.MeshLambertMaterial(),pipeMat=new THREE.MeshLambertMaterial();
-  var slabMat=new THREE.MeshLambertMaterial({transparent:true,opacity:0.5});
-  var edgeMat=new THREE.LineBasicMaterial(),ghostMat=new THREE.LineBasicMaterial();
+  var scrMat=FLAT(),pipeMat=FLAT(),ghostMat=new THREE.LineBasicMaterial(),levelMats={},focusLvl=null;
+  var shellMat=new THREE.MeshBasicMaterial({colorWrite:false,depthWrite:false});
   var labs=[],pick=[];
   function addLabel(text,pos,cls){var e=el("div","lab"+(cls?" "+cls:""),text);labels.appendChild(e);var o={el:e,pos:pos,cls:cls||""};labs.push(o);return o}
 
   LEVELS.forEach(function(l){
-    var g=new THREE.BoxGeometry(SLAB_W,0.1,SLAB_D),m=new THREE.Mesh(g,slabMat);
-    m.position.y=levelY[l.id]-0.05;scene.add(m);
-    var e=new THREE.LineSegments(new THREE.EdgesGeometry(g),edgeMat);e.position.copy(m.position);scene.add(e);
-    addLabel(l.name,new THREE.Vector3(-SLAB_W/2+0.1,levelY[l.id]+0.02,SLAB_D/2+0.25),"level");
+    /* a floor is drawn as an outline and 45-degree hatching, not a filled plate, so the levels below stay visible */
+    var y=levelY[l.id],hw=SLAB_W/2,hd=SLAB_D/2,P=[],STEP=0.34;
+    for(var c=-(hw+hd);c<=hw+hd;c+=STEP){
+      var z0=Math.max(-hd,-hw-c),z1=Math.min(hd,hw-c);
+      if(z1>z0)P.push(z0+c,y-0.02,z0,z1+c,y-0.02,z1);
+    }
+    var hg=new THREE.BufferGeometry();hg.setAttribute("position",new THREE.Float32BufferAttribute(P,3));
+    var hm=new THREE.LineBasicMaterial(),em=new THREE.LineBasicMaterial();
+    scene.add(new THREE.LineSegments(hg,hm));
+    var oe=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(SLAB_W,0.1,SLAB_D)),em);oe.position.y=y-0.05;scene.add(oe);
+    levelMats[l.id]={hatch:hm,edge:em};
+    addLabel(l.name,new THREE.Vector3(-SLAB_W/2+0.1,y+0.02,SLAB_D/2+0.25),"level");
   });
 
   var robot={},motor={};
   /* parts the What-if tab drives: the liquid inside the tank and the sealer's two bars */
-  var tankLiq=null,liqMat=new THREE.MeshLambertMaterial(),sealMat=new THREE.MeshLambertMaterial(),TANK_H=0.9;
-  function part(geo,mat,a){var m=new THREE.Mesh(geo,mat);m.userData.asset=a;pick.push(m);return m}
+  var tankLiq=null,liqMat=FLAT(),sealMat=FLAT(),TANK_H=0.9;
+  function part(geo,mat,a){var m=new THREE.Mesh(geo,mat);m.userData.asset=a;pick.push(m);
+    if(a.edgeMat&&mat!==scrMat&&mat!==liqMat&&mat!==sealMat){
+      var th=geo.type==="CylinderGeometry"?(geo.parameters.radialSegments>=18?40:12):(geo.type==="SphereGeometry"?60:25);
+      m.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo,th),a.edgeMat));
+    }
+    return m}
   function makeRobot(a,x,y,z){z=z||0;
-    var mat=new THREE.MeshLambertMaterial(),g=new THREE.Group();g.position.set(x,y,z);
+    a.edgeMat=new THREE.LineBasicMaterial();var mat=FLAT(),g=new THREE.Group();g.position.set(x,y,z);
     g.add(part(new THREE.CylinderGeometry(0.34,0.4,0.18,20),mat,a)).position.y=0.09;
     var turret=new THREE.Group();turret.position.y=0.18;g.add(turret);
     turret.add(part(new THREE.CylinderGeometry(0.2,0.2,0.2,16),mat,a)).position.y=0.1;
@@ -1061,7 +1407,7 @@ function build(){
     a.mat=mat;a.center=new THREE.Vector3(x,y+0.6,z);a.top=new THREE.Vector3(x,y+1.55,z);
   }
   function makeMotor(a,x,y,z){z=z||0;
-    var mat=new THREE.MeshLambertMaterial(),g=new THREE.Group();g.position.set(x,y,z);
+    a.edgeMat=new THREE.LineBasicMaterial();var mat=FLAT(),g=new THREE.Group();g.position.set(x,y,z);
     var body=part(new THREE.CylinderGeometry(0.3,0.3,0.7,20),mat,a);body.rotation.x=Math.PI/2;body.position.y=0.36;g.add(body);
     g.add(part(new THREE.BoxGeometry(0.7,0.08,0.6),mat,a)).position.y=0.04;
     var shaft=new THREE.Group();shaft.position.set(0,0.36,0.42);g.add(shaft);
@@ -1095,9 +1441,8 @@ function build(){
     plc:function(g,a){rail(g,a,4,[0.62,0.5,0.5,0.5]);put(g,a,B(0.12,0.14,0.02),-0.36,0.5,0.21,scrMat);return 0.68},
     io:function(g,a){rail(g,a,3,[0.34,0.34,0.34]);return 0.4},
     tank:function(g,a){
-      /* a see-through shell with the liquid inside it, so the fill is visible as it rises and falls */
-      a.mat.transparent=true;a.mat.opacity=0.34;a.mat.depthWrite=false;
-      put(g,a,C(0.4,0.95,24),0,0.55,0);put(g,a,C(0.44,0.08,24),0,0.04,0);put(g,a,C(0.3,0.08,24),0,1.06,0);
+      /* the shell is drawn as lines only, with the liquid inside it, so the fill is visible as it rises and falls */
+      put(g,a,C(0.4,0.95,12),0,0.55,0,shellMat);put(g,a,C(0.44,0.08,24),0,0.04,0);put(g,a,C(0.3,0.08,24),0,1.06,0);
       tankLiq=put(g,a,C(0.35,TANK_H,24),0,0.1+TANK_H/2,0,liqMat);tankLiq.renderOrder=-1;return 1.1},
     sealer:function(g,a){
       put(g,a,B(0.95,0.12,0.6),0,0.06,0);
@@ -1127,7 +1472,7 @@ function build(){
       [[-0.32,0.42,0.3],[0,0.55,0.4],[0.34,0.42,0.28]].forEach(function(c){put(g,a,new THREE.SphereGeometry(c[2],18,14),c[0],c[1],0)});return 0.95}
   };
   function makeShape(a,x,y,z){z=z||0;
-    a.mat=new THREE.MeshLambertMaterial();var g=new THREE.Group();g.position.set(x,y,z);
+    a.mat=FLAT();a.edgeMat=new THREE.LineBasicMaterial();var g=new THREE.Group();g.position.set(x,y,z);
     var top=SHAPES[a.kind](g,a);scene.add(g);
     a.center=new THREE.Vector3(x,y+top/2,z);a.top=new THREE.Vector3(x,y+top,z);
   }
@@ -1138,7 +1483,7 @@ function build(){
     group.forEach(function(a,i){
       var x=(i-(group.length-1)/2)*gap;
       if(a.kind==="robot")makeRobot(a,x,y,z);else if(a.kind==="motor")makeMotor(a,x,y,z);else makeShape(a,x,y,z);
-      a.lab=addLabel(a.name,a.top,"asset");
+      a.lab=addLabel(a.tag||a.name,a.top,"plate");a.lab.asset=a;a.lab.always=!!a.tag;
     });
   }
   LEVELS.forEach(function(l){
@@ -1156,7 +1501,7 @@ function build(){
   });
   /* firewalls sit between levels, on the conduit that joins them */
   FWS.forEach(function(f){
-    var x=-3.3,z=-1.5;f.mat=new THREE.MeshLambertMaterial();
+    var x=-3.3,z=-1.5;f.mat=FLAT();f.edgeMat=new THREE.LineBasicMaterial();
     var pipe=new THREE.Mesh(C(0.035,Math.abs(f.ya-f.yb),8),pipeMat);pipe.position.set(x,f.fy,z);scene.add(pipe);
     var g=new THREE.Group();g.position.set(x,f.fy,z);
     [-0.19,0,0.19].forEach(function(y,r){
@@ -1164,31 +1509,37 @@ function build(){
       else{[-0.2,0.2].forEach(function(bx){put(g,f,B(0.37,0.16,0.16),bx,y,0)});[-0.5,0.5].forEach(function(bx){put(g,f,B(0.17,0.16,0.16),bx,y,0)})}
     });
     scene.add(g);f.center=new THREE.Vector3(x,f.fy,z);f.top=new THREE.Vector3(x,f.fy+0.3,z);
-    f.lab=addLabel(f.name,f.top,"asset");
+    f.lab=addLabel(f.tag,f.top,"plate");f.lab.asset=f;f.lab.always=true;
   });
   var ALL=ASSETS.concat(FWS);
+  /* signal-tag plates: shown when their tag is lit, or when their device is selected */
+  SIGS.forEach(function(s){s.lab=addLabel(s.tag,s.asset.top.clone().add(new THREE.Vector3(0,0.42,0)),"sig")});
+  function isDim(a){if(focusLvl===null)return false;if(a.kind==="fw")return a.level!==focusLvl&&a.lo!==focusLvl;return a.level!==focusLvl}
 
   var temp=new THREE.Group();scene.add(temp);
-  var pulse=null,curve=null,ghostLab=null,selAsset=null;
+  var pulses=[],ghostLabs=[],selAsset=null;
   var reduce=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   var auto=!reduce;
 
   function clearTemp(){
     while(temp.children.length){var c=temp.children.pop();if(c.geometry)c.geometry.dispose();if(c.material&&c.material!==ghostMat)c.material.dispose()}
-    pulse=null;curve=null;
-    if(ghostLab){labels.removeChild(ghostLab.el);labs.splice(labs.indexOf(ghostLab),1);ghostLab=null}
+    pulses=[];
+    ghostLabs.forEach(function(g){labels.removeChild(g.el);labs.splice(labs.indexOf(g),1)});ghostLabs=[];
   }
   function update(){
-    slabMat.color.set(css("--slab"));edgeMat.color.set(css("--line"));ghostMat.color.set(css("--ink"));
-    scrMat.color.set(css("--ink"));pipeMat.color.set(css("--line"));
+    var bgc=new THREE.Color(css("--bg")),edgeC=new THREE.Color(css("--edge")),hatchC=new THREE.Color(css("--slab"));
+    function dimC(c,d){return d?c.clone().lerp(bgc,0.74):c}
+    ghostMat.color.set(css("--edge"));scrMat.color.set(css("--edge"));pipeMat.color.set(css("--edge"));
+    LEVELS.forEach(function(l){var d=focusLvl!==null&&focusLvl!==l.id;levelMats[l.id].hatch.color.copy(dimC(hatchC,d));levelMats[l.id].edge.color.copy(dimC(edgeC,d))});
     clearTemp();
-    var base=css("--box"),ink=css("--ink"),alarmCol=css("--alarm");
+    var base=css("--box"),ink=css("--ink"),alarmCol=css("--alarm"),lit=litSet();
     var simOn=curTab==="sim";
     ALL.forEach(function(a){
-      a.mat.color.set(a===selAsset?ink:(a.kind==="fw"?css("--mute"):base));a.lab.el.classList.toggle("hot",a===selAsset);
-      if(a.lab.text!==a.name){a.lab.text=a.name;a.lab.el.textContent=a.name}
+      var d=isDim(a),fill=new THREE.Color(a===selAsset?css("--live"):(a.kind==="fw"?css("--fwfill"):base));
+      a.mat.color.copy(dimC(fill,d));a.edgeMat.color.copy(dimC(edgeC,d));
+      a.lab.over=null;a.lab.el.classList.toggle("hot",a===selAsset);a.lab.el.classList.toggle("dim",d);
     });
-    sealMat.color.set(css("--mute"));liqMat.color.set(css("--live"));
+    sealMat.color.copy(dimC(new THREE.Color(css("--mute")),isDim(byName["SEALER-Line1"])));liqMat.color.copy(dimC(new THREE.Color(css("--live")),isDim(byName["TANK-Utility-1"])));
     if(!simOn&&!st.robot){byName["ROBOT-Pick-1"].mat.color.set(alarmCol);byName["ROBOT-Pick-1"].lab.el.classList.add("hot")}
     if(simOn&&SB.view){
       /* What-if: every device that is not normal lights in the warning or alarm colour and shows its name and live value */
@@ -1196,14 +1547,14 @@ function build(){
         var d=SB.view[dev],a=byName[dev];if(!a||d.level==="ok")return;
         var col=css(d.level==="alarm"?"--alarm":"--warn");
         a.mat.color.set(col);a.lab.el.classList.add("hot");
-        a.lab.text=dev+": "+d.value;a.lab.el.textContent=a.lab.text;
+        a.lab.over=(a.tag?a.tag+" · ":"")+dev+": "+d.value;
         if(dev==="TANK-Utility-1")liqMat.color.set(col);
         if(dev==="MOTOR-Conveyor-1"){var vf=byName["VFD-Conveyor-1"];vf.mat.color.set(col)}
       });
     }
     /* the Limits tab shows its own path; What-if shows no path; the other tabs show the alarm or the picked alert */
-    var tr=simOn?null:((curTab==="lim"&&LIM.trace)?LIM.trace:(active?active.trace:(selRec?selRec.trace:null)));
-    if(tr){
+    var traces=simOn?[]:((curTab==="lim"&&LIM.trace)?[LIM.trace]:(alarms.length?alarms.map(function(a){return a.trace}):(selRec?[selRec.trace]:[])));
+    traces.forEach(function(tr,ti){
       var col=css(tr.cvar),dst=traceEnd(tr,"dst"),src=traceEnd(tr,"src"),from,to=dst.center.clone();
       dst.mat.color.set(col);dst.lab.el.classList.add("hot");
       crossed(tr).forEach(function(f){f.mat.color.set(col);f.lab.el.classList.add("hot")});
@@ -1212,26 +1563,45 @@ function build(){
         var y=levelY[tr.unk.level],gp=new THREE.Vector3(SLAB_W/2-0.8,y+0.31,SLAB_D/2-0.75);
         var ghost=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(0.95,0.62,0.95)),ghostMat);
         ghost.position.copy(gp);temp.add(ghost);from=gp.clone();
-        ghostLab=addLabel(tr.unk.label,new THREE.Vector3(gp.x,y+0.62,gp.z),"asset hot");
+        ghostLabs.push(addLabel(tr.unk.label,new THREE.Vector3(gp.x,y+0.62,gp.z),"asset hot"));
       }
-      var mid=from.clone().add(to).multiplyScalar(0.5);mid.z+=3.4;
-      curve=new THREE.QuadraticBezierCurve3(from,mid,to);
+      var mid=from.clone().add(to).multiplyScalar(0.5);mid.z+=3.4+ti*1.1;
+      var curve=new THREE.QuadraticBezierCurve3(from,mid,to);
       temp.add(new THREE.Mesh(new THREE.TubeGeometry(curve,48,0.05,8,false),new THREE.MeshBasicMaterial({color:col})));
-      pulse=new THREE.Mesh(new THREE.SphereGeometry(0.17,16,12),new THREE.MeshBasicMaterial({color:col}));
-      pulse.position.copy(reduce?to:from);temp.add(pulse);
-    }
+      var pulse=new THREE.Mesh(new THREE.SphereGeometry(0.17,16,12),new THREE.MeshBasicMaterial({color:col}));
+      pulse.position.copy(reduce?to:from);temp.add(pulse);pulses.push({mesh:pulse,curve:curve});
+    });
+    /* a tag in alarm, or whose limit change is blocked or would miss an alarm, is lit on the plant and in the equipment list */
+    ALL.forEach(function(a){
+      var on=!!(a.tag&&lit[a.tag]);a.lab.el.classList.toggle("lit",on);
+      if(on){a.mat.color.set(alarmCol);a.lab.el.classList.add("hot")}
+    });
+    SIGS.forEach(function(s){var on=!!lit[s.tag];s.lab.el.classList.toggle("lit",on);s.lab.el.classList.toggle("hot",on||selAsset===s.asset)});
     showLabels();
   }
   function showLabels(){
-    /* Level names always show. An asset name shows only when it is clicked or is part of the traced alert. */
-    labs.forEach(function(l){if(l.cls.indexOf("asset")<0)return;l.el.style.display=l.el.classList.contains("hot")?"":"none"});
+    /* Level names always show. A tag plate always shows; the asset name joins it when the item is clicked or is part of a trace. */
+    labs.forEach(function(l){
+      if(l.cls.indexOf("level")>=0)return;
+      var hot=l.el.classList.contains("hot");
+      l.el.style.display=(hot||l.always)?"":"none";
+      if(l.asset&&(hot||l.always)){
+        var t=l.over||(hot?(l.asset.tag?l.asset.tag+" · "+l.asset.name:l.asset.name):l.asset.tag);
+        if(l.shown!==t){l.shown=t;l.el.textContent=t}
+      }
+    });
   }
 
   var th0=0.62,theta=th0,phi=1.18,zoom=1,dist=20,holdUntil=0;
+  /* the orthographic (isometric) camera: its frustum half-height is the zoom */
+  var ISO_T=Math.PI/4,ISO_P=Math.acos(1/Math.sqrt(3)),sv={t:0.62,p:1.18};
+  function oAspect(){return Math.max(0.2,stage.clientWidth/Math.max(1,stage.clientHeight))}
+  function oHalf(){return Math.max(8.2,6.4/oAspect())/zoom}
+  function applyOrtho(){var as=oAspect(),s=oHalf();ocam.left=-s*as;ocam.right=s*as;ocam.top=s;ocam.bottom=-s;ocam.updateProjectionMatrix()}
   function resize(){
     var w=stage.clientWidth,h=stage.clientHeight;if(!w||!h)return;
-    renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();
-    dist=Math.max(22.5,20.5/camera.aspect);showLabels();
+    renderer.setSize(w,h,false);pcam.aspect=w/h;pcam.updateProjectionMatrix();
+    dist=Math.max(25,19/pcam.aspect);applyOrtho();showLabels();
   }
   /* ---- movable camera target: the camera orbits TARGET, and TARGET can be panned ---- */
   var T0=TARGET.clone(),Y_MIN=levelY["0"],Y_MAX=levelY["5"],goalY=null,PAN_STEP=GAP/2;
@@ -1242,7 +1612,7 @@ function build(){
   }
   /* drag the scene by (dx,dy) screen pixels: the target moves the other way, in the camera's own right/up plane */
   function panBy(dx,dy){
-    var upp=2*(dist/zoom)*Math.tan(camera.fov*Math.PI/360)/Math.max(1,stage.clientHeight);
+    var upp=iso?2*oHalf()/Math.max(1,stage.clientHeight):2*(dist/zoom)*Math.tan(pcam.fov*Math.PI/360)/Math.max(1,stage.clientHeight);
     TARGET.x-=dx*upp*Math.cos(theta);TARGET.z+=dx*upp*Math.sin(theta);TARGET.y+=dy*upp;
     goalY=null;clampTarget();holdUntil=performance.now()+2500;
   }
@@ -1271,7 +1641,7 @@ function build(){
     }
     var dx=e.clientX-p.x,dy=e.clientY-p.y;moved+=Math.abs(dx)+Math.abs(dy);
     if(p.pan)panBy(dx,dy);
-    else{theta-=dx*0.008;if(e.pointerType==="mouse")phi=Math.min(1.5,Math.max(0.35,phi-dy*0.006))}
+    else if(!iso){theta-=dx*0.008;if(e.pointerType==="mouse")phi=Math.min(1.5,Math.max(0.35,phi-dy*0.006))}
     p.x=e.clientX;p.y=e.clientY;
   });
   /* one finger keeps scrolling the page (touch-action: pan-y). Two fingers belong to the 3D view. */
@@ -1291,7 +1661,7 @@ function build(){
   canvas.addEventListener("pointerup",up);canvas.addEventListener("pointercancel",up);
   canvas.addEventListener("keydown",function(e){
     var k=e.key,used=true;holdUntil=performance.now()+2500;
-    if(k==="ArrowLeft")theta-=0.12;else if(k==="ArrowRight")theta+=0.12;
+    if(iso&&k.indexOf("Arrow")===0){used=true}else if(k==="ArrowLeft")theta-=0.12;else if(k==="ArrowRight")theta+=0.12;
     else if(k==="ArrowUp")phi=Math.max(0.35,phi-0.08);else if(k==="ArrowDown")phi=Math.min(1.5,phi+0.08);
     else if(k==="+"||k==="=")zoom=Math.min(2.4,zoom*1.15);else if(k==="-")zoom=Math.max(0.6,zoom/1.15);
     else if(k==="PageUp")moveTo((goalY===null?TARGET.y:goalY)+PAN_STEP);
@@ -1308,21 +1678,34 @@ function build(){
     spinBtn.setAttribute("aria-label",auto?"Pause rotation":"Rotate plant");
   }
   spinBtn.addEventListener("click",function(){auto=!auto;spinLabel()});spinLabel();
-  $("#front").addEventListener("click",function(){theta=0;phi=1.18;zoom=1;resetTarget();auto=false;spinLabel()});
+  $("#front").addEventListener("click",function(){if(!iso){theta=0;phi=1.18}zoom=1;resetTarget();auto=false;spinLabel();focusLvl=null;levelKeys();update()});
   $("#up").addEventListener("click",function(){moveTo((goalY===null?TARGET.y:goalY)+PAN_STEP)});
   $("#down").addEventListener("click",function(){moveTo((goalY===null?TARGET.y:goalY)-PAN_STEP)});
+  function setIso(on){
+    if(on===iso)return;
+    if(on){sv.t=theta;sv.p=phi;iso=true;camera=ocam;auto=false;spinLabel()}else{iso=false;camera=pcam;theta=sv.t;phi=sv.p}
+    $("#persp").setAttribute("aria-pressed",on?"false":"true");$("#isob").setAttribute("aria-pressed",on?"true":"false");
+    resize();update();
+  }
+  $("#persp").addEventListener("click",function(){setIso(false)});
+  $("#isob").addEventListener("click",function(){setIso(true)});
+  /* level keys L0 to L5 (with 3.5): jump to the level and dim every other level's hatching and equipment; the same key again undims */
+  var lvBtns=[];
+  function levelKeys(){lvBtns.forEach(function(x){x.b.setAttribute("aria-pressed",focusLvl===x.id?"true":"false")})}
   LEVELS.slice().reverse().forEach(function(l){
-    var b=el("button",null,"L"+l.id);b.type="button";b.setAttribute("aria-label","Go to "+l.name);
-    b.addEventListener("click",function(){moveTo(levelY[l.id]+0.45)});$("#levels").appendChild(b);
+    var b=el("button",null,"L"+l.id);b.type="button";b.setAttribute("aria-label","Go to "+l.name);b.setAttribute("aria-pressed","false");
+    b.addEventListener("click",function(){focusLvl=(focusLvl===l.id)?null:l.id;moveTo(levelY[l.id]+0.45);levelKeys();update()});
+    $("#levels").appendChild(b);lvBtns.push({b:b,id:l.id});
   });
   $("#card").addEventListener("click",function(){if($("#card").hidden){selAsset=null;update()}});
 
   var v=new THREE.Vector3(),last=performance.now(),t0=last;
   function frame(now){
     var dt=Math.min(0.05,(now-last)/1000);last=now;
-    if(auto&&now>holdUntil&&!Object.keys(ptrs).length)theta+=dt*0.14;
+    if(auto&&!iso&&now>holdUntil&&!Object.keys(ptrs).length)theta+=dt*0.14;
     if(goalY!==null){TARGET.y+=(goalY-TARGET.y)*Math.min(1,dt*7);if(Math.abs(goalY-TARGET.y)<0.01){TARGET.y=goalY;goalY=null}}
-    var d=dist/zoom;
+    if(iso){theta=ISO_T;phi=ISO_P;applyOrtho()}
+    var d=iso?30:dist/zoom;
     camera.position.set(TARGET.x+d*Math.sin(phi)*Math.sin(theta),TARGET.y+d*Math.cos(phi),TARGET.z+d*Math.sin(phi)*Math.cos(theta));
     camera.lookAt(TARGET);
     /* state shown by the models themselves: tank fill and sealer glow. Colour and level only, nothing flashes. */
@@ -1336,7 +1719,7 @@ function build(){
         robot.turret.rotation.y=Math.sin(robot.t*1.3)*1.1;
         robot.shoulder.rotation.z=0.35+Math.sin(robot.t*2.6)*0.25;
         robot.elbow.rotation.z=-1.25+Math.sin(robot.t*2.6+0.8)*0.35;}
-      if(pulse&&curve)pulse.position.copy(curve.getPoint(((now-t0)%1800)/1800));
+      pulses.forEach(function(p){p.mesh.position.copy(p.curve.getPoint(((now-t0)%1800)/1800))});
     }else{robot.shoulder.rotation.z=0.35;robot.elbow.rotation.z=-1.25}
     renderer.render(scene,camera);
     var w=stage.clientWidth,h=stage.clientHeight;
@@ -1355,20 +1738,35 @@ function build(){
   if(window.matchMedia)window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change",function(){update()});
   new MutationObserver(function(){update()}).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
   resize();update();requestAnimationFrame(frame);
-  return {update:update,view:function(){return {x:TARGET.x,y:TARGET.y,z:TARGET.z,zoom:zoom,theta:theta,phi:phi,yMin:Y_MIN,yMax:Y_MAX,auto:auto}}};
+  return {update:update,
+    anchor:function(name){var a=byName[name];return a?{x:a.top.x,y:a.top.y,z:a.top.z}:null},
+    view:function(){return {x:TARGET.x,y:TARGET.y,z:TARGET.z,zoom:zoom,theta:theta,phi:phi,yMin:Y_MIN,yMax:Y_MAX,auto:auto,
+      iso:iso,half:iso?oHalf():null,aspect:oAspect(),w:stage.clientWidth,h:stage.clientHeight,focus:focusLvl}}};
 }
 
 /* ================= start ================= */
 /* read-only hook for the automated page tests: copies of the camera, the live plant and the sandbox */
 window.__sentinelot={
-  view:function(){return scene3d?scene3d.view():null},
+  view:function(){return scene3d?scene3d.view():null},anchor:function(n){return scene3d?scene3d.anchor(n):null},
   live:function(){return JSON.parse(JSON.stringify({st:st,queue:queue.length,rows:rows.length,tab:curTab,
-    active:active?{title:active.title,time:active.time,kind:active.kind,sev:active.sev,note:active.note}:null}))},
+    active:active?{title:active.title,time:active.time,kind:active.kind,sev:active.sev,note:active.note}:null,
+    alarms:alarms.map(function(a){return {kind:a.kind,seq:a.seq,ack:a.ack,cleared:a.cleared,count:a.count,firstOut:a===firstOut}}),
+    firstOut:firstOut?firstOut.kind:null}))},
   sim:function(){return JSON.parse(JSON.stringify({inp:SB.inp,st:SB.st,view:SB.view,proposed:LIM.proposed}))}
 };
+(function(){
+  var b=$("#theme"),root=document.documentElement,mq=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)");
+  function dark(){var t=root.getAttribute("data-theme");return t?t==="dark":!!(mq&&mq.matches)}
+  function lab(){b.textContent=dark()?"Light":"Dark"}
+  try{var s=localStorage.getItem("sot-theme");if(s==="light"||s==="dark")root.setAttribute("data-theme",s)}catch(e){}
+  b.addEventListener("click",function(){var n=dark()?"light":"dark";root.setAttribute("data-theme",n);try{localStorage.setItem("sot-theme",n)}catch(e){}lab()});
+  lab();if(mq)mq.addEventListener("change",lab);
+})();
+buildWindows();buildEq();
+$("#an-ack").addEventListener("click",ackAll);$("#an-reset").addEventListener("click",resetAlarms);
 for(var i=0;i<40;i++)simulate();
 for(var j=0;j<8;j++)emit(nextPoll());
-paint();paintRecs();
+paint();paintRecs();paintAlarm();paintWindows();setButtons();paintEq();
 try{
   if(!window.THREE)throw new Error("no three");
   scene3d=build();

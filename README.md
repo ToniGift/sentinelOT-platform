@@ -11,16 +11,17 @@ A factory floor, drawn in 3D in your browser, with two kinds of trouble happenin
 
 Start it with the commands under [Running it yourself](#running-it-yourself), then open the plant page at `/sentinelot.html`. Nothing you do here touches anything real.
 
-1. **Look around.** Drag the plant to turn it. The stack of grey slabs is the factory, drawn as layers: machines at the bottom, offices and the internet at the top. Press **Front view** to face it straight on, or **Rotate plant** to let it turn by itself.
+1. **Look around.** Drag the plant to turn it. The stack of hatched floors is the factory, drawn as layers: machines at the bottom, offices and the internet at the top. Every item carries a small tag plate such as `PLC-101`; click one and its name appears beside the tag. Press **Front view** to face it straight on, **Rotate plant** to let it turn by itself, or **Iso** for a flat engineering view with no perspective.
 2. **Watch the traffic.** The panel at the bottom right lists messages passing between the machines. These are Modbus/TCP frames, the language many controllers speak. Two computers are allowed to talk to the line 1 controller: the operator's screen and the historian that records readings.
-3. **Send the first attack.** On the **Live** tab, press **Raise the sealer setpoint**. An office computer with no business writing to a controller sets the heat sealer to 240 °C. An alarm appears, the plant draws the path the command took, and the firewalls it crossed light up.
+3. **Send the first attack.** On the **Live** tab, press **Raise the sealer setpoint**. An office computer with no business writing to a controller sets the heat sealer to 240 °C. A window on the annunciator panel under the plant starts flashing, the plant draws the path the command took, and the firewalls it crossed light up.
 4. **Read the alarm.** It names the source, the target, the rule that fired and the firewalls crossed, then explains in three short paragraphs what happened, what it could do to the process, and what to do first.
-5. **Try the other two.** **Stop the packing robot** switches a robot off. **Scan the register map** is a new computer feeling around the controller for addresses that answer. **Acknowledge and restore** puts the plant back.
-6. **See a recorded verdict.** The **Recorded** tab holds eight alerts the triage pipeline has already judged. Pick one and the plant traces that alert too.
-7. **Check an alarm limit.** On the **Limits** tab, press **Widen the sealer high limit to 250 °C**. The answer comes back **Blocked**, with the detection rate before and after, and a list of the faults that change would stop catching.
-8. **Break the process yourself.** On the **What-if** tab, drag the sealer setpoint up. The sealing bars glow orange, then red, and a line appears: *Film burns on the bars*. Push the conveyor past 1,500 rpm and packs pile up behind the robot. Fill the tank to 100% and it overflows. Empty it and the pump runs dry.
-9. **Compare two sets of limits.** Still on **What-if**, press **Propose sealer high 250 °C**, then set the sealer to 230 °C. The table shows the current limits raising **High high** and the proposed limits raising nothing, with a sentence spelling out what that would mean.
-10. **Move the camera.** Press **L0** to drop to the field machines, or **L5** for the internet. Hold Shift and drag to slide the view, or use **Up** and **Down**. On a phone, two fingers move it; one finger still scrolls the page.
+5. **Send a second attack before you acknowledge the first.** **Stop the packing robot** switches a robot off. **Scan the register map** is a new computer feeling around the controller for addresses that answer. Each alarm gets its own window and a sequence number, and the one that came first is marked **First out**. A few seconds after the setpoint attack a fourth window lights by itself: the sealer has passed its 190 °C limit. First out tells you which alarm was the cause and which the consequence.
+6. **Clear them the way an operator would.** **Ack all** stops the flashing and changes nothing else. **Restore from HMI-Line1** puts the setpoint or the robot back. **Reset** then clears the alarms that are both acknowledged and back to normal, and removes the first-out mark.
+7. **See a recorded verdict.** The **Recorded** tab holds eight alerts the triage pipeline has already judged. Pick one and the plant traces that alert too.
+8. **Check an alarm limit.** On the **Limits** tab, press **Widen the sealer high limit to 250 °C**. The answer comes back **Blocked**, with the detection rate before and after, and a list of the faults that change would stop catching. The tag that limit belongs to, `TT-101`, lights up on the plant and in the equipment list.
+9. **Break the process yourself.** On the **What-if** tab, drag the sealer setpoint up. The sealing bars glow orange, then red, and a line appears: *Film burns on the bars*. Push the conveyor past 1,500 rpm and packs pile up behind the robot. Fill the tank to 100% and it overflows. Empty it and the pump runs dry.
+10. **Compare two sets of limits.** Still on **What-if**, press **Propose sealer high 250 °C**, then set the sealer to 230 °C. The table shows the current limits raising **High high** and the proposed limits raising nothing, with a sentence spelling out what that would mean.
+11. **Move the camera.** Press **L0** to drop to the field machines, or **L5** for the internet. The other levels fade so the one you picked stands out; press the same key again to bring them back. Hold Shift and drag to slide the view, or use **Up** and **Down**. On a phone, two fingers move it; one finger still scrolls the page.
 
 ## Why draw it in 3D
 
@@ -58,6 +59,12 @@ Four firewalls stand between the levels, drawn on the column at the left of the 
 | FW-Cell-1 | Levels 2 and 1 | Anything but the operator screen, the historian and the engineering workstation reaching the line 1 controller |
 
 The attack in the guided tour starts at an office computer on level 4 and ends at a controller on level 1. It crosses three of those four, which is why the alarm lists them.
+
+### Tags
+
+Every item on the plant carries a short tag as well as its name, and the page lists them all in an equipment table. The tags are ISA-style: loosely modelled on the instrument naming used on plant drawings, assigned for this demo, not an official scheme. IT equipment uses plain asset-class prefixes (`SRV`, `WS`, `DB`, `PC`). The first digit of the number is the area: 1 line 1, 2 line 2, 3 network security, 4 enterprise and DMZ, 5 utilities, 6 operations and supervisory servers and workstations. So `PLC-101` is PLC-Line1 and `FW-304` is FW-Cell-1.
+
+Five tags are signals, not equipment: a measurement on one item, read through another. `TT-101` is the sealer temperature, `ST-101` the conveyor speed, `LT-501` the tank level, `PT-501` the pump pressure, and `TIC-101` the sealer's temperature controller inside PLC-101, whose setpoint the first attack changes. The flow meter is a drawn device, so `FT-501` is an ordinary asset tag. Each of the five AlarmOps tags maps to one of these, and that tag lights up when a limit change is blocked or would miss an alarm.
 
 ## Two problems on one plant
 
@@ -182,7 +189,7 @@ The shared plant dataset, 5 tags and 35 labelled faults:
 
 The two tables disagree on percentages because they count the same missed faults out of different totals. **The 14 extra faults were generated for this demo by the same seeded generator. They are not independent evidence of anything.** They exist so the sealer and the conveyor have something to be measured against.
 
-Test suites, run now: 63 tests for the platform, 86 for the AlarmOps copy.
+Test suites, run now: 119 tests for the platform, 86 for the AlarmOps copy.
 
 ## Running it yourself
 
@@ -273,7 +280,7 @@ python -m pytest
 python -m pytest alarmops
 ```
 
-The platform suite covers the API and its rate limits, the code checks, the orchestrator with the models stubbed out, the scenario labels, the lab feeds, the alarm-limit routes and every figure in the results tables, that the shared plant leaves the original dataset untouched, and that the saved answers in the page still match the routes. Sixteen of those tests drive the page itself in a headless browser and need Playwright and an installed Microsoft Edge (or Chrome), which they launch directly, so no browser download is needed. Playwright is in `requirements-dev.txt` and deliberately not in `requirements.txt`. Without them they are skipped, and `pytest.ini` turns on the summary that lists every skip with its reason, so a skipped test is never mistaken for a passing one. No test calls a model or reaches the network.
+The platform suite covers the API and its rate limits, the code checks, the orchestrator with the models stubbed out, the scenario labels, the lab feeds, the alarm-limit routes and every figure in the results tables, that the shared plant leaves the original dataset untouched, that the saved answers in the page still match the routes, and that every colour pair on the plant page keeps a readable contrast in light and dark (`python tests/test_palette_contrast.py` prints the table). Twenty-four of those tests drive the page itself in a headless browser and need Playwright and an installed Microsoft Edge (or Chrome), which they launch directly, so no browser download is needed. Playwright is in `requirements-dev.txt` and deliberately not in `requirements.txt`. Without them they are skipped, and `pytest.ini` turns on the summary that lists every skip with its reason, so a skipped test is never mistaken for a passing one. No test calls a model or reaches the network.
 
 ## Repository map
 

@@ -269,7 +269,7 @@ def test_leaving_the_sandbox_restores_the_live_plant_and_its_alarm(browser):
         page.dispatch_event(sel, "change")
     page.uncheck("#sim-pump")
     page.wait_for_timeout(3000)
-    assert page.inner_text("#proc-h") == "Line 1 process (What-if, simulated)"
+    assert page.text_content("#proc-h") == "Line 1 process (What-if, simulated)"
     assert page.inner_text("#t-sp .v") == "110.0"
     during = page.evaluate("() => window.__sentinelot.live()")
     assert {**during, "tab": None} == {**before, "tab": None}   # live plant untouched
@@ -279,7 +279,219 @@ def test_leaving_the_sandbox_restores_the_live_plant_and_its_alarm(browser):
     assert after["tab"] == "live"
     assert {**after, "tab": None} == {**before, "tab": None}
     assert page.inner_html("#alarm") == alarm_html             # same alarm, same note
-    assert page.inner_text("#proc-h") == "Line 1 process"
+    assert page.text_content("#proc-h") == "Line 1 process"
     assert page.inner_text("#t-sp .v") == "240.0"              # live value is back
     assert page.errors == []
     page.close()
+
+
+# ---------------- annunciator, tags and the drawing view ----------------
+
+def live(page):
+    return page.evaluate("() => window.__sentinelot.live()")
+
+
+def win_classes(page, kind):
+    return page.get_attribute(f'.win[data-kind="{kind}"]', "class").split()
+
+
+def test_second_attack_before_acknowledge_gives_two_alarms_and_first_out(browser):
+    """Detection keeps running while an alarm is active; first-out stays until Reset."""
+    page = open_page(browser)
+    page.click('[data-atk="setpoint"]')
+    page.wait_for_selector("#alarm.crit", timeout=20000)
+    page.wait_for_function(
+        "() => !document.querySelector('[data-atk=\"robot\"]').disabled", timeout=20000)
+    assert live(page)["alarms"][0]["ack"] is False            # not acknowledged
+    page.click('[data-atk="robot"]')
+    page.wait_for_function(
+        "() => window.__sentinelot.live().alarms.some(a => a.kind === 'robot')",
+        timeout=20000)
+    s = live(page)
+    by = {a["kind"]: a for a in s["alarms"]}
+    assert by["setpoint"]["seq"] == 1 and by["setpoint"]["firstOut"] is True
+    assert by["robot"]["seq"] == 2 and by["robot"]["firstOut"] is False
+    assert s["firstOut"] == "setpoint"
+    assert s["st"]["sp"] == 240 and s["st"]["robot"] == 0
+    page.click('.win[data-kind="setpoint"]')
+    assert "TIC-101 SP changed" in page.text_content("#alarm h3")
+    assert "fo" in win_classes(page, "setpoint") and "unack" in win_classes(page, "setpoint")
+    assert "fo" not in win_classes(page, "robot") and "unack" in win_classes(page, "robot")
+    # acknowledge: the flashing stops and nothing else changes
+    page.click("#an-ack")
+    s = live(page)
+    assert all(a["ack"] for a in s["alarms"]) and s["firstOut"] == "setpoint"
+    assert s["st"]["sp"] == 240 and s["st"]["robot"] == 0
+    assert "fo" in win_classes(page, "setpoint") and "unack" not in win_classes(page, "setpoint")
+    # reset clears the first-out mark; alarms whose condition is still there stay
+    page.click("#an-reset")
+    s = live(page)
+    assert s["firstOut"] is None
+    assert {"setpoint", "robot"} <= {a["kind"] for a in s["alarms"]}
+    assert "fo" not in win_classes(page, "setpoint")
+    assert page.errors == []
+    page.close()
+
+
+def test_restore_then_reset_clears_the_alarm(browser):
+    page = open_page(browser)
+    page.click('[data-atk="robot"]')
+    page.wait_for_selector("#alarm.crit", timeout=20000)
+    page.click("#an-ack")
+    page.wait_for_function(
+        "() => { const b = [...document.querySelectorAll('#alarm .btnrow button')]"
+        ".find(x => x.textContent.startsWith('Restore')); return b && !b.disabled }",
+        timeout=20000)
+    page.click("#alarm .btnrow button:has-text('Restore')")
+    s = live(page)
+    assert s["st"]["robot"] == 1 and s["alarms"][0]["cleared"] is True
+    page.click("#an-reset")
+    s = live(page)
+    assert s["alarms"] == [] and s["active"] is None and s["firstOut"] is None
+    assert page.errors == []
+    page.close()
+
+
+ALARMOPS_TAG = {"sealer_temperature": "TT-101", "conveyor_speed": "ST-101",
+                "tank_level": "LT-501", "pump_pressure": "PT-501", "flow_rate": "FT-501"}
+
+
+def test_equipment_list_maps_every_alarmops_tag_and_marks_demo_items(page):
+    rows = page.evaluate("""() => [...document.querySelectorAll('#eq tbody tr')].map(tr =>
+        [...tr.children].map(td => td.textContent.trim()))""")
+    by_tag = {r[0]: r for r in rows}
+    for lim, tag in ALARMOPS_TAG.items():
+        assert by_tag[tag][4] == lim
+    assert "SC-201" not in page.content()
+    assert by_tag["GW-101"][1] == "SENSOR-GW-1"              # a gateway, not a transmitter
+    assert by_tag["TIC-101"][2] == "Signal tag"
+    for tag, name in (("WS-601", "ENG-WS-01"), ("DB-601", "HIST-01"), ("SRV-601", "MES-SRV-01"),
+                      ("SRV-602", "AD-OT-01"), ("SRV-603", "SCADA-SRV-01")):
+        assert by_tag[tag][1] == name
+    for tag in ("SRV-601", "SRV-602", "WS-501", "SRV-501"):   # added for the demo
+        assert by_tag[tag][5] == "Demo only"
+    assert by_tag["PLC-101"][5] == "Project asset file"
+    text = page.text_content("body")
+    assert "Tags are ISA-style. IT equipment uses plain asset-class prefixes." in text
+    assert "recommends, never acts" in text and "checks alarm-limit changes" in text
+
+
+def lit_rows(page):
+    return page.evaluate(
+        "() => [...document.querySelectorAll('#eq tr.lit')].map(r => r.dataset.tag)")
+
+
+def test_blocked_limit_change_lights_its_tag(browser):
+    page = open_page(browser)
+    page.wait_for_function("() => document.querySelector('#lim-tag').options.length === 5")
+    assert lit_rows(page) == []
+    page.click("#tab-lim")
+    page.click("#lim-preset")                                 # sealer high 250: blocked
+    page.wait_for_selector("#lim-out .g-block")
+    assert lit_rows(page) == ["TT-101"]
+    page.click("#lim-reset")
+    assert lit_rows(page) == []
+    # What-if: the proposed limit would miss an alarm
+    page.click("#tab-sim")
+    page.click("#sim-preset")
+    page.fill("#sim-sp-n", "230")
+    page.dispatch_event("#sim-sp-n", "change")
+    page.wait_for_selector("#sim-missed .miss", timeout=60000)
+    assert lit_rows(page) == ["TT-101"]
+    assert page.errors == []
+    page.close()
+
+
+def plate_dim(page, tag):
+    return page.evaluate(
+        "t => [...document.querySelectorAll('#labels .lab')].find(e => e.textContent === t)"
+        ".classList.contains('dim')", tag)
+
+
+def test_level_keys_cover_every_level_and_dim_the_others(browser):
+    page = open_page(browser)
+    keys = page.evaluate(
+        "() => [...document.querySelectorAll('#levels button')].map(b => b.textContent)")
+    assert keys == ["L5", "L4", "L3.5", "L3", "L2", "L1", "L0"]
+    page.click("#levels button:text-is('L3.5')")
+    assert page.evaluate("() => window.__sentinelot.view().focus") == "3.5"
+    assert plate_dim(page, "PLC-101") is True and plate_dim(page, "DB-401") is False
+    page.click("#levels button:text-is('L3.5')")              # same key again: undim
+    assert page.evaluate("() => window.__sentinelot.view().focus") is None
+    assert plate_dim(page, "PLC-101") is False
+    assert page.errors == []
+    page.close()
+
+
+PROJECT = """() => {
+  const NAMES = __NAMES__;
+  const S = window.__sentinelot, v = S.view(), st = document.querySelector('#stage').getBoundingClientRect();
+  const sub = (a, b) => [a[0]-b[0], a[1]-b[1], a[2]-b[2]], dot = (a, b) => a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+  const cross = (a, b) => [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+  const norm = a => { const n = Math.hypot(...a); return a.map(x => x/n) };
+  const T = [v.x, v.y, v.z];
+  const f = norm([-Math.sin(v.phi)*Math.sin(v.theta), -Math.cos(v.phi), -Math.sin(v.phi)*Math.cos(v.theta)]);
+  const right = norm(cross(f, [0, 1, 0])), up = cross(right, f);
+  const out = [];
+  for (const [name, tag] of NAMES) {
+    const a = S.anchor(name), p = sub([a.x, a.y, a.z], T);
+    const ex = (dot(p, right)/(v.half*v.aspect)*0.5+0.5)*v.w, ey = (-dot(p, up)/v.half*0.5+0.5)*v.h;
+    const e = [...document.querySelectorAll('#labels .lab')].find(x => x.textContent.startsWith(tag));
+    const r = e.getBoundingClientRect();
+    out.push({tag, ex, ey, x: r.left + r.width/2 - st.left, y: r.top - st.top + 1.4*r.height, w: r.width, sw: v.w});
+  }
+  return {iso: v.iso, zoom: v.zoom, y: v.y, out};
+}"""
+PLATES = [["PLC-Line1", "PLC-101"], ["HMI-Line1", "HMI-101"], ["HIST-01", "DB-601"],
+          ["SENSOR-GW-1", "GW-101"], ["ERP-SRV-01", "SRV-401"], ["ROBOT-Pick-1", "RB-101"]]
+
+
+def plates_on_their_equipment(page):
+    page.wait_for_timeout(1800)                               # let a glide finish
+    import json
+    r = page.evaluate(PROJECT.replace("__NAMES__", json.dumps(PLATES)))
+    assert r["iso"] is True
+    seen = 0
+    for o in r["out"]:
+        if o["ex"] < o["w"] / 2 + 8 or o["ex"] > o["sw"] - o["w"] / 2 - 8:
+            continue                                          # kept inside the stage on purpose
+        assert abs(o["x"] - o["ex"]) < 1.5 and abs(o["y"] - o["ey"]) < 1.5, o
+        seen += 1
+    assert seen >= 4
+    return r
+
+
+def test_tag_plates_stay_on_their_equipment_in_the_orthographic_view(browser):
+    """Projects each plate's anchor with the test's own maths and compares it with where the page drew it."""
+    page = open_page(browser)
+    page.click("#isob")
+    a = plates_on_their_equipment(page)
+    page.click("#zin")
+    page.click("#zin")
+    b = plates_on_their_equipment(page)
+    page.click("#down")
+    page.click("#down")
+    c = plates_on_their_equipment(page)
+    assert b["zoom"] > a["zoom"] and c["y"] < b["y"]
+    page.click("#persp")
+    assert page.evaluate("() => window.__sentinelot.view().iso") is False
+    assert page.errors == []
+    page.close()
+
+
+def test_phone_width_shows_all_four_tabs_and_the_short_labels(browser):
+    for width, first in ((390, "live"), (768, "live attack")):
+        page = browser.new_page(viewport={"width": width, "height": 844})
+        page.goto(PAGE, wait_until="domcontentloaded")
+        page.wait_for_function("() => window.ProcessModel && window.__sentinelot")
+        t = page.evaluate("""() => { const box = document.querySelector('#tabs');
+            return {fits: box.scrollWidth <= box.clientWidth + 1,
+                    page: document.documentElement.scrollWidth <= window.innerWidth,
+                    tabs: [...box.querySelectorAll('button')].map(b => { const r = b.getBoundingClientRect();
+                      return {text: b.innerText.replace(/\\s+/g, ' ').trim().toLowerCase(),
+                              left: r.left, right: r.right, w: r.width} })} }""")
+        assert t["fits"] and t["page"]
+        assert all(0 <= b["left"] and b["right"] <= width and b["w"] > 40 for b in t["tabs"])
+        words = [b["text"].lstrip("0123456789 ") for b in t["tabs"]]
+        assert words == [first, "recorded", "limits", "what-if"]
+        page.close()
