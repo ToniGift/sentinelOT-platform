@@ -702,10 +702,10 @@ function raise(a){
     if(my!==runId)return;
     if(!sample){fallback(a);return}
     return sample(buildPrompt(a),{modelTier:"quick",onText:function(e){
-      if(my!==runId)return;a.who="Analyst note, written live by Claude";a.note=e.text;paintNote();
+      if(my!==runId)return;a.who="Analyst note, written live by AI";a.note=e.text;paintNote();
     }}).then(function(r){
       if(my!==runId)return;
-      if(r&&r.text){a.who="Analyst note, written live by Claude";a.note=r.text;paintNote()}else fallback(a);
+      if(r&&r.text){a.who="Analyst note, written live by AI";a.note=r.text;paintNote()}else fallback(a);
     });
   }).catch(function(){if(my===runId)fallback(a)});
 }

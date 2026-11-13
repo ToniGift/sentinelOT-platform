@@ -128,7 +128,7 @@ All numbers come from synthetic alerts or simulated sensor data. There are no re
 
 ### Numbers from the hackathon repositories
 
-**Triage**, measured on the hackathon version in [ToniGift/sentinelOT](https://github.com/ToniGift/sentinelOT) with synthetic alerts written with AI assistance (Claude), then reviewed and run by me. Not re-measured here.
+**Triage**, measured on the hackathon version in [ToniGift/sentinelOT](https://github.com/ToniGift/sentinelOT) with synthetic alerts written with AI assistance, then reviewed and run by me. Not re-measured here.
 
 - **Fresh held-out set (10 scenarios, 3 runs each):** 29 of 30 verdicts correct, 28 of 30 technique choices acceptable
 - **Prompt injection:** 0 of 10 injected runs followed the hidden instruction
@@ -279,7 +279,7 @@ The platform suite covers the API and its rate limits, the guards and code check
 - **Tavily Search API** supplies the live threat intelligence.
 - **three.js** (MIT) draws the 3D plant, loaded from the cdnjs CDN.
 - **Scapy** (GPL-2.0) is an optional dependency of the Modbus sniffer, installed from PyPI.
-- The synthetic alerts were written with AI assistance (Claude), then reviewed and run by the author. Parts of this repository were built with Claude Code.
+- The synthetic alerts were written with AI assistance, then reviewed and run by the author.
 
 ## Licence and author
 

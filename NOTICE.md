@@ -63,8 +63,8 @@ AI Hackathon (track: Best Apps and Agents):
 - Imported from commit `4766d662da3ddd845d72a371216b4e2eecdcf4ae`
 - The original repository is kept unchanged as the hackathon submission.
 
-The synthetic alerts in the scenario files were written with AI assistance
-(Claude), then reviewed and run by the author.
+The synthetic alerts in the scenario files were written with AI assistance,
+then reviewed and run by the author.
 
 ## Material added in this repository
 
