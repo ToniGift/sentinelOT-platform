@@ -495,3 +495,149 @@ def test_phone_width_shows_all_four_tabs_and_the_short_labels(browser):
         words = [b["text"].lstrip("0123456789 ") for b in t["tabs"]]
         assert words == [first, "recorded", "limits", "what-if"]
         page.close()
+
+
+# ---------------- the firewall rule editor on the page ----------------
+# These check the page against the demo's own rules, not against a real plant.
+
+def rules_of(page):
+    return page.evaluate("() => window.__sentinelot.rules()")
+
+
+def set_rule(page, fw, value):
+    page.evaluate("([f, v]) => window.__sentinelot.setRule(f, v)", [fw, value])
+
+
+def test_the_four_switches_start_as_found_and_are_labelled_by_their_rule(page):
+    assert rules_of(page) == {"FW-301": "allow", "FW-302": "allow",
+                              "FW-303": "allow", "FW-304": "allow"}
+    rows = page.evaluate("""() => [...document.querySelectorAll('#rules li')].map(li => ({
+        label: li.querySelector('.lb').textContent,
+        state: li.querySelector('.swt').textContent,
+        pressed: li.querySelector('.swt').getAttribute('aria-pressed'),
+        fw: li.querySelector('.swt').dataset.fw}))""")
+    assert [r["fw"] for r in rows] == ["FW-301", "FW-302", "FW-303", "FW-304"]
+    assert all(r["state"] == "ALLOW" and r["pressed"] == "true" for r in rows)
+    assert rows[3]["label"].endswith("Non-approved hosts to controllers, Modbus 502")
+    for r in rows[:3]:                                   # each names its own rule, not the same one
+        assert "Non-approved" in r["label"] and "any port" in r["label"]
+    assert len({r["label"] for r in rows}) == 4
+    text = page.text_content("#pane-live")
+    assert "Demo rules, not a recommendation for a real plant" in text
+    assert "As found. Each switch removes one over-broad rule." in text
+    assert ("A firewall rule sees source, destination and port, not the change window or "
+            "the value being written. That is what triage is for.") in text
+
+
+def test_a_denied_attack_raises_no_alarm_and_changes_nothing_in_the_plant(browser):
+    page = open_page(browser)
+    set_rule(page, "FW-303", "deny")
+    assert "3 of 3 live attacks stop" in page.text_content("#seg-sum")
+    page.click('[data-atk="setpoint"]')
+    page.wait_for_function("() => window.__sentinelot.live().blocked", timeout=20000)
+    page.wait_for_timeout(1200)
+    s = live(page)
+    assert s["blocked"] == {"fw": "FW-303", "rule": "SEG-303",
+                            "kind": "setpoint", "reached": "L3.5"}
+    assert s["alarms"] == [] and s["firstOut"] is None       # not an alarm
+    assert s["st"]["sp"] == 160                              # the setpoint never moved
+    assert page.text_content("#an-st") == "NO ALARM"
+    # the informational window: steady, never first out, never counted
+    cls = win_classes(page, "seg")
+    assert "info" in cls and "on" in cls
+    assert "unack" not in cls and "fo" not in cls and "crit" not in cls
+    assert page.text_content('.win[data-kind="seg"] .w-tag') == "FW-303"
+    assert "NOT AN ALARM" in page.text_content('.win[data-kind="seg"] .w-st')
+    # the note is pre-written and says the sensor saw nothing
+    assert page.text_content("#alarm h3") == "Stopped at the firewall, not by SentinelOT"
+    assert page.text_content("#alarm .who") == "Not seen by SentinelOT · simulated firewall log"
+    note = page.text_content("#alarm .text")
+    assert "no frame reached the controller" in note
+    assert "never reached the mirror port" in note
+    assert "The setpoint did not change" in note
+    # the log shows the denial and no reply
+    rows = page.eval_on_selector_all(".row.deny .meta", "rs => rs.map(r => r.textContent)")
+    assert len(rows) == 1 and "DENY at FW-303" in rows[0]
+    assert "did not reach PLC-101" in rows[0]
+    assert page.eval_on_selector_all(
+        ".row", "rs => rs.filter(r => r.textContent.includes('Echo: write accepted')).length") == 0
+    assert page.errors == []
+    page.close()
+
+
+def test_normal_polling_keeps_running_with_every_switch_set_to_deny(browser):
+    """The approved flows have fixed rules, so no switch touches the HMI and historian polling."""
+    page = open_page(browser)
+    for fw in ("FW-301", "FW-302", "FW-303", "FW-304"):
+        set_rule(page, fw, "deny")
+    assert rules_of(page) == {fw: "deny" for fw in
+                              ("FW-301", "FW-302", "FW-303", "FW-304")}
+    before = live(page)["rows"]
+    page.wait_for_function("n => window.__sentinelot.live().rows > n", arg=before, timeout=20000)
+    page.wait_for_timeout(2500)
+    after = live(page)
+    assert after["rows"] > before
+    # every new row is ordinary polling: nothing denied, because nothing unapproved is talking
+    assert page.eval_on_selector_all(".row.deny", "rs => rs.length") == 0
+    seen = page.eval_on_selector_all(".row .meta", "rs => rs.map(r => r.textContent).join(' ')")
+    assert "10.10.30.5" in seen and "10.10.40.20" in seen     # HMI-Line1 and HIST-01
+    assert after["st"]["rpm"] > 0                             # the plant is still running
+    assert page.errors == []
+    page.close()
+
+
+def test_the_three_alerts_from_approved_hosts_are_never_stopped_on_the_page(browser):
+    page = open_page(browser)
+    for fw in ("FW-301", "FW-302", "FW-303", "FW-304"):
+        set_rule(page, fw, "deny")
+    page.click("#tab-rec")
+    for n in (2, 3, 8):                                       # 1-based, as the page lists them
+        page.click(f"#recs button >> nth={n - 1}")
+        assert "Passes: an approved flow, which no switch touches" in page.text_content("#detail")
+    page.click("#recs button >> nth=5")                       # alert 6, DNP3, not approved
+    assert "Stopped at FW-304" in page.text_content("#detail")
+    assert "5 of 8 recorded alerts would stop" in page.text_content("#seg-sum")
+    assert page.errors == []
+    page.close()
+
+
+def test_a_denied_trace_stops_at_the_firewall_in_3d(browser):
+    page = open_page(browser)
+    set_rule(page, "FW-304", "deny")
+    page.click('[data-atk="robot"]')
+    page.wait_for_function("() => window.__sentinelot.live().blocked", timeout=20000)
+    page.wait_for_timeout(1200)
+    shown = page.evaluate(
+        "() => [...document.querySelectorAll('#labels .lab')]"
+        ".filter(e => e.style.display !== 'none').map(e => e.textContent)")
+    assert any(t.startswith("FW-304") and "DENY" in t for t in shown)
+    # the controller is not part of the trace, because nothing reached it
+    assert not any(t.startswith("PLC-101 ·") for t in shown)
+    assert live(page)["st"]["robot"] == 1
+    assert page.errors == []
+    page.close()
+
+
+def test_turning_a_rule_back_to_allow_lets_the_attack_through_again(browser):
+    page = open_page(browser)
+    set_rule(page, "FW-302", "deny")
+    page.click('[data-atk="robot"]')
+    page.wait_for_function("() => window.__sentinelot.live().blocked", timeout=20000)
+    assert live(page)["alarms"] == []
+    set_rule(page, "FW-302", "allow")
+    page.wait_for_function("() => !document.querySelector('[data-atk=\"robot\"]').disabled",
+                           timeout=20000)
+    page.click('[data-atk="robot"]')
+    page.wait_for_selector("#alarm.crit", timeout=20000)
+    s = live(page)
+    assert [a["kind"] for a in s["alarms"]] == ["robot"] and s["st"]["robot"] == 0
+    assert s["blocked"] is None
+    assert page.errors == []
+    page.close()
+
+
+def test_the_page_has_a_drawn_favicon_and_no_emoji(page):
+    href = page.get_attribute('link[rel="icon"]', "href")
+    assert href.startswith("data:image/svg+xml,")
+    assert "<svg" in href.replace("%3C", "<") and "emoji" not in href
+    assert "text" not in href                                 # drawn, not a character

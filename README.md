@@ -18,12 +18,15 @@ Start it with the commands under [Running it yourself](#running-it-yourself), th
 3. **Send the first attack.** On the **Live** tab, press **Raise the sealer setpoint**. An office computer with no business writing to a controller sets the heat sealer to 240 °C. A window on the annunciator panel under the plant starts flashing, the plant draws the path the command took, and the firewalls it crossed light up.
 4. **Read the alarm.** It names the source, the target, the rule that fired and the firewalls crossed, then explains in three short paragraphs what happened, what it could do to the process, and what to do first.
 5. **Send a second attack before you acknowledge the first.** **Stop the packing robot** switches a robot off. **Scan the register map** is a new computer feeling around the controller for addresses that answer. Each alarm gets its own window and a sequence number, and the one that came first is marked **First out**. A few seconds after the setpoint attack a fourth window lights by itself: the sealer has passed its 190 °C limit. First out tells you which alarm was the cause and which the consequence.
-6. **Clear them the way an operator would.** **Ack all** stops the flashing and changes nothing else. **Restore from HMI-Line1** puts the setpoint or the robot back. **Reset** then clears the alarms that are both acknowledged and back to normal, and removes the first-out mark.
-7. **See a recorded verdict.** The **Recorded** tab holds eight alerts the triage pipeline has already judged. Pick one and the plant traces that alert too.
-8. **Check an alarm limit.** On the **Limits** tab, press **Widen the sealer high limit to 250 °C**. The answer comes back **Blocked**, with the detection rate before and after, and a list of the faults that change would stop catching. The tag that limit belongs to, `TT-101`, lights up on the plant and in the equipment list.
-9. **Break the process yourself.** On the **What-if** tab, drag the sealer setpoint up. The sealing bars glow orange, then red, and a line appears: *Film burns on the bars*. Push the conveyor past 1,500 rpm and packs pile up behind the robot. Fill the tank to 100% and it overflows. Empty it and the pump runs dry.
-10. **Compare two sets of limits.** Still on **What-if**, press **Propose sealer high 250 °C**, then set the sealer to 230 °C. The table shows the current limits raising **High high** and the proposed limits raising nothing, with a sentence spelling out what that would mean.
-11. **Move the camera.** Press **L0** to drop to the field machines, or **L5** for the internet. The other levels fade so the one you picked stands out; press the same key again to bring them back. Hold Shift and drag to slide the view, or use **Up** and **Down**. On a phone, two fingers move it; one finger still scrolls the page.
+6. **Turn a firewall rule off.** Under the attack buttons is a block of four **firewall rules**, each a switch reading **ALLOW** or **DENY**. They start as found, all ALLOW, which is the state these paths were actually in. Set **FW-303** to DENY and send the setpoint attack again. The trace now stops at FW-303 in mid-air, the plate reads `FW-303 · DENY`, the controller never lights, the log shows one frame marked *DENY at FW-303, did not reach PLC-101* with no reply after it, and **no alarm is raised at all** &mdash; because nothing happened in the plant. The annunciator still reads NO ALARM, and the fifth window is informational, not an alarm.
+7. **Notice what the page does not claim.** The note says *Not seen by SentinelOT*, and names the simulated firewall log as its source. The passive sensor sits between the masters and the controller, so frames stopped further up never reach it. Segmentation and monitoring are different controls, and the page says so rather than pretending the sensor saw something.
+8. **Watch the polling carry on.** Set all four to DENY. The log keeps filling with the HMI and the historian reading the controller, because those are approved flows with their own fixed rules that no switch touches.
+9. **Clear them the way an operator would.** **Ack all** stops the flashing and changes nothing else. **Restore from HMI-Line1** puts the setpoint or the robot back. **Reset** then clears the alarms that are both acknowledged and back to normal, and removes the first-out mark.
+10. **See a recorded verdict.** The **Recorded** tab holds eight alerts the triage pipeline has already judged. Pick one and the plant traces that alert too, and a line says where it would stop under the rules you have set. Three of the eight come from approved hosts, so no switch touches them.
+11. **Check an alarm limit.** On the **Limits** tab, press **Widen the sealer high limit to 250 °C**. The answer comes back **Blocked**, with the detection rate before and after, and a list of the faults that change would stop catching. The tag that limit belongs to, `TT-101`, lights up on the plant and in the equipment list.
+12. **Break the process yourself.** On the **What-if** tab, drag the sealer setpoint up. The sealing bars glow orange, then red, and a line appears: *Film burns on the bars*. Push the conveyor past 1,500 rpm and packs pile up behind the robot. Fill the tank to 100% and it overflows. Empty it and the pump runs dry.
+13. **Compare two sets of limits.** Still on **What-if**, press **Propose sealer high 250 °C**, then set the sealer to 230 °C. The table shows the current limits raising **High high** and the proposed limits raising nothing, with a sentence spelling out what that would mean.
+14. **Move the camera.** Press **L0** to drop to the field machines, or **L5** for the internet. The other levels fade so the one you picked stands out; press the same key again to bring them back. Hold Shift and drag to slide the view, or use **Up** and **Down**. On a phone, two fingers move it; one finger still scrolls the page.
 
 ## Why draw it in 3D
 
@@ -61,6 +64,37 @@ Four firewalls stand between the levels, drawn on the column at the left of the 
 | FW-Cell-1 | Levels 2 and 1 | Anything but the operator screen, the historian and the engineering workstation reaching the line 1 controller |
 
 The attack in the guided tour starts at an office computer on level 4 and ends at a controller on level 1. It crosses three of those four, which is why the alarm lists them.
+
+### Turning a rule off
+
+Each firewall has one switch on the **Live** tab, and each switch controls one rule: the as-found over-broad allow for hosts that are not approved. They start as found, every one **ALLOW**. **Simulated: demo rules, not a recommendation for a real plant.**
+
+| Switch | Rule | What it allows while it is ALLOW |
+|---|---|---|
+| FW-301 | SEG-301 | Non-approved remote hosts into the plant, any port |
+| FW-302 | SEG-302 | Non-approved office hosts past the DMZ, any port |
+| FW-303 | SEG-303 | Non-approved DMZ hosts into operations, any port |
+| FW-304 | SEG-304 | Non-approved hosts to controllers, Modbus 502 (and DNP3 20000, both directions across the cell boundary) |
+
+The **approved flows** are separate, fixed rules that no switch touches: HMI-Line1 and the historian polling the controllers, the engineering workstation reaching both, and the one configured outstation reporting to SCADA. That is why the log keeps filling even with all four set to DENY.
+
+The first DENY on a path's route is the one that stops it, so which attacks get through follows from which firewalls lie between their two ends:
+
+| Path | From &rarr; to | Stopped by |
+|---|---|---|
+| All three live attacks | Office L4 &rarr; PLC-101 L1 | any one of FW-302, FW-303, FW-304 |
+| Alert 1, office PC writes a coil | L4 &rarr; L1 | any one of FW-302, FW-303, FW-304 |
+| Alert 5, unit ID and port sweep | L4 &rarr; L1 | any one of FW-302, FW-303, FW-304 |
+| Alert 4, VPN pool to the HMI | L5 &rarr; L2 | any one of FW-301, FW-302, FW-303 |
+| Alert 7, failed OPC UA logins | L4 &rarr; L2 | FW-302 or FW-303 |
+| Alert 6, DNP3 from an unknown outstation | L1 &rarr; L2 | FW-304 only |
+| Alerts 2, 3 and 8 | L3 or L2 &rarr; L1 | **no switch**, because they come from approved hosts |
+
+Alerts 2, 3 and 8 are the interesting ones. A program download outside the change window, a setpoint written outside its normal range, and a workstation polling registers all come from hosts a firewall is right to allow. **A firewall rule sees source, destination and port, not the change window or the value being written. That is what triage is for.**
+
+When a rule stops an attack, nothing happens in the plant, so the page raises no alarm. It shows an informational window instead, and says in as many words that SentinelOT did not see the attempt: the passive sensor sits between the masters and the controller, and frames stopped further up never reach it. The entry comes from a simulated firewall log.
+
+The model behind all of this is zones, conduits and flows, in `window.NetworkModel` on the page, with `canPass(path, rules)` as a pure function. The two conduits that have **no** firewall, level 2 to level 3 and level 0 to level 1, are in the model rather than left out: an unfiltered boundary is a fact about the plant. `tests/test_segmentation.py` checks every path against every combination of the four switches, against a second implementation of the table written independently in Python.
 
 ### Tags
 
@@ -191,7 +225,7 @@ The shared plant dataset, 5 tags and 35 labelled faults:
 
 The two tables disagree on percentages because they count the same missed faults out of different totals. **The 14 extra faults were generated for this demo by the same seeded generator. They are not independent evidence of anything.** They exist so the sealer and the conveyor have something to be measured against.
 
-Test suites, run now: 119 tests for the platform, 86 for the AlarmOps copy. The platform's 119 are 47 for the server and the data, 23 that drive the plant page in a browser, and 49 that check the page's colours.
+Test suites, run now: 349 tests for the platform, 86 for the AlarmOps copy. The platform's 349 are 47 for the server and the data, 30 that drive the plant page in a browser, 49 that check the page's colours, and 223 that check the firewall rules.
 
 ## Running it yourself
 
@@ -282,7 +316,7 @@ python -m pytest
 python -m pytest alarmops
 ```
 
-The platform suite covers the API and its rate limits, the code checks, the orchestrator with the models stubbed out, the scenario labels, the lab feeds, the alarm-limit routes and every figure in the results tables, that the shared plant leaves the original dataset untouched, that the saved answers in the page still match the routes, and that every colour pair on the plant page keeps a readable contrast in light and dark (`python tests/test_palette_contrast.py` prints the table). Twenty-three of those tests drive the page itself in a browser and need Playwright and an installed Microsoft Edge (or Chrome), which they launch directly, so no browser download is needed. Playwright is in `requirements-dev.txt` and deliberately not in `requirements.txt`. Without them they are skipped, and `pytest.ini` turns on the summary that lists every skip with its reason, so a skipped test is never mistaken for a passing one. No test calls a model or reaches the network.
+The platform suite covers the API and its rate limits, the code checks, the orchestrator with the models stubbed out, the scenario labels, the lab feeds, the alarm-limit routes and every figure in the results tables, that the shared plant leaves the original dataset untouched, that the saved answers in the page still match the routes, that every colour pair on the plant page keeps a readable contrast in light and dark (`python tests/test_palette_contrast.py` prints the table), and that the firewall rules answer correctly for every path against every combination of the four switches. Thirty of those tests drive the page itself in a browser, and 223 more drive the segmentation model in one. All of them need Playwright and an installed Microsoft Edge (or Chrome), which they launch directly, so no browser download is needed. Playwright is in `requirements-dev.txt` and deliberately not in `requirements.txt`. Without them they are skipped, and `pytest.ini` turns on the summary that lists every skip with its reason, so a skipped test is never mistaken for a passing one. No test calls a model or reaches the network.
 
 ## Repository map
 

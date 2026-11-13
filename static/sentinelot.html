@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SentinelOT: OT security demo, simulated plant</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23F4F1E8'/%3E%3Cg fill='none' stroke='%2314171A' stroke-width='2'%3E%3Crect x='3' y='3' width='26' height='26'/%3E%3Cpath d='M3 21h26M16 3v18'/%3E%3C/g%3E%3Crect x='5' y='23' width='10' height='4' fill='%23B3261E'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Text:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -206,6 +207,22 @@ button,input,select{font-family:inherit}
 .miss b{display:block;margin-bottom:2px;font-family:var(--head);letter-spacing:.06em;text-transform:uppercase}
 
 /* annunciator: one window per alarm */
+.seg{border:1px solid var(--rule);padding:10px 12px;margin-bottom:12px}
+.seg h3{margin:0 0 4px;font-size:16px}
+.seg .hd{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.rules{list-style:none;margin:8px 0;padding:0;border-top:1px solid var(--line)}
+.rules li{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)}
+.rules .lb{font-size:14px;line-height:1.3}
+.rules .lb b{font-family:var(--mono);font-weight:500;font-size:12.5px;color:var(--mute);display:block}
+.rules .dt{grid-column:1/-1;margin:0;font-family:var(--mono);font-size:11.5px;color:var(--mute)}
+.swt{font-family:var(--head);font-weight:800;letter-spacing:.08em;font-size:15px;min-width:74px;padding:5px 10px;border:1px solid var(--rule);background:var(--panel);color:var(--ink);cursor:pointer}
+.swt[aria-pressed="false"]{background:var(--ink);color:var(--bg)}
+.segsum{font-family:var(--mono);font-size:12.5px;color:var(--mute);border-top:1px solid var(--rule);padding-top:7px}
+.segsum b{color:var(--ink);font-weight:500}
+.row.deny{box-shadow:inset 4px 0 0 var(--mute);background:transparent}
+.row.deny .meta .fc{color:var(--mute)}
+.win.info{border-style:dashed}
+.win.info.on{border-style:solid}
 .anun-h{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin-bottom:8px}
 .anun-h h2{margin:0}
 .an-st{font-family:var(--mono);font-size:12.5px;color:var(--mute);flex:1 1 200px}
@@ -371,7 +388,7 @@ footer p{margin:0;max-width:110ch}
   <div class="st-right">
     <dl class="st-meta">
       <div class="x3"><dt>Dwg</dt><dd>SOT-0001</dd></div>
-      <div><dt>Rev</dt><dd>D</dd></div>
+      <div><dt>Rev</dt><dd>E</dd></div>
       <div class="x2"><dt>Scale</dt><dd>NTS</dd></div>
       <div><dt>Sheet</dt><dd><span class="lg">1 of 1</span><span class="sm">1/1</span></dd></div>
       <div class="x2 x3"><dt>Drawn</dt><dd>ToniGift</dd></div>
@@ -429,6 +446,13 @@ footer p{margin:0;max-width:110ch}
           <button class="btn atk" data-atk="robot">Stop the packing robot<span>OFFICE-PC-14 writes coil 00003 (RB-101 enable) to off</span></button>
           <button class="btn atk" data-atk="scan">Scan the register map<span>A new host reads address ranges on PLC-101 until something answers</span></button>
         </div>
+        <section class="seg" aria-label="Firewall rules">
+          <div class="hd"><h3>Firewall rules</h3><span class="simtag">SIMULATED</span></div>
+          <p class="note">Demo rules, not a recommendation for a real plant. As found. Each switch removes one over-broad rule. The approved flows &mdash; HMI-Line1 and the historian to the controllers, the engineering workstation to both, the configured outstation to SCADA &mdash; have their own fixed rules that no switch touches, so the polling in the log keeps running whatever you set here.</p>
+          <ul class="rules" id="rules"></ul>
+          <p class="note">A firewall rule sees source, destination and port, not the change window or the value being written. That is what triage is for.</p>
+          <div class="segsum" id="seg-sum" role="status"></div>
+        </section>
         <div class="alarm quiet" id="alarm" aria-live="polite">
           <p>No active alarm. Only HMI-Line1 and the historian are talking to the PLC.</p>
         </div>
@@ -502,7 +526,7 @@ footer p{margin:0;max-width:110ch}
     <section class="tblock" aria-label="Title block and revisions">
       <h2>Title block</h2>
       <table class="tb">
-        <tr><th scope="row">Dwg no.</th><td>SOT-0001</td><th scope="row">Rev</th><td>D</td></tr>
+        <tr><th scope="row">Dwg no.</th><td>SOT-0001</td><th scope="row">Rev</th><td>E</td></tr>
         <tr><th scope="row">Title</th><td colspan="3">OT security demo, packaging plant line 1, simulated</td></tr>
         <tr><th scope="row">Drawn</th><td>ToniGift</td><th scope="row">Scale</th><td>NTS</td></tr>
         <tr><th scope="row">Checked</th><td></td><th scope="row">Sheet</th><td>1 of 1</td></tr>
@@ -515,6 +539,7 @@ footer p{margin:0;max-width:110ch}
           <tr><td>B</td><td class="d">2026-11-12</td><td>Imported here; 3D plant; AlarmOps connected as a module</td><td class="blank"></td><td class="blank"></td></tr>
           <tr><td>C</td><td class="d">2026-11-13</td><td>Pan; What-if sandbox; README</td><td class="blank"></td><td class="blank"></td></tr>
           <tr><td>D</td><td class="d">2026-11-13</td><td>Drawing-sheet layout; annunciator; tag plates</td><td class="blank"></td><td class="blank"></td></tr>
+          <tr><td>E</td><td class="d">2026-11-13</td><td>Firewall rule editor; zone and conduit model</td><td class="blank"></td><td class="blank"></td></tr>
         </tbody>
       </table>
     </section>
@@ -713,6 +738,130 @@ root.ProcessModel={LIMIT_KEYS:LIMIT_KEYS,ALARM_LABEL:ALARM_LABEL,TAGS:TAGS,NAME:
   alarmState:alarmState,evaluate:evaluate,missed:missed,allMissed:allMissed,effects:effects};
 })(window);
 </script>
+<script id="network-model">
+/* The plant's network segmentation, as data: zones, conduits and flows.
+   SIMULATED. Demo rules, not a recommendation for a real plant.
+
+   Pure functions only: no DOM, no timers, no network. tests/test_segmentation.py calls these
+   directly, and a later network-segmentation view reads the same ZONES, CONDUITS and FLOWS
+   rather than keeping a second copy of the model. */
+(function(root){
+"use strict";
+/* Zones, lowest first. The route between two zones is the slice of this list that lies between them. */
+var ZONES=[
+  {id:"L0",  level:"0",  name:"Field"},
+  {id:"L1",  level:"1",  name:"Control"},
+  {id:"L2",  level:"2",  name:"Supervisory"},
+  {id:"L3",  level:"3",  name:"Operations"},
+  {id:"L3.5",level:"3.5",name:"DMZ"},
+  {id:"L4",  level:"4",  name:"Enterprise"},
+  {id:"L5",  level:"5",  name:"Internet"}
+];
+/* A conduit joins two neighbouring zones. CONDUITS[n] joins ZONES[n] and ZONES[n+1].
+   Two conduits have no firewall at all. They are in the model rather than left out: an
+   unfiltered boundary is a fact about the plant, and the segmentation view has to show it. */
+var CONDUITS=[
+  {id:"C-0-1",   a:"L0",  b:"L1",  firewall:null,     rule:null},
+  {id:"C-1-2",   a:"L1",  b:"L2",  firewall:"FW-304", rule:"SEG-304"},
+  {id:"C-2-3",   a:"L2",  b:"L3",  firewall:null,     rule:null},
+  {id:"C-3-3.5", a:"L3",  b:"L3.5",firewall:"FW-303", rule:"SEG-303"},
+  {id:"C-3.5-4", a:"L3.5",b:"L4",  firewall:"FW-302", rule:"SEG-302"},
+  {id:"C-4-5",   a:"L4",  b:"L5",  firewall:"FW-301", rule:"SEG-301"}
+];
+/* Every flow has from, to, protocol, port and approved.
+     kind "host"    from and to are asset names. These are the approved flows: fixed rules that
+                    no switch touches, which is why normal polling keeps running whatever the
+                    switches say.
+     kind "conduit" from and to are zone ids. These are the four as-found over-broad allows,
+                    one per firewall, and each one is a switch.
+   port is a number, an array of numbers, or "any". */
+var FLOWS=[
+  {id:"hmi-plc1", kind:"host", from:"HMI-Line1", to:"PLC-Line1", protocol:"Modbus/TCP", port:502, approved:true,
+   note:"Operator screen for line 1: the approved master, read and write"},
+  {id:"hist-plc1", kind:"host", from:"HIST-01", to:"PLC-Line1", protocol:"Modbus/TCP", port:502, approved:true,
+   note:"Historian: polls read-only"},
+  {id:"hist-plc2", kind:"host", from:"HIST-01", to:"PLC-Line2", protocol:"Modbus/TCP", port:502, approved:true,
+   note:"Historian: polls read-only"},
+  {id:"eng-plc1", kind:"host", from:"ENG-WS-01", to:"PLC-Line1", protocol:"Modbus/TCP", port:502, approved:true,
+   note:"Engineering workstation. Its change window is a procedure, not a firewall rule"},
+  {id:"eng-plc2", kind:"host", from:"ENG-WS-01", to:"PLC-Line2", protocol:"Modbus/TCP", port:502, approved:true,
+   note:"Engineering workstation. Its change window is a procedure, not a firewall rule"},
+  {id:"rtu-scada", kind:"host", from:"RTU-Outstation-3", to:"SCADA-SRV-01", protocol:"DNP3", port:20000, approved:true,
+   note:"The one configured outstation"},
+
+  {id:"SEG-301", kind:"conduit", conduit:"C-4-5", firewall:"FW-301", from:"L5", to:"L4",
+   protocol:"any", port:"any", approved:false,
+   label:"Non-approved remote hosts into the plant, any port",
+   detail:"Anything arriving from the internet or the VPN pool may reach the plant networks"},
+  {id:"SEG-302", kind:"conduit", conduit:"C-3.5-4", firewall:"FW-302", from:"L4", to:"L3.5",
+   protocol:"any", port:"any", approved:false,
+   label:"Non-approved office hosts past the DMZ, any port",
+   detail:"Any office workstation may carry on past the DMZ servers it is meant to stop at"},
+  {id:"SEG-303", kind:"conduit", conduit:"C-3-3.5", firewall:"FW-303", from:"L3.5", to:"L3",
+   protocol:"any", port:"any", approved:false,
+   label:"Non-approved DMZ hosts into operations, any port",
+   detail:"Anything that reached the DMZ may carry on down into operations"},
+  {id:"SEG-304", kind:"conduit", conduit:"C-1-2", firewall:"FW-304", from:"L2", to:"L1",
+   protocol:"Modbus/TCP, DNP3", port:[502,20000], approved:false,
+   label:"Non-approved hosts to controllers, Modbus 502",
+   detail:"Any host at all may speak Modbus 502 or DNP3 20000 across the line 1 cell boundary, in either direction"}
+];
+
+function zoneIndex(id){for(var i=0;i<ZONES.length;i++)if(ZONES[i].id===id)return i;return -1}
+function zoneOf(level){for(var i=0;i<ZONES.length;i++)if(ZONES[i].level===String(level))return ZONES[i].id;return null}
+function flow(id){for(var i=0;i<FLOWS.length;i++)if(FLOWS[i].id===id)return FLOWS[i];return null}
+function switches(){return FLOWS.filter(function(f){return f.kind==="conduit"})}
+/* does this rule's port list cover the port in question? */
+function portMatches(rule,port){
+  if(rule.port==="any")return true;
+  if(port==null)return true;
+  var list=[].concat(rule.port);
+  for(var i=0;i<list.length;i++)if(Number(list[i])===Number(port))return true;
+  return false;
+}
+/* the approved flow that covers this source, destination and port, or null */
+function approvedFlow(from,to,port){
+  for(var i=0;i<FLOWS.length;i++){
+    var f=FLOWS[i];
+    if(f.kind!=="host"||!f.approved)continue;
+    if(f.from===from&&f.to===to&&(port==null||Number(f.port)===Number(port)))return f;
+  }
+  return null;
+}
+/* the conduits between two zones, in the order traffic meets them, nearest the source first */
+function route(from,to){
+  var i=zoneIndex(from),j=zoneIndex(to),out=[];
+  if(i<0||j<0||i===j)return out;
+  var step=i<j?1:-1;
+  for(var k=i;k!==j;k+=step)out.push(CONDUITS[Math.min(k,k+step)]);
+  return out;
+}
+/* Can this path cross the plant under these switch settings?
+     path  {from, to, approved, protocol, port}   from and to are zone ids
+     rules {"FW-301":"allow"|"deny", ...}         anything not named counts as allow
+   The first DENY on the route wins, so every combination of the four switches follows from
+   which firewalls lie on a path. An approved flow has its own fixed rule and no switch touches it. */
+function canPass(path,rules){
+  rules=rules||{};
+  var cs=route(path.from,path.to),crossed=[],unfiltered=[],i=zoneIndex(path.from),
+      step=zoneIndex(path.to)>i?1:-1,at=path.from;
+  for(var n=0;n<cs.length;n++){
+    var c=cs[n];
+    if(!c.firewall){unfiltered.push(c.id);at=ZONES[zoneIndex(at)+step].id;continue}
+    crossed.push(c.firewall);
+    if(!path.approved&&rules[c.firewall]==="deny"&&portMatches(flow(c.rule),path.port))
+      return {passed:false,stoppedAt:c.firewall,stoppedBy:c.rule,conduit:c.id,
+              crossed:crossed,unfiltered:unfiltered,reached:at};
+    at=ZONES[zoneIndex(at)+step].id;
+  }
+  return {passed:true,stoppedAt:null,stoppedBy:null,conduit:null,
+          crossed:crossed,unfiltered:unfiltered,reached:path.to};
+}
+root.NetworkModel={ZONES:ZONES,CONDUITS:CONDUITS,FLOWS:FLOWS,
+  zoneIndex:zoneIndex,zoneOf:zoneOf,flow:flow,switches:switches,
+  portMatches:portMatches,approvedFlow:approvedFlow,route:route,canPass:canPass};
+})(window);
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 (function(){
@@ -788,6 +937,7 @@ var TAGOF={"VPN-GW-01":"VPN-301","OFFICE-PC-14":"PC-401","ERP-SRV-01":"SRV-401",
 var IN_FILE={"PLC-Line1":1,"PLC-Line2":1,"RTU-Outstation-3":1,"HMI-Line1":1,"SCADA-SRV-01":1,"ENG-WS-01":1,"HIST-01":1,"OFFICE-PC-14":1,
   "IO-Module-Line2":1,"VFD-Conveyor-1":1,"SENSOR-GW-1":1,"JUMP-SRV-01":1,"PATCH-SRV-01":1,"HIST-DMZ-01":1};
 ASSETS.concat(FWS).forEach(function(a){a.tag=TAGOF[a.name]||"";a.demo=!IN_FILE[a.name]});
+var byTag={};ASSETS.concat(FWS).forEach(function(a){if(a.tag)byTag[a.tag]=a});
 /* the five AlarmOps tags, each mapped to a tag on the plant. FT-501 is a drawn device (the flow meter); the others are signal tags. */
 var ALARM_TAG={sealer_temperature:"TT-101",conveyor_speed:"ST-101",tank_level:"LT-501",pump_pressure:"PT-501",flow_rate:"FT-501"};
 var SIGS=[
@@ -831,21 +981,21 @@ function paintEq(){
 
 
 var RECS=[
- {title:"Modbus write coil to PLC from an office PC",v:"escalate",p:"P1",t:"T0835",src:"10.10.50.7",dst:"10.10.20.11",
+ {title:"Modbus write coil to PLC from an office PC",v:"escalate",p:"P1",t:"T0835",src:"10.10.50.7",dst:"10.10.20.11",port:502,proto:"Modbus/TCP",
   d:"Modbus/TCP function code 5 sent from 10.10.50.7 to 10.10.20.11, coil 12, value ON. The source has never written to this PLC before."},
- {title:"PLC program download outside the change window",v:"escalate",p:"P1",t:"T0843.001",src:"10.10.40.8",dst:"10.10.20.12",
+ {title:"PLC program download outside the change window",v:"escalate",p:"P1",t:"T0843.001",src:"10.10.40.8",dst:"10.10.20.12",port:502,proto:"Modbus/TCP",
   d:"Full program download to 10.10.20.12 from 10.10.40.8 at 02:40 on a Thursday. No change ticket is referenced."},
- {title:"Setpoint written outside its normal range",v:"escalate",p:"P1",t:"T0836",src:"10.10.30.5",dst:"10.10.20.11",
+ {title:"Setpoint written outside its normal range",v:"escalate",p:"P1",t:"T0836",src:"10.10.30.5",dst:"10.10.20.11",port:502,proto:"Modbus/TCP",
   d:"Modbus function code 6 from the HMI to 10.10.20.11, register 40021 set to 9500. Normal range is 1000 to 3000."},
- {title:"New remote session to the HMI from the VPN pool",v:"investigate",p:"P2",t:"T0822",src:"10.10.90.14",dst:"10.10.30.5",unk:{label:"VPN pool host",level:"5"},
+ {title:"New remote session to the HMI from the VPN pool",v:"investigate",p:"P2",t:"T0822",src:"10.10.90.14",dst:"10.10.30.5",port:3389,proto:"RDP",unk:{label:"VPN pool host",level:"5"},
   d:"RDP session from 10.10.90.14 to 10.10.30.5. The account has not logged in to this HMI before."},
- {title:"Modbus unit ID and port sweep from a new host",v:"investigate",p:"P2",t:"T0846.001",src:"10.10.50.99",dst:"10.10.20.11",unk:{label:"New host",level:"4"},
+ {title:"Modbus unit ID and port sweep from a new host",v:"investigate",p:"P2",t:"T0846.001",src:"10.10.50.99",dst:"10.10.20.11",port:502,proto:"Modbus/TCP",unk:{label:"New host",level:"4"},
   d:"Host 10.10.50.99 probed 10.10.20.0/24 on ports 502, 44818 and 20000 and tried Modbus unit IDs 1 to 247 within 90 seconds."},
- {title:"DNP3 responses from an unknown outstation",v:"investigate",p:"P2",t:"T1692.002",src:"10.10.20.99",dst:"10.10.30.10",unk:{label:"Unknown outstation",level:"1"},
+ {title:"DNP3 responses from an unknown outstation",v:"investigate",p:"P2",t:"T1692.002",src:"10.10.20.99",dst:"10.10.30.10",port:20000,proto:"DNP3",unk:{label:"Unknown outstation",level:"1"},
   d:"The SCADA master received unsolicited DNP3 responses from 10.10.20.99, which is not a configured outstation."},
- {title:"Repeated failed OPC UA logins",v:"investigate",p:"P2",t:"T0822",src:"10.10.50.7",dst:"10.10.30.10",
+ {title:"Repeated failed OPC UA logins",v:"investigate",p:"P2",t:"T0822",src:"10.10.50.7",dst:"10.10.30.10",port:4840,proto:"OPC UA",
   d:"47 failed OPC UA session activations against 10.10.30.10 within 5 minutes from 10.10.50.7, using different usernames."},
- {title:"Engineering workstation reading PLC registers",v:"likely_benign",p:"P4",t:"",src:"10.10.40.8",dst:"10.10.20.11",
+ {title:"Engineering workstation reading PLC registers",v:"likely_benign",p:"P4",t:"",src:"10.10.40.8",dst:"10.10.20.11",port:502,proto:"Modbus/TCP",
   d:"Modbus function code 3 from 10.10.40.8 to 10.10.20.11, 120 registers, polled every 5 seconds for 20 minutes."}
 ];
 var VLABEL={escalate:"Escalate",investigate:"Investigate",likely_benign:"Likely benign"};
@@ -860,6 +1010,11 @@ var WRITE_FC={5:1,6:1,15:1,16:1};
 var HI_SEAL=190,SP_NORMAL=160;
 var st={sp:SP_NORMAL,pv:159.7,rpm:1200,ppm:42,heater:1,conv:1,robot:1};
 var hist=[],queue=[],rows=[],tid=0x1A00,lastTid=0,step=0,ticks=0;
+var NM=window.NetworkModel;
+/* The four switches, as found: every one ALLOW, which is the state these paths were actually in,
+   so a first-time visitor still sees an alarm. SIMULATED; demo rules, not advice for a real plant. */
+var SEG={};NM.switches().forEach(function(r){SEG[r.firewall]="allow"});
+var segEvent=null;
 var alarms=[],alarmSeq=0,firstOut=null,active=null,selRec=null,scan={addrs:[],frames:[]},scene3d=null,curTab="live";
 
 var samplePromise=(window.claude&&typeof window.claude.use==="function")
@@ -871,7 +1026,15 @@ function adu(id,pdu){return w(id).concat([0,0],w(pdu.length+1),[1],pdu)}
 function clock(){var d=new Date();function p(n){return (n<10?"0":"")+n}return p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds())}
 function rnd(a){return (Math.random()*2-1)*a}
 function f1(n){return n.toFixed(1)}
-function mk(src,dst,fc,pdu,text,isResp,extra){var f={src:src,dst:dst,fc:fc,pdu:pdu,text:text,resp:isResp};if(extra)for(var k in extra)f[k]=extra[k];return f}
+function mk(src,dst,fc,pdu,text,isResp,extra){var f={src:src,dst:dst,fc:fc,pdu:pdu,text:text,resp:isResp};if(extra)for(var k in extra)f[k]=extra[k];
+  if(!isResp)f.path=pathBetween(src,dst,502);return f}
+/* the path a frame takes, in the form the segmentation model wants: two zones, a port, and whether
+   an approved flow covers it. An approved flow has its own fixed rule, so no switch can stop it. */
+function pathBetween(src,dst,port,level){
+  var s=byIp[src.ip]||byName[src.name]||null,d=byIp[dst.ip]||byName[dst.name]||null;
+  return {from:NM.zoneOf(s?s.level:(level||"4")),to:NM.zoneOf(d?d.level:(level||"4")),port:port,
+          approved:!!(s&&d&&NM.approvedFlow(s.name,d.name,port))};
+}
 
 function nextPoll(){
   var pattern=[0,1,0,1,2,3],s=pattern[step%pattern.length];step++;
@@ -923,10 +1086,43 @@ function detect(f){
 function emit(f){
   if(f.resp){f.tid=lastTid}else{tid=(tid+1)&0xFFFF;f.tid=lastTid=tid}
   f.time=clock();f.hex=hx(adu(f.tid,f.pdu));
+  /* a frame the firewalls deny never reaches PLC-101: no effect on the plant, nothing for the
+     mirror-port sensor to see, and no reply, so the queued response is dropped with it */
+  var blocked=f.resp?null:(f.path?segOf(f.path):null);
+  if(blocked&&!blocked.passed){
+    f.deny=blocked.stoppedAt;f.denyRule=blocked.stoppedBy;
+    if(queue.length&&queue[0].resp)queue.shift();
+    segBlocked(f,blocked);
+    rows.unshift(f);if(rows.length>60)rows.pop();
+    return;
+  }
   if(f.effect)f.effect();
   if(alarmOf("scan")&&!f.resp&&f.kind==="scan")f.flag=true;
   detect(f);
   rows.unshift(f);if(rows.length>60)rows.pop();
+}
+/* SIMULATED. What the page shows when the firewalls stop an attempt: an informational entry, not
+   an alarm, because nothing in the plant changed. The note is always pre-written. The live AI is
+   never asked about this, because there are no process consequences for it to describe. */
+var SEG_NOTE={
+  setpoint:["tried to write 240 \u00b0C to the sealer setpoint on PLC-101",
+            "The setpoint did not change, the sealer is still at its normal 160 \u00b0C, and no process alarm fired. Nothing on line 1 is affected."],
+  robot:["tried to force the packing robot enable coil off on PLC-101",
+         "The robot is still running and no process alarm fired. Nothing on line 1 is affected."],
+  scan:["tried to read address ranges on PLC-101",
+        "The controller answered nothing, because nothing reached it. No process value changed."]
+};
+function segBlocked(f,r){
+  var k=f.kind||"scan",n=SEG_NOTE[k]||SEG_NOTE.scan,rule=NM.flow(r.stoppedBy);
+  segEvent={fw:r.stoppedAt,rule:r.stoppedBy,kind:k,time:clock(),src:f.src,reached:r.reached,
+    label:rule?rule.label:"",
+    trace:{src:f.src.ip,dst:f.dst.ip,cvar:"--mute",stopAt:r.stoppedAt,
+           unk:byIp[f.src.ip]?null:{label:f.src.name,level:"4"}},
+    who:"Not seen by SentinelOT \u00b7 simulated firewall log",
+    note:f.src.name+" "+n[0]+". "+r.stoppedAt+" denied it under rule "+r.stoppedBy+
+         " and no frame reached the controller.\n\n"+n[1]+
+         "\n\nThe frames never reached the mirror port, so the Modbus sensor saw nothing: this entry comes from the firewall log, not from SentinelOT. Worth asking why that host is addressing a controller at all. The attempt is the finding, not the result."};
+  active=null;refresh();
 }
 function simulate(){
   ticks++;
@@ -959,9 +1155,12 @@ var KINDS={
   setpoint:{tag:"TIC-101",txt:"SP changed",sev:"crit"},
   robot:{tag:"RB-101",txt:"Robot stopped",sev:"crit"},
   scan:{tag:"PLC-101",txt:"Register scan",sev:"warn"},
-  temp:{tag:"TT-101",txt:"High 190 °C",sev:"warn"}
+  temp:{tag:"TT-101",txt:"High 190 °C",sev:"warn"},
+  /* not an alarm: nothing is wrong in the plant, so this window never flashes,
+     is never marked first out, and is not counted in the active total */
+  seg:{tag:"FW-30x",txt:"Blocked",sev:"info"}
 };
-var KIND_ORDER=["setpoint","robot","scan","temp"];
+var KIND_ORDER=["setpoint","robot","scan","temp","seg"];
 function alarmOf(kind){for(var i=0;i<alarms.length;i++)if(alarms[i].kind===kind)return alarms[i];return null}
 function alive(a){return alarms.indexOf(a)>=0}
 function raise(a){
@@ -1000,9 +1199,26 @@ function stateWord(a){
 }
 function paintAlarm(){
   var box=$("#alarm");box.textContent="";
+  if(!active&&segEvent){
+    /* informational, not an alarm: no severity flag, no flashing, no acknowledge */
+    var g=segEvent;
+    box.className="alarm quiet";
+    box.appendChild(el("span","badge g-rec","Blocked by "+g.fw));
+    box.appendChild(el("h3",null,"Stopped at the firewall, not by SentinelOT"));
+    box.appendChild(factsEl([["Time",g.time],["Source",g.src.ip?g.src.ip+" ("+g.src.name+")":g.src.name],
+      ["Denied by",g.fw+" \u00b7 rule "+g.rule],["Rule",g.label],
+      ["Got as far as",NM.ZONES[NM.zoneIndex(g.reached)].name+" (level "+NM.ZONES[NM.zoneIndex(g.reached)].level+")"],
+      ["Reached PLC-101","No frame arrived"]]));
+    var ai=el("div","ai");ai.appendChild(el("p","who",g.who));ai.appendChild(el("p","text",g.note));
+    box.appendChild(ai);
+    var cl=el("button","btn ghost ack","Clear");cl.type="button";
+    cl.addEventListener("click",function(){segEvent=null;refresh()});box.appendChild(cl);
+    return;
+  }
   if(!active){
     box.className="alarm quiet";
-    box.appendChild(el("p",null,"No active alarm. Only HMI-Line1 and the historian are talking to the PLC."));
+    box.appendChild(el("p",null,"No active alarm. Only HMI-Line1 and the historian are talking to the PLC."
+      +(Object.keys(SEG).some(function(k){return SEG[k]==="deny"})?" Some firewall rules are set to DENY.":"")));
     return;
   }
   var a=active;
@@ -1036,35 +1252,85 @@ function restore(a){
   a.cleared=true;refresh();paint();
 }
 function resetAlarms(){
+  segEvent=null;
   alarms=alarms.filter(function(a){return !(a.ack&&a.cleared)});
   firstOut=null;if(!alarms.length)alarmSeq=0;
   if(alarms.indexOf(active)<0)active=alarms.length?alarms[alarms.length-1]:null;
   refresh();
 }
 function selectAlarm(a){active=a;refresh()}
+/* launching an attack clears the previous blocked note, so the panel shows this attempt */
+function clearSeg(){segEvent=null}
+/* the three live attacks and the eight recorded alerts as paths, so one model drives the
+   switch summary, the 3D traces and the recorded detail */
+function attackPath(kind){return pathBetween(kind==="scan"?NEWHOST:OFFICE,PLC,502,"4")}
+function recPath(a){
+  var src=byIp[a.src]||{ip:a.src,name:a.src},dst=byIp[a.dst]||{ip:a.dst,name:a.dst};
+  return pathBetween(src,dst,a.port,a.unk?a.unk.level:"4");
+}
+function segOf(path){return NM.canPass(path,SEG)}
+function buildRules(){
+  var ul=$("#rules");ul.textContent="";
+  NM.switches().forEach(function(r){
+    var li=el("li"),lb=el("div","lb");
+    lb.appendChild(el("b",null,r.firewall+" \u00b7 rule "+r.id));
+    lb.appendChild(document.createTextNode(r.label));
+    var b=el("button","swt");b.type="button";b.setAttribute("data-fw",r.firewall);
+    b.addEventListener("click",function(){
+      SEG[r.firewall]=SEG[r.firewall]==="deny"?"allow":"deny";refresh();
+    });
+    li.appendChild(lb);li.appendChild(b);
+    li.appendChild(el("p","dt",r.detail+" \u00b7 "+r.protocol+" \u00b7 port "+(r.port==="any"?"any":[].concat(r.port).join(", "))));
+    ul.appendChild(li);
+  });
+}
+function paintRules(){
+  NM.switches().forEach(function(r){
+    var b=$('.swt[data-fw="'+r.firewall+'"]'),on=SEG[r.firewall]!=="deny";
+    b.textContent=on?"ALLOW":"DENY";b.setAttribute("aria-pressed",on?"true":"false");
+    b.setAttribute("aria-label",r.label+": "+(on?"allow":"deny"));
+  });
+  var stop=0;
+  ["setpoint","robot","scan"].forEach(function(k){if(!segOf(attackPath(k)).passed)stop++});
+  var recStop=RECS.filter(function(a){return !segOf(recPath(a)).passed}).length;
+  var sum=$("#seg-sum");sum.textContent="";
+  sum.appendChild(el("b",null,stop+" of 3 live attacks stop"));
+  sum.appendChild(document.createTextNode(" \u00b7 "+recStop+" of 8 recorded alerts would stop \u00b7 simulated"));
+}
 function buildWindows(){
   var ul=$("#windows");ul.textContent="";
   KIND_ORDER.forEach(function(k){
     var K=KINDS[k],li=el("li"),b=el("button","win "+K.sev);b.type="button";b.setAttribute("data-kind",k);
     b.appendChild(el("span","w-tag",K.tag));b.appendChild(el("span","w-txt",K.txt));b.appendChild(el("span","w-st","NORMAL"));b.appendChild(el("span","w-fo","FIRST OUT"));
-    b.addEventListener("click",function(){var a=alarmOf(k);if(a)selectAlarm(a)});
+    b.addEventListener("click",function(){
+      if(k==="seg"){if(segEvent){active=null;refresh()}return}
+      var a=alarmOf(k);if(a)selectAlarm(a);
+    });
     li.appendChild(b);ul.appendChild(li);K.el=b;
   });
 }
 function paintWindows(){
   KIND_ORDER.forEach(function(k){
     var K=KINDS[k],a=alarmOf(k),b=K.el;
+    if(k==="seg"){
+      b.className="win info"+(segEvent?" on":"")+(segEvent&&!active?" sel":"");
+      b.querySelector(".w-tag").textContent=segEvent?segEvent.fw:"FW-30x";
+      b.querySelector(".w-st").textContent=segEvent?"INFO \u00b7 NOT AN ALARM":"NORMAL";
+      b.setAttribute("aria-label","Segmentation: "+(segEvent?segEvent.fw+" blocked an attempt. Informational, not an alarm.":"nothing blocked"));
+      return;
+    }
     b.className="win "+K.sev+(a?(a.cleared?" ret":" on"+(a.ack?"":" unack")):"")+(a&&a===firstOut?" fo":"")+(a&&a===active?" sel":"");
     b.querySelector(".w-st").textContent=a?"#"+a.seq+" "+stateWord(a):"NORMAL";
     b.setAttribute("aria-label",K.tag+" "+K.txt+": "+(a?"seq "+a.seq+", "+stateWord(a)+(a===firstOut?", first out":""):"normal"));
   });
+  /* the informational window is deliberately left out of this count: it is not an alarm */
   var n=alarms.length,un=alarms.filter(function(a){return !a.ack}).length,st=$("#an-st");
   st.textContent=n?n+" ACTIVE · "+un+" UNACK"+(firstOut?" · FIRST OUT: "+KINDS[firstOut.kind].tag+" "+KINDS[firstOut.kind].txt.toUpperCase():""):"NO ALARM";
   $("#an-ack").disabled=!un;$("#an-reset").disabled=!n;
 }
 /* every view of the alarms in one place */
 function refresh(){
-  paintAlarm();paintWindows();setButtons();paintEq();paintRecs();
+  paintRules();paintAlarm();paintWindows();setButtons();paintEq();paintRecs();
   if(scene3d)scene3d.update();
 }
 function setButtons(){
@@ -1104,13 +1370,14 @@ function paint(){
   $("#l-hi").setAttribute("y1",ty(HI_SEAL));$("#l-hi").setAttribute("y2",ty(HI_SEAL));
   var log=$("#log"),frag=document.createDocumentFragment();
   rows.forEach(function(f){
-    var r=el("div","row"+(f.flag?" flag":"")),m=el("div","meta");
+    var r=el("div","row"+(f.flag?" flag":"")+(f.deny?" deny":"")),m=el("div","meta");
     m.appendChild(el("span",null,f.time));
     if(f.note){m.appendChild(el("span","fc",f.text))}
     else{
       m.appendChild(el("span",null,f.src.ip+" to "+f.dst.ip));
       m.appendChild(el("span","fc","FC"+("0"+f.fc).slice(-2)+(f.pdu[0]&0x80?" error":"")));
       m.appendChild(el("span",null,f.text));
+      if(f.deny)m.appendChild(el("span","fc","DENY at "+f.deny+" \u00b7 did not reach PLC-101"));
     }
     r.appendChild(m);if(f.hex)r.appendChild(el("div","hex",f.hex));frag.appendChild(r);
   });
@@ -1130,6 +1397,7 @@ function tick(){
 document.querySelectorAll(".atk").forEach(function(b){
   b.addEventListener("click",function(){
     var kind=b.getAttribute("data-atk");if(queue.length||alarmOf(kind))return;
+    clearSeg();
     selRec=null;paintRecs();if(scene3d)scene3d.update();
     ATTACKS[b.getAttribute("data-atk")]();setButtons();
     if(window.matchMedia("(max-width:860px)").matches)$("#stage").scrollIntoView({block:"start",behavior:"smooth"});
@@ -1157,6 +1425,7 @@ RECS.forEach(function(a){
   b.appendChild(el("i","dot v-"+a.v));b.appendChild(el("span",null,a.title));
   b.addEventListener("click",function(){if(alarms.length)return;selRec=(selRec===a?null:a);paintRecs();if(scene3d)scene3d.update()});
   a.btn=b;a.trace={src:a.src,dst:a.dst,cvar:VVAR[a.v],unk:a.unk||null};
+  Object.defineProperty(a.trace,"stopAt",{get:function(){return segOf(recPath(a)).stoppedAt}});
   $("#recs").appendChild(b);
 });
 function paintRecs(){
@@ -1167,7 +1436,13 @@ function paintRecs(){
   d.appendChild(el("span","badge v-"+a.v,VLABEL[a.v]+", priority "+a.p));
   d.appendChild(el("h3",null,a.title));
   d.appendChild(el("p",null,a.d));
-  d.appendChild(factsEl([["From",hostName(a.src,a)],["To",hostName(a.dst,a)],["ATT&CK for ICS",a.t||"No technique mapped"],["Crossed",fwNames(a.trace)]]));
+  var r=segOf(recPath(a));
+  d.appendChild(factsEl([["From",hostName(a.src,a)],["To",hostName(a.dst,a)],
+    ["Protocol",a.proto+" \u00b7 port "+a.port],
+    ["ATT&CK for ICS",a.t||"No technique mapped"],["Crossed",fwNames(a.trace)],
+    ["Under these rules",r.passed
+      ?(recPath(a).approved?"Passes: an approved flow, which no switch touches":"Passes: no rule set to DENY on its route")
+      :"Stopped at "+r.stoppedAt+" (rule "+r.stoppedBy+")"]]));
 }
 function showCard(s){
   var c=$("#card");c.textContent="";
@@ -1553,11 +1828,20 @@ function build(){
       });
     }
     /* the Limits tab shows its own path; What-if shows no path; the other tabs show the alarm or the picked alert */
-    var traces=simOn?[]:((curTab==="lim"&&LIM.trace)?[LIM.trace]:(alarms.length?alarms.map(function(a){return a.trace}):(selRec?[selRec.trace]:[])));
+    var traces=simOn?[]:((curTab==="lim"&&LIM.trace)?[LIM.trace]
+      :(alarms.length?alarms.map(function(a){return a.trace})
+      :(segEvent?[segEvent.trace]:(selRec?[selRec.trace]:[]))));
     traces.forEach(function(tr,ti){
-      var col=css(tr.cvar),dst=traceEnd(tr,"dst"),src=traceEnd(tr,"src"),from,to=dst.center.clone();
-      dst.mat.color.set(col);dst.lab.el.classList.add("hot");
-      crossed(tr).forEach(function(f){f.mat.color.set(col);f.lab.el.classList.add("hot")});
+      /* a denied path ends at the firewall that stopped it: the destination is never reached, so it
+         is not lit, and neither is any firewall further down the route */
+      var stop=tr.stopAt?byTag[tr.stopAt]:null;
+      var col=css(stop?"--alarm":tr.cvar),dst=traceEnd(tr,"dst"),src=traceEnd(tr,"src"),from,
+          to=(stop?stop.center:dst.center).clone();
+      if(stop){stop.mat.color.set(col);stop.lab.el.classList.add("hot");stop.lab.over=stop.tag+" \u00b7 DENY"}
+      else{
+        dst.mat.color.set(col);dst.lab.el.classList.add("hot");
+        crossed(tr).forEach(function(f){f.mat.color.set(col);f.lab.el.classList.add("hot")});
+      }
       if(src){src.mat.color.set(col);src.lab.el.classList.add("hot");from=src.center.clone()}
       else{
         var y=levelY[tr.unk.level],gp=new THREE.Vector3(SLAB_W/2-0.8,y+0.31,SLAB_D/2-0.75);
@@ -1751,7 +2035,11 @@ window.__sentinelot={
   live:function(){return JSON.parse(JSON.stringify({st:st,queue:queue.length,rows:rows.length,tab:curTab,
     active:active?{title:active.title,time:active.time,kind:active.kind,sev:active.sev,note:active.note}:null,
     alarms:alarms.map(function(a){return {kind:a.kind,seq:a.seq,ack:a.ack,cleared:a.cleared,count:a.count,firstOut:a===firstOut}}),
-    firstOut:firstOut?firstOut.kind:null}))},
+    firstOut:firstOut?firstOut.kind:null,
+    seg:JSON.parse(JSON.stringify(SEG)),
+    blocked:segEvent?{fw:segEvent.fw,rule:segEvent.rule,kind:segEvent.kind,reached:segEvent.reached}:null}))},
+  rules:function(){return JSON.parse(JSON.stringify(SEG))},
+  setRule:function(fw,v){SEG[fw]=v;refresh()},
   sim:function(){return JSON.parse(JSON.stringify({inp:SB.inp,st:SB.st,view:SB.view,proposed:LIM.proposed}))}
 };
 (function(){
@@ -1762,11 +2050,11 @@ window.__sentinelot={
   b.addEventListener("click",function(){var n=dark()?"light":"dark";root.setAttribute("data-theme",n);try{localStorage.setItem("sot-theme",n)}catch(e){}lab()});
   lab();if(mq)mq.addEventListener("change",lab);
 })();
-buildWindows();buildEq();
+buildRules();buildWindows();buildEq();
 $("#an-ack").addEventListener("click",ackAll);$("#an-reset").addEventListener("click",resetAlarms);
 for(var i=0;i<40;i++)simulate();
 for(var j=0;j<8;j++)emit(nextPoll());
-paint();paintRecs();paintAlarm();paintWindows();setButtons();paintEq();
+paint();paintRecs();paintRules();paintAlarm();paintWindows();setButtons();paintEq();
 try{
   if(!window.THREE)throw new Error("no three");
   scene3d=build();
