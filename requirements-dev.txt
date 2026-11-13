@@ -1,0 +1,4 @@
+# Extra packages for the page tests (tests/test_page_model.py). Not needed to run the app.
+# After installing, download the browser once:  python -m playwright install chromium
+-r requirements.txt
+playwright

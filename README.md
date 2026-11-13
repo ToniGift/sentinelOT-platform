@@ -117,6 +117,8 @@ Nothing is stored; a "change" exists only in the reply. The routes accept GET on
 - **Recorded:** the "Recorded" tab holds eight alerts from the synthetic scenarios with the verdicts SentinelOT returned in its evaluation run on 6 October 2026. These are real outputs of the triage module on synthetic inputs, not new runs.
 - **Simulated:** the plant, every host, every address, the process values and the alarm-limit dataset are invented. The page carries a "Simulated data, no real plant connected" label on the demo board and a footer that lists what was added for the demo.
 - **Alarm limits:** the "Limits" tab sends edited limits to `/api/alarmops/compare` and shows the detection rate, the false alarms and whether the change passes or is blocked. Opened without the server, it shows saved results labelled "Recorded".
+- **What-if:** the fourth tab is a process sandbox. Sliders set the sealer setpoint, the conveyor speed, the tank level and the pump, and the plant reacts: the sealer bars glow, the tank fill rises, the conveyor motor spins faster, and each affected device lights in the warning or alarm colour with its name and live value. Every state is written out in words as well, so colour is never the only signal. The same live values are compared against the current alarm limits and the proposed ones side by side, and when the proposed limits stay silent where the current ones raise an alarm the page says so in a sentence. The sandbox is a **simplified demo model, not plant physics**: the sealer lag, the pack arrival and robot rate, the pump pressure and the flow are invented rules, stated next to the controls and in the footer. It runs entirely in the browser, so it also works when the page is opened as a plain file. While the tab is open the live Modbus traffic pauses; leaving it restores the live values and any active alarm exactly as they were.
+- **Moving the view:** the 3D plant can be panned as well as turned. Shift+drag or right-drag moves the view, two fingers move it on a touch screen (one finger still scrolls the page), PageUp and PageDown and the Up and Down buttons step it, and the L5 to L0 buttons glide to a level while keeping the zoom.
 
 How the attack and the alarm limit relate, in one sentence: the attack does not feed AlarmOps and AlarmOps does not watch traffic; the page shows that the 190 °C sealer limit that catches the attack is the same limit AlarmOps refuses to let anyone widen to 250 °C.
 
@@ -245,12 +247,13 @@ sentinelot-platform/
 Two suites, run separately because AlarmOps keeps its own configuration:
 
 ```
-pip install -r requirements.txt -r alarmops/requirements-dev.txt
-python -m pytest              # platform: 47 tests
+pip install -r requirements-dev.txt -r alarmops/requirements-dev.txt
+python -m playwright install chromium      # for the page tests only
+python -m pytest              # platform: 63 tests
 python -m pytest alarmops     # AlarmOps: 86 tests
 ```
 
-The platform suite covers the API and its rate limits, the guards and code checks, the orchestrator with mocked models, the held-out scenario labels, the lab feeds (Modbus parsing, the sniffer rule, the Elasticsearch field mapping, dry run), the alarm-limit routes and every number in the results table, that `plant/` leaves the AlarmOps data unchanged, and that the recorded results embedded in the page match the API. No test calls a model or the network. The AlarmOps suite covers its engine, rules, replay, gate, scripts, CI configuration and web page.
+The platform suite covers the API and its rate limits, the guards and code checks, the orchestrator with mocked models, the held-out scenario labels, the lab feeds (Modbus parsing, the sniffer rule, the Elasticsearch field mapping, dry run), the alarm-limit routes and every number in the results table, that `plant/` leaves the AlarmOps data unchanged, and that the recorded results embedded in the page match the API. It also drives the showcase page itself in a headless browser (`tests/test_page_model.py`): the What-if model's rules, a missed alarm for each of the five tags, and that leaving the sandbox restores the live plant and its alarm. Those 16 page tests need Playwright, which is in `requirements-dev.txt` and not in `requirements.txt`; without it they are skipped, and `pytest.ini` sets `-ra` so every skip is listed with its reason in the summary and never looks like a pass. No test calls a model or the network. The AlarmOps suite covers its engine, rules, replay, gate, scripts, CI configuration and web page.
 
 ## Limits and honest caveats
 
