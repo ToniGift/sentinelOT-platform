@@ -724,11 +724,21 @@ def test_at_phone_width_only_the_levels_that_matter_keep_their_plates(browser):
     page.close()
 
 
-def test_wide_screens_still_show_every_plate(page):
-    page.wait_for_timeout(1200)
-    shown = [p["text"] for p in visible_plates(page) if not p["level"]]
+def test_wide_screens_are_not_under_the_phone_plate_rule(browser):
+    """A wide screen shows the plates a phone hides. Front view, because the plant turns by
+    itself and the collision handling hides a plate that cannot be nudged clear, so which few
+    are missing depends on the angle."""
+    page = open_page(browser)
+    page.click("#front")                                  # stops the rotation, fixes the angle
+    page.wait_for_timeout(1500)
+    plates = [p for p in visible_plates(page) if not p["level"]]
+    shown = [p["text"] for p in plates]
     for tag in ("PLC-101", "SRV-401", "GW-101", "FW-301", "RB-101"):
-        assert any(t.startswith(tag) for t in shown), tag
+        assert any(t.startswith(tag) for t in shown), (tag, shown)
+    assert len(shown) >= 24, shown                        # not the handful a phone keeps
+    assert all(p["size"] >= 11 for p in plates)
+    assert page.errors == []
+    page.close()
 
 
 def test_the_annunciator_is_on_the_first_screen_beside_the_stage(browser):
@@ -957,4 +967,141 @@ def test_a_phone_always_keeps_the_firewalls_and_the_controller(browser):
             apart = (a["x"] + a["w"] <= b["x"] or b["x"] + b["w"] <= a["x"]
                      or a["y"] + a["h"] <= b["y"] or b["y"] + b["h"] <= a["y"])
             assert apart, (a["text"], b["text"])
+    page.close()
+
+
+# ---------------- getting back to the trace on a phone ----------------
+
+def phone_page(browser, **kw):
+    p = browser.new_page(viewport={"width": 390, "height": 844}, **kw)
+    errors = []
+    p.on("pageerror", lambda e: errors.append(str(e)))
+    p.goto(PAGE, wait_until="domcontentloaded")
+    p.wait_for_function("() => window.ProcessModel && window.__sentinelot")
+    p.errors = errors
+    return p
+
+
+def stage_view(page):
+    return page.evaluate("""() => { const s = document.querySelector('#stage').getBoundingClientRect();
+        const b = document.querySelector('#showtrace');
+        return {visible: Math.round(Math.max(0, Math.min(innerHeight, s.bottom) - Math.max(0, s.top))),
+                button: !b.hidden, y: Math.round(scrollY)} }""")
+
+
+def launch_from_the_controls(page, kind="setpoint"):
+    page.evaluate("k => document.querySelector(`[data-atk=\"${k}\"]`)"
+                  ".scrollIntoView({block: 'center'})", kind)
+    page.wait_for_timeout(600)
+    page.click(f'[data-atk="{kind}"]')
+    page.wait_for_timeout(1600)
+
+
+def test_on_a_phone_the_trace_is_on_screen_right_after_the_attack(browser):
+    """The attack buttons are below the plant, so launching one brings the plant back up."""
+    page = phone_page(browser)
+    before = stage_view(page)
+    launch_from_the_controls(page)
+    after = stage_view(page)
+    assert before["y"] == 0
+    assert after["visible"] > 300, after              # the plant, and its trace, are in view
+    assert after["button"] is False                   # so no control is needed yet
+    page.wait_for_selector("#alarm.crit", timeout=20000)
+    assert page.errors == []
+    page.close()
+
+
+def test_reading_the_alarm_loses_the_trace_and_show_trace_brings_it_back(browser):
+    page = phone_page(browser)
+    launch_from_the_controls(page)
+    page.wait_for_selector("#alarm.crit", timeout=20000)
+    page.evaluate("() => document.querySelector('#alarm').scrollIntoView({block: 'center'})")
+    page.wait_for_timeout(800)
+    gone = stage_view(page)
+    assert gone["visible"] == 0, gone                 # the alarm is taller than the screen
+    assert gone["button"] is True, gone
+    b = page.locator("#showtrace")
+    assert b.inner_text().strip().upper().endswith("SHOW TRACE")
+    assert b.bounding_box()["height"] >= 40
+    b.click()
+    page.wait_for_timeout(1200)
+    back = stage_view(page)
+    assert back["visible"] > 300, back
+    assert back["button"] is False                    # it gets out of the way again
+    assert back["y"] != gone["y"]
+    assert page.errors == []
+    page.close()
+
+
+def test_show_trace_does_not_trap_scrolling(browser):
+    page = phone_page(browser)
+    launch_from_the_controls(page)
+    page.wait_for_selector("#alarm.crit", timeout=20000)
+    page.evaluate("() => document.querySelector('#alarm').scrollIntoView({block: 'center'})")
+    page.wait_for_timeout(700)
+    page.click("#showtrace")
+    page.wait_for_timeout(1200)
+    at_stage = stage_view(page)
+    # nothing is pinned or locked
+    locked = page.evaluate("""() => { const b = getComputedStyle(document.body),
+        h = getComputedStyle(document.documentElement),
+        s = getComputedStyle(document.querySelector('#stage'));
+        return {body: b.overflow + ' ' + b.position, html: h.overflow,
+                stage: s.position} }""")
+    assert "hidden" not in locked["body"] and locked["body"].endswith("static")
+    assert "hidden" not in locked["html"]
+    assert locked["stage"] != "fixed" and locked["stage"] != "sticky"
+    # and the reader can scroll away again, in both directions
+    page.evaluate("() => scrollBy(0, 1000)")
+    page.wait_for_timeout(700)
+    away = stage_view(page)
+    assert away["y"] > at_stage["y"] and away["visible"] == 0
+    assert away["button"] is True                     # offering the way back, not forcing it
+    page.evaluate("() => scrollTo(0, 0)")
+    page.wait_for_timeout(700)
+    assert stage_view(page)["y"] == 0
+    assert page.errors == []
+    page.close()
+
+
+def test_show_trace_stays_away_when_there_is_nothing_to_show(browser):
+    page = phone_page(browser)
+    page.evaluate("() => scrollTo(0, document.body.scrollHeight)")
+    page.wait_for_timeout(700)
+    s = stage_view(page)
+    assert s["visible"] == 0 and s["button"] is False, s     # off screen, but no trace drawn
+    # a recorded alert draws one, so it appears
+    page.click("#tab-rec")
+    page.click("#recs button >> nth=0")
+    page.evaluate("() => document.querySelector('#detail').scrollIntoView({block: 'center'})")
+    page.wait_for_timeout(800)
+    assert stage_view(page)["button"] is True
+    assert page.errors == []
+    page.close()
+
+
+def test_show_trace_is_not_part_of_the_wide_layout(browser):
+    page = browser.new_page(viewport={"width": 1280, "height": 900})
+    page.goto(PAGE, wait_until="domcontentloaded")
+    page.wait_for_function("() => window.__sentinelot")
+    page.click('[data-atk="setpoint"]')
+    page.wait_for_selector("#alarm.crit", timeout=20000)
+    page.evaluate("() => scrollTo(0, document.body.scrollHeight)")
+    page.wait_for_timeout(800)
+    assert page.evaluate("""() => { const b = document.querySelector('#showtrace');
+        return b.hidden || getComputedStyle(b).display === 'none' }""") is True
+    page.close()
+
+
+def test_show_trace_still_works_under_reduced_motion(browser):
+    page = phone_page(browser, reduced_motion="reduce")
+    launch_from_the_controls(page)
+    page.wait_for_selector("#alarm.crit", timeout=20000)
+    page.evaluate("() => document.querySelector('#alarm').scrollIntoView({block: 'center'})")
+    page.wait_for_timeout(700)
+    assert stage_view(page)["button"] is True
+    page.click("#showtrace")
+    page.wait_for_timeout(600)                        # a jump, not a glide: no long settle
+    assert stage_view(page)["visible"] > 300
+    assert page.errors == []
     page.close()

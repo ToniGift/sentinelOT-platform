@@ -242,6 +242,17 @@ button,input,select{font-family:inherit}
 
 .swt{font-family:var(--head);font-weight:800;letter-spacing:.08em;font-size:15px;min-width:74px;padding:5px 10px;border:1px solid var(--rule);background:var(--panel);color:var(--ink);cursor:pointer}
 .swt[aria-pressed="false"]{background:var(--ink);color:var(--bg)}
+/* On a narrow screen the plant sits above the controls, so reading a tall alarm scrolls the trace
+   off the top. This brings it back. It only appears while there is a trace to see and the plant is
+   off screen, it scrolls once and lets go, and it never pins or locks the page. */
+.tracebtn{position:fixed;right:12px;bottom:12px;z-index:30;min-height:44px;padding:10px 14px;
+  font-family:var(--head);font-weight:800;letter-spacing:.07em;text-transform:uppercase;font-size:15px;
+  border:2px solid var(--rule);background:var(--panel);color:var(--ink);cursor:pointer;
+  margin-bottom:env(safe-area-inset-bottom,0px)}
+.tracebtn::before{content:"\2191";margin-right:7px;font-family:var(--mono);font-weight:400}
+.tracebtn:hover{background:var(--ink);color:var(--bg)}
+.tracebtn[hidden]{display:none}
+@media (min-width:1001px){.tracebtn{display:none}}
 .segsum{font-family:var(--mono);font-size:12.5px;color:var(--mute);border-top:1px solid var(--rule);padding-top:7px}
 .segsum b{color:var(--ink);font-weight:500}
 .row.deny{box-shadow:inset 4px 0 0 var(--mute);background:transparent}
@@ -609,6 +620,7 @@ footer p{margin:0;max-width:110ch}
     </section>
 
   </div>
+  <button type="button" class="tracebtn" id="showtrace" hidden>Show trace</button>
 </section>
 
 <section class="sec" id="equipment">
@@ -1296,6 +1308,20 @@ function resetAlarms(){
   refresh();
 }
 function selectAlarm(a){active=a;refresh()}
+/* is there anything drawn on the plant right now that the reader would want to look at? */
+function traceLive(){
+  return !!(alarms.length||segEvent||selRec||(curTab==="lim"&&LIM.trace));
+}
+var stageSeen=true;
+function paintTraceBtn(){
+  var b=$("#showtrace");if(!b)return;
+  var narrowNow=!window.matchMedia||window.matchMedia("(max-width:1000px)").matches;
+  b.hidden=!(narrowNow&&traceLive()&&!stageSeen);
+}
+function showTrace(){
+  var reduceM=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  $("#stage").scrollIntoView({block:"start",behavior:reduceM?"auto":"smooth"});
+}
 /* Bring a newly raised alarm into view in the side panel and mark it for a moment. The panel is its
    own scroll area on a wide screen; on a phone it is not, and the page is left where the reader put
    it. Under reduced motion the scroll jumps instead of gliding and the mark is steady, not flashing. */
@@ -1382,7 +1408,7 @@ function paintWindows(){
 }
 /* every view of the alarms in one place */
 function refresh(){
-  paintRules();paintAlarm();paintWindows();setButtons();paintEq();paintRecs();
+  paintRules();paintAlarm();paintWindows();setButtons();paintEq();paintRecs();paintTraceBtn();
   if(scene3d)scene3d.update();
 }
 function setButtons(){
@@ -1465,7 +1491,7 @@ function showTab(which){
   $("#pane-live").hidden=which!=="live";$("#pane-rec").hidden=which!=="rec";$("#pane-lim").hidden=which!=="lim";$("#pane-sim").hidden=which!=="sim";
   curTab=which;paintEq();
   if(which==="sim"){if(!SB.hist.length)SB.hist.push(SB.st.pv);SB.sig="";sbPaint()}
-  paint();if(scene3d)scene3d.update();
+  paint();paintTraceBtn();if(scene3d)scene3d.update();
 }
 $("#tab-sim").addEventListener("click",function(){showTab("sim")});
 $("#tab-lim").addEventListener("click",function(){showTab("lim")});
@@ -2192,9 +2218,18 @@ buildRules();buildWindows();buildEq();
    stay within one screen of each other. On a wider screen they are open. */
 if(window.matchMedia&&window.matchMedia("(max-width:767px)").matches)$("#segbox").open=false;
 $("#an-ack").addEventListener("click",ackAll);$("#an-reset").addEventListener("click",resetAlarms);
+$("#showtrace").addEventListener("click",showTrace);
+/* the button follows the plant in and out of view. No scroll handler, no sticky plant, nothing
+   that could stop the reader scrolling wherever they like. */
+if(window.IntersectionObserver){
+  new IntersectionObserver(function(es){
+    stageSeen=es[0].isIntersecting;paintTraceBtn();
+  },{threshold:0}).observe($("#stage"));
+}else stageSeen=true;
+if(window.matchMedia)window.matchMedia("(max-width:1000px)").addEventListener("change",paintTraceBtn);
 for(var i=0;i<40;i++)simulate();
 for(var j=0;j<8;j++)emit(nextPoll());
-paint();paintRecs();paintRules();paintAlarm();paintWindows();setButtons();paintEq();
+paint();paintRecs();paintRules();paintAlarm();paintWindows();setButtons();paintEq();paintTraceBtn();
 try{
   if(!window.THREE)throw new Error("no three");
   scene3d=build();
