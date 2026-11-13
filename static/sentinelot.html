@@ -180,6 +180,14 @@ button,input,select{font-family:inherit}
 .fold .foldhd:hover,.fold[open] .foldhd{color:var(--ink)}
 .fold .foldhd:focus-visible{outline:2px solid var(--live);outline-offset:2px}
 .fold .ai{border-top:0;padding-top:0;margin-top:0}
+.ai.note .lead{margin:0;white-space:pre-line;font-size:15px}
+.ai.note.open .lead{display:none}
+.ai.note:not(.open) .text,.ai.note:not(.open) .extra{display:none}
+.ai.note.short .more{display:none}
+.ai.note .more{margin-top:6px;padding:0;border:0;background:none;color:var(--ink);cursor:pointer;
+  font-family:var(--head);font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:14px;
+  text-decoration:underline;text-underline-offset:3px;min-height:34px}
+.ai.note .more:focus-visible{outline:2px solid var(--live);outline-offset:2px}
 .btnrow{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
 .btnrow .ack{margin:0}
 
@@ -410,6 +418,7 @@ footer p{margin:0;max-width:110ch}
   .btn,.swt,.sq{min-height:42px;padding-top:9px;padding-bottom:9px}
   .recs button{min-height:44px}
   .fold .foldhd{min-height:44px;font-size:15px}
+  .ai.note .more{min-height:44px}
   .lims input,.lims select,.sl .nb input{min-height:42px}
   .windows{grid-template-columns:repeat(2,minmax(0,1fr))}
   .win{min-height:84px}
@@ -1252,6 +1261,7 @@ function paintNote(a){
   if(a!==active)return;
   if(who)who.textContent=a.who;
   if(t)t.textContent=a.note;
+  var ld=$("#ai-lead");if(ld)ld.textContent=firstSentence(a.note);
 }
 function fwNames(tr){var c=crossed(tr).map(function(f){return f.name});return c.length?c.join(", "):"No firewall"}
 function factsEl(pairs){var dl=el("dl","facts");pairs.forEach(function(p){dl.appendChild(el("dt",null,p[0]));dl.appendChild(el("dd",null,p[1]))});return dl}
@@ -1264,6 +1274,24 @@ function stateWord(a){
    clears the memory, so each one arrives folded the same way. */
 var cardOpen={facts:null,note:null};
 function foldDefault(){return !(window.matchMedia&&window.matchMedia("(max-width:767px)").matches)}
+/* the analyst note is the point of the page, so it is never folded away. On a phone its first
+   sentence is always in view and the rest is one tap away; on a wide screen it is all there. */
+function firstSentence(t){
+  t=String(t||"").trim();var m=t.match(/^[\s\S]*?[.!?](?=\s|$)/);return m?m[0]:t;
+}
+function noteBlock(who,text){
+  var ai=el("div","ai note"),w=el("p","who",who),lead=el("p","lead",firstSentence(text)),
+      full=el("p","text",text),rest=String(text||"").trim().length>firstSentence(text).length;
+  w.id="ai-who";full.id="ai-text";lead.id="ai-lead";
+  var open=cardOpen.note===null?foldDefault():cardOpen.note;
+  ai.appendChild(w);ai.appendChild(lead);ai.appendChild(full);
+  var b=el("button","more",open?"Show less":"Read the full note");b.type="button";
+  b.setAttribute("aria-controls","ai-text");b.setAttribute("aria-expanded",open?"true":"false");
+  b.addEventListener("click",function(){cardOpen.note=!(cardOpen.note===null?foldDefault():cardOpen.note);paintAlarm()});
+  ai.classList.toggle("open",open);ai.classList.toggle("short",!rest);
+  ai.appendChild(b);
+  return ai;
+}
 function fold(key,label){
   var d=document.createElement("details");d.className="fold";d.setAttribute("data-fold",key);
   d.open=cardOpen[key]===null?foldDefault():cardOpen[key];
@@ -1288,9 +1316,7 @@ function paintAlarm(){
       ["Got as far as",NM.ZONES[NM.zoneIndex(g.reached)].name+" (level "+NM.ZONES[NM.zoneIndex(g.reached)].level+")"],
       ["Reached PLC-101","No frame arrived"]]));
     box.appendChild(gd);
-    var gn=fold("note","Analyst note");
-    var ai=el("div","ai");ai.appendChild(el("p","who",g.who));ai.appendChild(el("p","text",g.note));
-    gn.appendChild(ai);box.appendChild(gn);
+    box.insertBefore(noteBlock(g.who,g.note),gd);
     var cl=el("button","btn ghost ack","Clear");cl.type="button";
     cl.addEventListener("click",function(){segEvent=null;refresh()});box.appendChild(cl);
     return;
@@ -1314,17 +1340,17 @@ function paintAlarm(){
     ["State",stateWord(a)+(a.count>1?" · "+a.count+" occurrences":"")],
     ["Time",a.time],["Rule",a.rule],["Crossed",fwNames(a.trace)]]));
   box.appendChild(det);
-  var note=fold("note","Analyst note");
-  var ai=el("div","ai"),who=el("p","who",a.who),txt=el("p","text",a.note);who.id="ai-who";txt.id="ai-text";
-  ai.appendChild(who);ai.appendChild(txt);note.appendChild(ai);
+  var note=noteBlock(a.who,a.note);
   if(a.kind==="setpoint"){
     /* the link to AlarmOps: one sentence and a jump to the blocked change. The attack itself is not sent to AlarmOps. */
     var lk=el("div","ai");
     lk.appendChild(el("p","text","The 190 °C high limit still fires because AlarmOps blocked the change that would have widened it."));
     var jb=el("button","btn ghost ack","See the blocked change");jb.type="button";
-    jb.addEventListener("click",function(){showTab("lim");limPreset()});lk.appendChild(jb);note.appendChild(lk);
+    jb.addEventListener("click",function(){showTab("lim");limPreset()});lk.appendChild(jb);
+    lk.classList.add("extra");note.insertBefore(lk,note.lastChild);
   }
-  box.appendChild(note);
+  /* the note comes straight after source and target; the extra fact rows fold below it */
+  box.insertBefore(note,det);
   var row=el("div","btnrow");
   if(!a.ack){var b=el("button","btn ack","Acknowledge");b.type="button";b.addEventListener("click",function(){ackAlarm(a)});row.appendChild(b)}
   if(!a.cleared&&a.kind!=="temp"){var r=el("button","btn ghost ack","Restore from HMI-Line1");r.type="button";r.disabled=queue.length>0;r.addEventListener("click",function(){restore(a)});row.appendChild(r)}

@@ -1228,6 +1228,8 @@ def card(page):
                 open: [...a.querySelectorAll('details.fold')].map(d => [d.dataset.fold, d.open]),
                 shown: [...a.querySelectorAll('.facts dt')].filter(vis).map(d => d.textContent),
                 note: vis(document.querySelector('#ai-text')),
+                lead: vis(document.querySelector('#ai-lead')) ? document.querySelector('#ai-lead').textContent : null,
+                more: (b => b && vis(b) ? [b.textContent, b.getAttribute('aria-expanded')] : null)(a.querySelector('.note .more')),
                 buttons: [...a.querySelectorAll('.btnrow button')].filter(vis).map(b => b.textContent)} }""")
 
 
@@ -1239,10 +1241,13 @@ def test_the_alarm_card_is_compact_on_a_phone(browser):
     c = card(page)
     assert c["sev"] and c["title"]
     assert c["shown"] == ["Source", "Target"], c                 # what an operator reads first
-    assert c["open"] == [["facts", False], ["note", False]]      # the rest folded, closed by default
-    assert c["note"] is False
+    assert c["open"] == [["facts", False]]                       # only the extra fact rows fold
+    # the analyst note is the point of the page: its first sentence is always in view
+    assert c["lead"] and c["lead"].endswith(".") and len(c["lead"]) > 40, c["lead"]
+    assert c["more"] == ["Read the full note", "false"]
+    assert c["note"] is False                                    # the rest is one tap away
     assert c["buttons"] == ["Acknowledge", "Restore from HMI-Line1"]   # never folded away
-    assert c["h"] < 844 * 0.6, c["h"]                            # well under a screen
+    assert c["h"] < 844 * 0.65, c["h"]                           # still well under a screen
     # the ids and the text the other tests read are all still in the page
     assert "TIC-101 SP changed" in page.text_content("#alarm h3")
     assert page.text_content("#ai-who") and page.text_content("#ai-text")
@@ -1256,21 +1261,25 @@ def test_the_folded_sections_open_from_the_keyboard_and_stay_open(browser):
     launch_from_the_controls(page, "robot")               # no follow-on alarm to take the card over
     page.wait_for_selector("#alarm.crit", timeout=20000)
     page.wait_for_timeout(800)
-    page.focus('#alarm details[data-fold="note"] summary')
+    page.focus("#alarm .note .more")
     page.keyboard.press("Enter")
     page.wait_for_timeout(300)
-    assert card(page)["note"] is True
+    c = card(page)
+    assert c["note"] is True and c["lead"] is None               # the full note replaces the lead
+    assert c["more"] == ["Show less", "true"]
     page.focus('#alarm details[data-fold="facts"] summary')
     page.keyboard.press("Space")
     page.wait_for_timeout(300)
     c = card(page)
-    assert c["open"] == [["facts", True], ["note", True]]
+    assert c["open"] == [["facts", True]]
     assert c["shown"] == ["Source", "Target", "Seq", "State", "Time", "Rule", "Crossed"]
     # the card is redrawn as the plant ticks: what the reader opened must stay open
     page.wait_for_timeout(3200)
-    assert card(page)["open"] == [["facts", True], ["note", True]]
+    c = card(page)
+    assert c["open"] == [["facts", True]] and c["note"] is True
     page.click("#an-ack")                                        # a full repaint
-    assert card(page)["open"] == [["facts", True], ["note", True]]
+    c = card(page)
+    assert c["open"] == [["facts", True]] and c["note"] is True
     assert page.errors == []
     page.close()
 
@@ -1280,8 +1289,8 @@ def test_the_alarm_card_is_fully_open_on_a_wide_screen(browser):
     page.click('[data-atk="setpoint"]')
     page.wait_for_selector("#alarm.crit", timeout=20000)
     c = card(page)
-    assert c["open"] == [["facts", True], ["note", True]]
-    assert c["note"] is True and len(c["shown"]) == 7
+    assert c["open"] == [["facts", True]]
+    assert c["note"] is True and c["lead"] is None and len(c["shown"]) == 7
     assert page.errors == []
     page.close()
 
@@ -1294,7 +1303,66 @@ def test_the_blocked_attempt_card_folds_the_same_way_on_a_phone(browser):
     page.wait_for_timeout(800)
     c = card(page)
     assert c["shown"] == ["Source", "Denied by"]
-    assert c["open"] == [["facts", False], ["note", False]]
+    assert c["open"] == [["facts", False]]
+    assert c["lead"].startswith("OFFICE-PC-14 tried to write")
     assert page.text_content("#alarm .who") == "Not seen by SentinelOT · simulated firewall log"
     assert page.errors == []
+    page.close()
+
+
+ANGLE_SWEEP = """() => { const out = {};
+    document.querySelectorAll('#eq tbody tr').forEach(tr => {
+      const t = tr.dataset.tag, type = tr.children[2].textContent.trim();
+      if (!t || t === '-' || type === 'Signal tag') return;
+      const lv = tr.children[3].textContent.match(/[0-9.]+/g);       // 'L5 / L4' gives both
+      lv.forEach(l => (out[l] = out[l] || []).push(t)) });
+    return out }"""
+
+
+def test_every_plate_can_be_brought_back_at_any_angle(browser):
+    """Collision handling does hide plates at some camera angles. This walks the plant round in
+    eight steps of 45 degrees, in both cameras, and at every angle jumps to each level in turn:
+    every tagged plate on that level must show, after a zoom at most. A firewall belongs to both
+    levels it joins. Reduced motion, so the level jump is immediate rather than a glide."""
+    page = browser.new_page(viewport={"width": 1280, "height": 900}, reduced_motion="reduce")
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    page.goto(PAGE, wait_until="domcontentloaded")
+    page.wait_for_function("() => window.ProcessModel && window.__sentinelot")
+    by_level = page.evaluate(ANGLE_SWEEP)
+    assert sum(len(v) for v in by_level.values()) == 31 + 4      # firewalls counted twice
+    hidden_somewhere, stuck = set(), []
+    for camera in ("#persp", "#isob"):
+        page.click(camera)
+        angles = 1 if camera == "#isob" else 8                   # the isometric view does not turn
+        for step in range(angles):
+            page.click("#front")
+            page.focus("#gl")
+            for _ in range(step * 7):                            # 7 x 0.12 rad is about 45 degrees
+                page.keyboard.press("ArrowRight")
+            page.wait_for_timeout(250)
+            shown = page.evaluate(SHOWN_PLATES)
+            hidden_somewhere |= {t for v in by_level.values() for t in v
+                                 if not any(x.startswith(t) for x in shown)}
+            for level, tags in by_level.items():
+                key = f"#levels button:text-is('L{level}')"
+                page.click(key)
+                page.wait_for_timeout(250)
+                zoom = 0
+                while True:
+                    shown = page.evaluate(SHOWN_PLATES)
+                    missing = [t for t in tags if not any(x.startswith(t) for x in shown)]
+                    if not missing or zoom == 4:
+                        break
+                    page.click("#zin")
+                    zoom += 1
+                    page.wait_for_timeout(150)
+                stuck += [(camera, step * 45, level, t) for t in missing]
+                page.click("#front")                             # undim, zoom back to 1
+                page.focus("#gl")
+                for _ in range(step * 7):
+                    page.keyboard.press("ArrowRight")
+    assert hidden_somewhere, "expected collisions to hide something at some angle"
+    assert stuck == [], stuck
+    assert errors == []
     page.close()
