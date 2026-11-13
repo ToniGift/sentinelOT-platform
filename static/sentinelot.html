@@ -90,7 +90,13 @@ button,input,select{font-family:inherit}
    Without this the firewall switches make the column taller than the stage and push the
    annunciator off the first screen. */
 .panel{grid-area:panel;border-left:1px solid var(--rule);border-bottom:1px solid var(--rule);padding:12px 14px;min-width:0;
-  height:min(clamp(430px,44vw,660px),calc(100vh - 290px));min-height:430px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-gutter:stable}
+  height:min(clamp(430px,44vw,660px),calc(100vh - 290px));min-height:430px;overflow-y:auto;overscroll-behavior:contain;
+  scrollbar-width:thin;scrollbar-gutter:stable;scroll-snap-type:y proximity}
+.panel:focus-visible{outline:2px solid var(--live);outline-offset:-2px}
+/* a new alarm is scrolled into view in the panel and marked for a moment */
+@keyframes newalarm{0%,100%{box-shadow:none}25%,75%{box-shadow:inset 0 0 0 3px var(--ink)}}
+.alarm.justin{animation:newalarm 1.6s steps(1,end) 2}
+@media (prefers-reduced-motion: reduce){.alarm.justin{animation:none;box-shadow:inset 0 0 0 3px var(--ink)}}
 .anun{grid-area:anun;padding:12px 14px;border-bottom:1px solid var(--rule);min-width:0}
 .tblock{grid-area:tblock;border-left:1px solid var(--rule);border-bottom:1px solid var(--rule);padding:12px 14px;min-width:0}
 .proc{grid-area:proc;padding:12px 14px;border-bottom:1px solid var(--rule);min-width:0}
@@ -223,10 +229,17 @@ button,input,select{font-family:inherit}
 .seg:not([open]) .hd::after{content:"+"}
 .sgh{font-family:var(--head);font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:16px}
 .rules{list-style:none;margin:8px 0;padding:0;border-top:1px solid var(--line)}
-.rules li{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)}
-.rules .lb{font-size:14px;line-height:1.3}
-.rules .lb b{font-family:var(--mono);font-weight:500;font-size:12.5px;color:var(--mute);display:block}
-.rules .dt{grid-column:1/-1;margin:0;font-family:var(--mono);font-size:11.5px;color:var(--mute)}
+/* every switch row is the same height, so the panel's scroll never cuts one in half */
+.rules li{display:grid;grid-template-columns:1fr auto;grid-template-areas:"lb sw" "dt dt";gap:2px 10px;align-items:center;padding:0;
+  height:104px;border-bottom:1px solid var(--line);scroll-snap-align:start;overflow:hidden}
+.rules .lb{grid-area:lb}
+.rules .swt{grid-area:sw}
+.rules .dt{grid-area:dt;margin:0}
+.rules .lb{display:flex;flex-direction:column;gap:2px;font-size:13.5px;line-height:1.25;min-width:0}
+.rules .lb b{font-family:var(--mono);font-weight:500;font-size:12px;color:var(--mute)}
+.rules .lb .tx{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.rules .dt{font-family:var(--mono);font-size:11.5px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
 .swt{font-family:var(--head);font-weight:800;letter-spacing:.08em;font-size:15px;min-width:74px;padding:5px 10px;border:1px solid var(--rule);background:var(--panel);color:var(--ink);cursor:pointer}
 .swt[aria-pressed="false"]{background:var(--ink);color:var(--bg)}
 .segsum{font-family:var(--mono);font-size:12.5px;color:var(--mute);border-top:1px solid var(--rule);padding-top:7px}
@@ -394,6 +407,7 @@ footer p{margin:0;max-width:110ch}
   .tools .sm{display:inline}
   .tools button{min-width:40px;padding:0 7px;font-size:14px;height:42px}
   .lab{font-size:11px;padding:0 3px}
+  .rules .dt{font-size:11px}
   .levels button{min-width:42px;height:42px;font-size:13px;padding:0 4px}
   .card{left:56px;max-width:calc(100% - 66px)}
   .sheet{margin:6px}
@@ -460,7 +474,7 @@ footer p{margin:0;max-width:110ch}
       </div>
     </div>
 
-    <div class="panel">
+    <div class="panel" id="panel" tabindex="0" role="region" aria-label="Attack controls, firewall rules and alarm detail">
       <div class="pane" id="pane-live">
         <p class="note">Each button sends simulated Modbus frames to PLC-101 (PLC-Line1) from a host that isn’t an approved master. Start a second attack before acknowledging the first and both alarms stay active.</p>
         <div class="attacks">
@@ -814,19 +828,19 @@ var FLOWS=[
   {id:"SEG-301", kind:"conduit", conduit:"C-4-5", firewall:"FW-301", from:"L5", to:"L4",
    protocol:"any", port:"any", approved:false,
    label:"Non-approved remote hosts into the plant, any port",
-   detail:"Anything arriving from the internet or the VPN pool may reach the plant networks"},
+   detail:"L5 → L4 · any protocol · any port"},
   {id:"SEG-302", kind:"conduit", conduit:"C-3.5-4", firewall:"FW-302", from:"L4", to:"L3.5",
    protocol:"any", port:"any", approved:false,
    label:"Non-approved office hosts past the DMZ, any port",
-   detail:"Any office workstation may carry on past the DMZ servers it is meant to stop at"},
+   detail:"L4 → L3.5 · any protocol · any port"},
   {id:"SEG-303", kind:"conduit", conduit:"C-3-3.5", firewall:"FW-303", from:"L3.5", to:"L3",
    protocol:"any", port:"any", approved:false,
    label:"Non-approved DMZ hosts into operations, any port",
-   detail:"Anything that reached the DMZ may carry on down into operations"},
+   detail:"L3.5 → L3 · any protocol · any port"},
   {id:"SEG-304", kind:"conduit", conduit:"C-1-2", firewall:"FW-304", from:"L2", to:"L1",
    protocol:"Modbus/TCP, DNP3", port:[502,20000], approved:false,
    label:"Non-approved hosts across the line 1 cell boundary, Modbus 502 and DNP3 20000",
-   detail:"Any host at all may speak Modbus 502 or DNP3 20000 across the line 1 cell boundary, in either direction"}
+   detail:"L2 ⇄ L1 · Modbus/TCP, DNP3 · ports 502, 20000"}
 ];
 
 function zoneIndex(id){for(var i=0;i<ZONES.length;i++)if(ZONES[i].id===id)return i;return -1}
@@ -1192,7 +1206,7 @@ function raise(a){
   a.trace=a.trace||{src:a.src.ip,dst:PLC.ip,cvar:a.sev==="crit"?"--alarm":"--warn",unk:byIp[a.src.ip]?null:{label:a.src.name,level:"4"}};
   alarms.push(a);if(!firstOut)firstOut=a;active=a;selRec=null;
   if(a.kind!=="temp")showTab("live");
-  refresh();
+  refresh();revealAlarm();
   if(a.kind==="temp"){fallback(a);return a}
   samplePromise.then(function(sample){
     if(!alive(a))return;
@@ -1220,11 +1234,12 @@ function stateWord(a){
   return a.ack?"ALARM · ACK":"ALARM · UNACK";
 }
 function paintAlarm(){
-  var box=$("#alarm");box.textContent="";
+  var box=$("#alarm"),mark=box.classList.contains("justin");box.textContent="";
+  function cls(c){box.className=c+(mark?" justin":"")}
   if(!active&&segEvent){
     /* informational, not an alarm: no severity flag, no flashing, no acknowledge */
     var g=segEvent;
-    box.className="alarm quiet";
+    cls("alarm quiet");
     box.appendChild(el("span","badge g-rec","Blocked by "+g.fw));
     box.appendChild(el("h3",null,"Stopped at the firewall, not by SentinelOT"));
     box.appendChild(factsEl([["Time",g.time],["Source",g.src.ip?g.src.ip+" ("+g.src.name+")":g.src.name],
@@ -1238,13 +1253,13 @@ function paintAlarm(){
     return;
   }
   if(!active){
-    box.className="alarm quiet";
+    cls("alarm quiet");
     box.appendChild(el("p",null,"No active alarm. Only HMI-Line1 and the historian are talking to the PLC."
       +(Object.keys(SEG).some(function(k){return SEG[k]==="deny"})?" Some firewall rules are set to DENY.":"")));
     return;
   }
   var a=active;
-  box.className="alarm "+(a.ack?"":"unack ")+(a.sev==="crit"?"crit":"warnbox");
+  cls("alarm "+(a.ack?"":"unack ")+(a.sev==="crit"?"crit":"warnbox"));
   box.appendChild(el("span","sev",a.label));
   box.appendChild(el("h3",null,a.title));
   box.appendChild(factsEl([["Seq",a.seq+(a===firstOut?" · FIRST OUT":"")+(alarms.length>1?" of "+alarms.length+" active":"")],
@@ -1281,6 +1296,21 @@ function resetAlarms(){
   refresh();
 }
 function selectAlarm(a){active=a;refresh()}
+/* Bring a newly raised alarm into view in the side panel and mark it for a moment. The panel is its
+   own scroll area on a wide screen; on a phone it is not, and the page is left where the reader put
+   it. Under reduced motion the scroll jumps instead of gliding and the mark is steady, not flashing. */
+var justInTimer=0;
+function revealAlarm(){
+  var box=$("#alarm"),p=$("#panel");if(!box||!p)return;
+  var reduceM=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if(p.scrollHeight>p.clientHeight+2){
+    var top=box.offsetTop-p.offsetTop-8;
+    if(p.scrollTo)p.scrollTo({top:top,behavior:reduceM?"auto":"smooth"});else p.scrollTop=top;
+  }
+  box.classList.remove("justin");void box.offsetWidth;box.classList.add("justin");
+  clearTimeout(justInTimer);
+  justInTimer=setTimeout(function(){box.classList.remove("justin")},3400);
+}
 /* launching an attack clears the previous blocked note, so the panel shows this attempt */
 function clearSeg(){segEvent=null}
 /* the three live attacks and the eight recorded alerts as paths, so one model drives the
@@ -1295,14 +1325,14 @@ function buildRules(){
   var ul=$("#rules");ul.textContent="";
   NM.switches().forEach(function(r){
     var li=el("li"),lb=el("div","lb");
-    lb.appendChild(el("b",null,r.firewall+" \u00b7 rule "+r.id));
-    lb.appendChild(document.createTextNode(r.label));
+    lb.appendChild(el("b",null,r.firewall+" · rule "+r.id));
+    lb.appendChild(el("span","tx",r.label));
+
     var b=el("button","swt");b.type="button";b.setAttribute("data-fw",r.firewall);
     b.addEventListener("click",function(){
       SEG[r.firewall]=SEG[r.firewall]==="deny"?"allow":"deny";refresh();
     });
-    li.appendChild(lb);li.appendChild(b);
-    li.appendChild(el("p","dt",r.detail+" \u00b7 "+r.protocol+" \u00b7 port "+(r.port==="any"?"any":[].concat(r.port).join(", "))));
+    li.appendChild(lb);li.appendChild(b);li.appendChild(el("p","dt",r.detail));
     ul.appendChild(li);
   });
 }
@@ -1965,7 +1995,10 @@ function build(){
     labs.forEach(function(l){
       if(l.cls.indexOf("level")>=0)return;
       var hot=l.el.classList.contains("hot"),lit=l.el.classList.contains("lit");
-      var keep=l.always&&(!nr||lit||hot||(focusLvl!==null&&l.asset&&
+      /* on a phone the four firewalls and PLC-101 keep their plates whatever else is hidden:
+         they are what the traces are about */
+      var always4=l.asset&&(l.asset.kind==="fw"||l.asset.tag==="PLC-101");
+      var keep=l.always&&(!nr||lit||hot||always4||(focusLvl!==null&&l.asset&&
                (l.asset.level===focusLvl||l.asset.lo===focusLvl)));
       l.el.style.display=(hot||lit||keep)?"":"none";
       l.prio=lit?3:(hot?2:1);

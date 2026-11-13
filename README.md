@@ -15,7 +15,7 @@ Start it with the commands under [Running it yourself](#running-it-yourself), th
 
 1. **Look around.** Drag the plant to turn it. The stack of hatched floors is the factory, drawn as layers: machines at the bottom, offices and the internet at the top. Every item carries a small tag plate such as `PLC-101`; click one and its name appears beside the tag. Press **Front view** to face it straight on, **Rotate plant** to let it turn by itself, or **Iso** for a flat engineering view with no perspective.
 2. **Watch the traffic.** The panel at the bottom right lists messages passing between the machines. These are Modbus/TCP frames, the language many controllers speak. Two computers are allowed to talk to the line 1 controller: the operator's screen and the historian that records readings.
-3. **Send the first attack.** On the **Live** tab, press **Raise the sealer setpoint**. An office computer with no business writing to a controller sets the heat sealer to 240 °C. A window on the annunciator panel under the plant starts flashing, the plant draws the path the command took, and the firewalls it crossed light up.
+3. **Send the first attack.** On the **Live** tab, press **Raise the sealer setpoint**. An office computer with no business writing to a controller sets the heat sealer to 240 °C. A window on the annunciator panel under the plant starts flashing, the plant draws the path the command took, and the firewalls it crossed light up. On a wide screen the side panel scrolls itself to the new alarm and marks it for a moment. That panel is its own scroll area: click it or tab to it and Page Down, the arrow keys and Home scroll it from the keyboard.
 4. **Read the alarm.** It names the source, the target, the rule that fired and the firewalls crossed, then explains in three short paragraphs what happened, what it could do to the process, and what to do first.
 5. **Send a second attack before you acknowledge the first.** **Stop the packing robot** switches a robot off. **Scan the register map** is a new computer feeling around the controller for addresses that answer. Each alarm gets its own window and a sequence number, and the one that came first is marked **First out**. A few seconds after the setpoint attack a fourth window lights by itself: the sealer has passed its 190 °C limit. First out tells you which alarm was the cause and which the consequence.
 6. **Turn a firewall rule off.** Under the attack buttons is a block of four **firewall rules**, each a switch reading **ALLOW** or **DENY**. They start as found, all ALLOW, which is the state these paths were actually in. Set **FW-303** to DENY and send the setpoint attack again. The trace now stops at FW-303 in mid-air, the plate reads `FW-303 · DENY`, the controller never lights, the log shows one frame marked *DENY at FW-303, did not reach PLC-101* with no reply after it, and **no alarm is raised at all** &mdash; because nothing happened in the plant. The annunciator still reads NO ALARM, and the fifth window is informational, not an alarm.
@@ -26,7 +26,7 @@ Start it with the commands under [Running it yourself](#running-it-yourself), th
 11. **Check an alarm limit.** On the **Limits** tab, press **Widen the sealer high limit to 250 °C**. The answer comes back **Blocked**, with the detection rate before and after, and a list of the faults that change would stop catching. The tag that limit belongs to, `TT-101`, lights up on the plant and in the equipment list.
 12. **Break the process yourself.** On the **What-if** tab, drag the sealer setpoint up. The sealing bars glow orange, then red, and a line appears: *Film burns on the bars*. Push the conveyor past 1,500 rpm and packs pile up behind the robot. Fill the tank to 100% and it overflows. Empty it and the pump runs dry.
 13. **Compare two sets of limits.** Still on **What-if**, press **Propose sealer high 250 °C**, then set the sealer to 230 °C. The table shows the current limits raising **High high** and the proposed limits raising nothing, with a sentence spelling out what that would mean.
-14. **Move the camera.** Press **L0** to drop to the field machines, or **L5** for the internet. The other levels fade so the one you picked stands out; press the same key again to bring them back. Hold Shift and drag to slide the view, or use **Up** and **Down**. On a phone, two fingers move it; one finger still scrolls the page.
+14. **Move the camera.** Press **L0** to drop to the field machines, or **L5** for the internet. The other levels fade so the one you picked stands out; press the same key again to bring them back. On a phone the plant shows only the four firewalls, PLC-101, and whatever is lit, selected or on the level you picked, because thirty tag plates will not fit on a phone. Hold Shift and drag to slide the view, or use **Up** and **Down**. On a phone, two fingers move it; one finger still scrolls the page.
 
 ## Why draw it in 3D
 
@@ -69,12 +69,14 @@ The attack in the guided tour starts at an office computer on level 4 and ends a
 
 Each firewall has one switch on the **Live** tab, and each switch controls one rule: the as-found over-broad allow for hosts that are not approved. They start as found, every one **ALLOW**. **Simulated: demo rules, not a recommendation for a real plant.**
 
-| Switch | Rule | What it allows while it is ALLOW |
-|---|---|---|
-| FW-301 | SEG-301 | Non-approved remote hosts into the plant, any port |
-| FW-302 | SEG-302 | Non-approved office hosts past the DMZ, any port |
-| FW-303 | SEG-303 | Non-approved DMZ hosts into operations, any port |
-| FW-304 | SEG-304 | Non-approved hosts across the line 1 cell boundary, Modbus 502 and DNP3 20000, in either direction |
+| Switch | Rule | Label on the page | What it allows while it is ALLOW |
+|---|---|---|---|
+| FW-301 | SEG-301 | Non-approved remote hosts into the plant, any port | Anything arriving from the internet or the VPN pool may reach the plant networks (L5 &rarr; L4, any port) |
+| FW-302 | SEG-302 | Non-approved office hosts past the DMZ, any port | Any office workstation may carry on past the DMZ servers it is meant to stop at (L4 &rarr; L3.5, any port) |
+| FW-303 | SEG-303 | Non-approved DMZ hosts into operations, any port | Anything that reached the DMZ may carry on down into operations (L3.5 &rarr; L3, any port) |
+| FW-304 | SEG-304 | Non-approved hosts across the line 1 cell boundary, Modbus 502 and DNP3 20000 | Any host at all may speak Modbus 502 or DNP3 20000 across the line 1 cell boundary, in either direction (L2 &harr; L1) |
+
+Each row on the page carries the rule's label and, under it, the zones, protocol and ports it covers. The longer sentence in the last column is here rather than on the page, so every switch row is one fixed height and the panel's scroll can never cut one in half.
 
 The **approved flows** are separate, fixed rules that no switch touches: HMI-Line1 and the historian polling the controllers, the engineering workstation reaching both, and the one configured outstation reporting to SCADA. That is why the log keeps filling even with all four set to DENY.
 
@@ -225,7 +227,7 @@ The shared plant dataset, 5 tags and 35 labelled faults:
 
 The two tables disagree on percentages because they count the same missed faults out of different totals. **The 14 extra faults were generated for this demo by the same seeded generator. They are not independent evidence of anything.** They exist so the sealer and the conveyor have something to be measured against.
 
-Test suites, run now: 349 tests for the platform, 86 for the AlarmOps copy. The platform's 349 are 47 for the server and the data, 30 that drive the plant page in a browser, 49 that check the page's colours, and 223 that check the firewall rules.
+Test suites, run now: 365 tests for the platform, 86 for the AlarmOps copy. The platform's 365 are 47 for the server and the data, 46 that drive the plant page in a browser, 49 that check the page's colours, and 223 that check the firewall rules.
 
 ## Running it yourself
 
@@ -316,7 +318,7 @@ python -m pytest
 python -m pytest alarmops
 ```
 
-The platform suite covers the API and its rate limits, the code checks, the orchestrator with the models stubbed out, the scenario labels, the lab feeds, the alarm-limit routes and every figure in the results tables, that the shared plant leaves the original dataset untouched, that the saved answers in the page still match the routes, that every colour pair on the plant page keeps a readable contrast in light and dark (`python tests/test_palette_contrast.py` prints the table), and that the firewall rules answer correctly for every path against every combination of the four switches. Thirty of those tests drive the page itself in a browser, and 223 more drive the segmentation model in one. All of them need Playwright and an installed Microsoft Edge (or Chrome), which they launch directly, so no browser download is needed. Playwright is in `requirements-dev.txt` and deliberately not in `requirements.txt`. Without them they are skipped, and `pytest.ini` turns on the summary that lists every skip with its reason, so a skipped test is never mistaken for a passing one. No test calls a model or reaches the network.
+The platform suite covers the API and its rate limits, the code checks, the orchestrator with the models stubbed out, the scenario labels, the lab feeds, the alarm-limit routes and every figure in the results tables, that the shared plant leaves the original dataset untouched, that the saved answers in the page still match the routes, that every colour pair on the plant page keeps a readable contrast in light and dark (`python tests/test_palette_contrast.py` prints the table), and that the firewall rules answer correctly for every path against every combination of the four switches. Forty-six of those tests drive the page itself in a browser, and 223 more drive the segmentation model in one. All of them need Playwright and an installed Microsoft Edge (or Chrome), which they launch directly, so no browser download is needed. Playwright is in `requirements-dev.txt` and deliberately not in `requirements.txt`. Without them they are skipped, and `pytest.ini` turns on the summary that lists every skip with its reason, so a skipped test is never mistaken for a passing one. No test calls a model or reaches the network.
 
 ## Repository map
 

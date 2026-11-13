@@ -712,7 +712,8 @@ def test_at_phone_width_only_the_levels_that_matter_keep_their_plates(browser):
     page.wait_for_function("() => window.ProcessModel && window.__sentinelot")
     page.wait_for_timeout(1800)
     plates = [p for p in visible_plates(page) if not p["level"]]
-    assert plates == [] or all(p["lit"] or p["hot"] for p in plates)
+    always = ("FW-301", "FW-302", "FW-303", "FW-304", "PLC-101")
+    assert all(p["lit"] or p["hot"] or p["text"].startswith(always) for p in plates), plates
     assert all(p["size"] >= 11 for p in visible_plates(page))
     page.click("#levels button:text-is('L1')")
     page.wait_for_timeout(1600)
@@ -813,4 +814,147 @@ def test_the_internet_is_drawn_flat_with_no_spheres(browser):
         return window.__sentinelot.geometry() }""")
     assert kinds["spheres"] == 0, kinds
     assert kinds["shapes"] >= 2                                # the cloud, drawn front and back
+    page.close()
+
+
+# ---------------- the side panel ----------------
+
+def wide_page(browser, **kw):
+    p = browser.new_page(viewport={"width": 1280, "height": 900}, **kw)
+    errors = []
+    p.on("pageerror", lambda e: errors.append(str(e)))
+    p.goto(PAGE, wait_until="domcontentloaded")
+    p.wait_for_function("() => window.ProcessModel && window.__sentinelot")
+    p.errors = errors
+    return p
+
+
+def panel_scroll(page):
+    return page.evaluate("""() => { const p = document.querySelector('#panel');
+        return {top: p.scrollTop, h: p.clientHeight, full: p.scrollHeight} }""")
+
+
+def test_the_side_panel_is_a_named_region_a_keyboard_can_scroll(browser):
+    page = wide_page(browser)
+    p = page.locator("#panel")
+    assert p.get_attribute("tabindex") == "0"
+    assert p.get_attribute("role") == "region"
+    assert p.get_attribute("aria-label") == ("Attack controls, firewall rules "
+                                             "and alarm detail")
+    s = panel_scroll(page)
+    assert s["full"] > s["h"] and s["top"] == 0           # there is something to scroll
+    page.focus("#panel")
+    assert page.evaluate("() => document.activeElement.id") == "panel"
+    page.keyboard.press("PageDown")
+    page.wait_for_timeout(500)
+    down = panel_scroll(page)["top"]
+    assert down > 0, "PageDown did not scroll the panel"
+    page.keyboard.press("ArrowDown")
+    page.wait_for_timeout(400)
+    assert panel_scroll(page)["top"] >= down
+    page.keyboard.press("Home")
+    page.wait_for_timeout(500)
+    assert panel_scroll(page)["top"] < down
+    assert page.errors == []
+    page.close()
+
+
+def test_a_new_alarm_is_scrolled_into_view_in_the_panel_and_marked(browser):
+    page = wide_page(browser)
+    page.evaluate("() => document.querySelector('#panel').scrollTop = 0")
+    page.click('[data-atk="setpoint"]')
+    page.wait_for_selector("#alarm.crit", timeout=20000)
+    page.wait_for_timeout(1200)
+    box = page.evaluate("""() => { const p = document.querySelector('#panel');
+        const a = document.querySelector('#alarm').getBoundingClientRect();
+        const r = p.getBoundingClientRect();
+        return {scrolled: p.scrollTop, visible: a.top >= r.top - 2 && a.top < r.bottom,
+                marked: document.querySelector('#alarm').classList.contains('justin')} }""")
+    assert box["scrolled"] > 0, box                       # the panel moved to it
+    assert box["visible"], box
+    assert box["marked"], box
+    # the mark is temporary
+    page.wait_for_function(
+        "() => !document.querySelector('#alarm').classList.contains('justin')", timeout=8000)
+    assert page.errors == []
+    page.close()
+
+
+def test_the_new_alarm_mark_does_not_animate_under_reduced_motion(browser):
+    page = wide_page(browser, reduced_motion="reduce")
+    page.click('[data-atk="robot"]')
+    page.wait_for_selector("#alarm.crit", timeout=20000)
+    page.wait_for_timeout(900)
+    style = page.evaluate("""() => { const a = document.querySelector('#alarm');
+        const cs = getComputedStyle(a);
+        return {marked: a.classList.contains('justin'), name: cs.animationName,
+                shadow: cs.boxShadow} }""")
+    assert style["marked"] is True
+    assert style["name"] == "none", style                 # steady, not flashing
+    assert style["shadow"] != "none", style               # but still visibly marked
+    assert page.errors == []
+    page.close()
+
+
+def test_every_switch_row_is_the_same_height_so_none_is_cut_at_the_fold(browser):
+    for width in (1280, 1024, 390):
+        page = browser.new_page(viewport={"width": width, "height": 900})
+        page.goto(PAGE, wait_until="domcontentloaded")
+        page.wait_for_function("() => window.__sentinelot")
+        page.evaluate("() => document.querySelector('#segbox').open = true")
+        page.wait_for_timeout(400)
+        rows = page.evaluate("""() => [...document.querySelectorAll('#rules li')].map(li => {
+            const tx = li.querySelector('.tx'), dt = li.querySelector('.dt');
+            return {h: Math.round(li.getBoundingClientRect().height),
+                    labelCut: tx.scrollHeight - tx.clientHeight,
+                    detailCut: Math.max(0, dt.scrollWidth - dt.clientWidth - 2),
+                    snap: getComputedStyle(li).scrollSnapAlign} })""")
+        assert len({r["h"] for r in rows}) == 1, (width, rows)
+        assert all(r["labelCut"] <= 0 and r["detailCut"] == 0 for r in rows), (width, rows)
+        assert all(r["snap"] == "start" for r in rows), (width, rows)
+        page.close()
+
+
+def test_scrolling_the_panel_never_leaves_a_switch_row_cut_in_half(browser):
+    """Rows are one fixed height and snap to the top, so a scroll lands on a row boundary."""
+    page = wide_page(browser)
+    page.evaluate("() => document.querySelector('#segbox').open = true")
+    page.wait_for_timeout(300)
+    assert page.evaluate(
+        "() => getComputedStyle(document.querySelector('#panel')).scrollSnapType"
+    ).split()[0] == "y"
+    h = page.evaluate("() => document.querySelector('#rules li').getBoundingClientRect().height")
+    top = page.evaluate("""() => { const p = document.querySelector('#panel');
+        const first = document.querySelector('#rules li');
+        p.scrollTop = first.offsetTop - p.offsetTop + 37;      // deliberately mid-row
+        return p.scrollTop }""")
+    page.wait_for_timeout(600)
+    cut = page.evaluate("""() => { const p = document.querySelector('#panel').getBoundingClientRect();
+        return [...document.querySelectorAll('#rules li')].filter(li => {
+            const r = li.getBoundingClientRect();
+            return (r.top < p.top - 1 && r.bottom > p.top + 1)
+                || (r.top < p.bottom - 1 && r.bottom > p.bottom + 1) }).length }""")
+    assert 100 < h < 112 and top > 0          # one row, border included
+    assert cut <= 1, cut            # at most the one the fold lands on, and snapping removes it
+    assert page.errors == []
+    page.close()
+
+
+def test_a_phone_always_keeps_the_firewalls_and_the_controller(browser):
+    page = browser.new_page(viewport={"width": 390, "height": 844})
+    page.goto(PAGE, wait_until="domcontentloaded")
+    page.wait_for_function("() => window.ProcessModel && window.__sentinelot")
+    page.wait_for_timeout(1800)
+    plates = visible_plates(page)
+    shown = [p["text"] for p in plates if not p["level"]]
+    for tag in ("FW-301", "FW-302", "FW-303", "FW-304", "PLC-101"):
+        assert any(t.startswith(tag) for t in shown), (tag, shown)
+    assert not any(t.startswith("SRV-401") for t in shown)     # still hidden
+    assert all(p["size"] >= 11 for p in plates)
+    # and they still do not overlap
+    for i, a in enumerate(plates):
+        for b in plates[i + 1:]:
+            apart = (a["x"] + a["w"] <= b["x"] or b["x"] + b["w"] <= a["x"]
+                     or a["y"] + a["h"] <= b["y"] or b["y"] + b["h"] <= a["y"])
+            assert apart, (a["text"], b["text"])
     page.close()
