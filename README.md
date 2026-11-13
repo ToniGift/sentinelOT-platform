@@ -280,4 +280,4 @@ The platform suite covers the API and its rate limits, the guards and code check
 
 Released under the **MIT License**; see [`LICENSE`](LICENSE). Third-party material and the origin of each part are in [`NOTICE.md`](NOTICE.md).
 
-Built by Anthony Afonughe, an OT/ICS security engineer. Contact: anthonygift2019@gmail.com
+Built by Anthony Afonughe, an OT/ICS security engineer. Contact: through the showcase page or [github.com/ToniGift](https://github.com/ToniGift).
