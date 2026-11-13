@@ -269,12 +269,11 @@ The plant page also opens straight from the file system. The attacks, the 3D vie
 
 ```
 pip install -r requirements-dev.txt -r alarmops/requirements-dev.txt
-python -m playwright install chromium
 python -m pytest
 python -m pytest alarmops
 ```
 
-The platform suite covers the API and its rate limits, the code checks, the orchestrator with the models stubbed out, the scenario labels, the lab feeds, the alarm-limit routes and every figure in the results tables, that the shared plant leaves the original dataset untouched, and that the saved answers in the page still match the routes. Sixteen of those tests drive the page itself in a headless browser and need Playwright, which is in `requirements-dev.txt` and deliberately not in `requirements.txt`. Without it they are skipped, and `pytest.ini` turns on the summary that lists every skip with its reason, so a skipped test is never mistaken for a passing one. No test calls a model or reaches the network.
+The platform suite covers the API and its rate limits, the code checks, the orchestrator with the models stubbed out, the scenario labels, the lab feeds, the alarm-limit routes and every figure in the results tables, that the shared plant leaves the original dataset untouched, and that the saved answers in the page still match the routes. Sixteen of those tests drive the page itself in a headless browser and need Playwright and an installed Microsoft Edge (or Chrome), which they launch directly, so no browser download is needed. Playwright is in `requirements-dev.txt` and deliberately not in `requirements.txt`. Without them they are skipped, and `pytest.ini` turns on the summary that lists every skip with its reason, so a skipped test is never mistaken for a passing one. No test calls a model or reaches the network.
 
 ## Repository map
 

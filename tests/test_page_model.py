@@ -3,10 +3,10 @@
 They run the page's own JavaScript in a headless browser, with the page opened
 as a plain file (no server), so they also check that the sandbox works that way.
 
-They need Playwright and its Chromium, which are not in requirements.txt:
+They need Playwright, which is not in requirements.txt:
     pip install -r requirements-dev.txt
-    python -m playwright install chromium
-Without them every test here is SKIPPED, and pytest says so in its summary
+They drive an installed Microsoft Edge (falling back to Chrome), so no browser
+download is needed. Without a browser every test here is SKIPPED, and pytest says so in its summary
 (pytest.ini sets -ra). A skipped test is not a pass.
 """
 from pathlib import Path
@@ -26,11 +26,16 @@ TAGS = ["sealer_temperature", "conveyor_speed", "tank_level", "pump_pressure",
 @pytest.fixture(scope="module")
 def browser():
     with sync_api.sync_playwright() as pw:
-        try:
-            b = pw.chromium.launch()
-        except Exception as exc:                      # browser not downloaded
-            pytest.skip("Playwright's Chromium is not installed: page model "
-                        f"tests NOT RUN (python -m playwright install chromium): {exc}")
+        b, errors = None, []
+        for channel in ("msedge", "chrome"):
+            try:
+                b = pw.chromium.launch(channel=channel)
+                break
+            except Exception as exc:                  # browser not installed
+                errors.append(f"{channel}: {str(exc).splitlines()[0]}")
+        if b is None:
+            pytest.skip("No installed Edge or Chrome could be launched: page "
+                        "model tests NOT RUN (" + "; ".join(errors) + ")")
         yield b
         b.close()
 

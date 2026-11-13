@@ -27,7 +27,7 @@ python -m triage.smoke_test nvidia/nemotron-3-super-120b-a12b     # tests one mo
 Start the web app and open http://localhost:8000:
 
 ```
-uvicorn triage.main:app --port 8000
+python -m uvicorn triage.main:app --port 8000
 ```
 
 Or triage one scenario from the command line:
