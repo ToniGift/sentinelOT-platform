@@ -1344,7 +1344,9 @@ function build(){
       var l=labs[i];if(l.el.style.display==="none")continue;
       v.copy(l.pos).project(camera);
       var x=(v.x*0.5+0.5)*w,y=(-v.y*0.5+0.5)*h;
-      if(l.cls==="level"){if(!l.w)l.w=l.el.offsetWidth;x=Math.max(x,l.w/2+4)}
+      /* keep a label inside the stage: they carry live values now, so a clipped one is unreadable */
+      var lw=l.el.offsetWidth;if(lw)l.w=lw;
+      if(l.w)x=l.cls==="level"?Math.max(x,l.w/2+4):Math.min(w-l.w/2-4,Math.max(l.w/2+4,x));
       l.el.style.transform="translate("+x.toFixed(1)+"px,"+y.toFixed(1)+"px)"+(l.cls==="level"?" translate(-50%,-50%)":" translate(-50%,-140%)");
     }
     requestAnimationFrame(frame);
