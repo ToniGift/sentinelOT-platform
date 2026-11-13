@@ -72,8 +72,12 @@ a{color:inherit}
 .lab.level{background:var(--panel);border:0;color:var(--mute);font-family:var(--cond);font-weight:600;font-size:15px;padding:0 4px}
 .lab.hot{border-color:var(--ink);font-weight:600;z-index:3}
 .tools{position:absolute;right:10px;bottom:10px;display:flex;gap:6px}
+.tools .sm{display:none}
+.levels{position:absolute;left:10px;top:10px;display:flex;gap:4px}
+.levels button{font:inherit;font-weight:600;font-size:14px;min-width:38px;height:34px;padding:0 6px;border:1px solid var(--line);background:var(--well);color:var(--ink);border-radius:3px;cursor:pointer}
+.levels button:hover{border-color:var(--ink)}
 .tools button{font:inherit;font-weight:600;font-size:15px;min-width:40px;height:40px;padding:0 10px;border:1px solid var(--ink);background:var(--well);color:var(--ink);border-radius:3px;cursor:pointer}
-.card{position:absolute;left:10px;top:10px;max-width:min(300px,calc(100% - 20px));background:var(--well);border:1px solid var(--ink);border-radius:3px;padding:10px 12px;font-size:15px}
+.card{position:absolute;left:10px;top:52px;max-width:min(300px,calc(100% - 20px));background:var(--well);border:1px solid var(--ink);border-radius:3px;padding:10px 12px;font-size:15px}
 .card[hidden]{display:none}
 .card h3{font-family:var(--cond);font-weight:600;font-size:21px;margin:0 28px 4px 0;line-height:1.1}
 .card p{margin:0 0 6px}
@@ -180,7 +184,13 @@ a{color:inherit}
 footer{border-top:1px solid var(--line);padding:18px 0 28px;font-size:14.5px;color:var(--mute)}
 footer p{margin:0;max-width:66ch}
 
-@media (max-width:600px){.wrap{padding:0 16px}}
+@media (max-width:600px){
+  .wrap{padding:0 16px}
+  .tools{gap:5px}
+  .tools button{font-size:14px;padding:0 8px}
+  .tools .lg{display:none}
+  .tools .sm{display:inline}
+}
 @media (max-width:860px){
   .grid{grid-template-columns:1fr}
   .cell.l{border-right:0}
@@ -220,14 +230,17 @@ footer p{margin:0;max-width:66ch}
   <div class="grid">
 
     <div class="cell l stage" id="stage">
-      <canvas id="gl" tabindex="0" aria-label="3D model of the plant. Drag or use arrow keys to rotate."></canvas>
+      <canvas id="gl" tabindex="0" aria-label="3D model of the plant. Drag or use the arrow keys to rotate. Shift and drag, right-drag or Page Up and Page Down move the view."></canvas>
       <div class="labels" id="labels" aria-hidden="true"></div>
       <div class="card" id="card" hidden></div>
+      <div class="levels" id="levels" role="group" aria-label="Jump to a level"></div>
       <div class="tools">
         <button type="button" id="zin" aria-label="Zoom in">+</button>
         <button type="button" id="zout" aria-label="Zoom out">−</button>
-        <button type="button" id="front">Front view</button>
-        <button type="button" id="spin">Pause rotation</button>
+        <button type="button" id="up" aria-label="Move the view up">Up</button>
+        <button type="button" id="down" aria-label="Move the view down">Down</button>
+        <button type="button" id="front" aria-label="Front view"><span class="lg">Front view</span><span class="sm">Front</span></button>
+        <button type="button" id="spin"><span class="lg"></span><span class="sm"></span></button>
       </div>
     </div>
 
@@ -931,24 +944,55 @@ function build(){
     renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();
     dist=Math.max(22.5,20.5/camera.aspect);showLabels();
   }
-  var ptrs={},moved=0,pinch=0;
-  canvas.addEventListener("pointerdown",function(e){ptrs[e.pointerId]={x:e.clientX,y:e.clientY};moved=0;try{canvas.setPointerCapture(e.pointerId)}catch(_){}});
+  /* ---- movable camera target: the camera orbits TARGET, and TARGET can be panned ---- */
+  var T0=TARGET.clone(),Y_MIN=levelY["0"],Y_MAX=levelY["5"],goalY=null,PAN_STEP=GAP/2;
+  function clampTarget(){
+    TARGET.y=Math.min(Y_MAX,Math.max(Y_MIN,TARGET.y));
+    TARGET.x=Math.min(SLAB_W/2,Math.max(-SLAB_W/2,TARGET.x));
+    TARGET.z=Math.min(SLAB_D/2,Math.max(-SLAB_D/2,TARGET.z));
+  }
+  /* drag the scene by (dx,dy) screen pixels: the target moves the other way, in the camera's own right/up plane */
+  function panBy(dx,dy){
+    var upp=2*(dist/zoom)*Math.tan(camera.fov*Math.PI/360)/Math.max(1,stage.clientHeight);
+    TARGET.x-=dx*upp*Math.cos(theta);TARGET.z+=dx*upp*Math.sin(theta);TARGET.y+=dy*upp;
+    goalY=null;clampTarget();holdUntil=performance.now()+2500;
+  }
+  /* glide (or, with reduced motion, jump) the target to a height; zoom and angle are kept */
+  function moveTo(y){
+    y=Math.min(Y_MAX,Math.max(Y_MIN,y));holdUntil=performance.now()+2500;
+    if(reduce){TARGET.y=y;goalY=null}else goalY=y;
+  }
+  function resetTarget(){TARGET.copy(T0);goalY=null}
+
+  var ptrs={},moved=0,pinch=0,pinchC=null;
+  canvas.addEventListener("contextmenu",function(e){e.preventDefault()});
+  canvas.addEventListener("pointerdown",function(e){
+    ptrs[e.pointerId]={x:e.clientX,y:e.clientY,pan:e.button===2||e.shiftKey};moved=0;pinch=0;pinchC=null;
+    try{canvas.setPointerCapture(e.pointerId)}catch(_){}
+  });
   canvas.addEventListener("pointermove",function(e){
     var p=ptrs[e.pointerId];if(!p)return;
     var ids=Object.keys(ptrs);holdUntil=performance.now()+2500;
     if(ids.length===2){
+      /* two fingers: spread to zoom, drag together to pan */
       p.x=e.clientX;p.y=e.clientY;
-      var a=ptrs[ids[0]],b=ptrs[ids[1]],dd=Math.hypot(a.x-b.x,a.y-b.y);
-      if(pinch)zoom=Math.min(2.4,Math.max(0.6,zoom*dd/pinch));pinch=dd;moved=99;return;
+      var a=ptrs[ids[0]],b=ptrs[ids[1]],dd=Math.hypot(a.x-b.x,a.y-b.y),cx=(a.x+b.x)/2,cy=(a.y+b.y)/2;
+      if(pinch)zoom=Math.min(2.4,Math.max(0.6,zoom*dd/pinch));pinch=dd;
+      if(pinchC)panBy(cx-pinchC.x,cy-pinchC.y);pinchC={x:cx,y:cy};moved=99;return;
     }
     var dx=e.clientX-p.x,dy=e.clientY-p.y;moved+=Math.abs(dx)+Math.abs(dy);
-    theta-=dx*0.008;if(e.pointerType==="mouse")phi=Math.min(1.5,Math.max(0.35,phi-dy*0.006));
+    if(p.pan)panBy(dx,dy);
+    else{theta-=dx*0.008;if(e.pointerType==="mouse")phi=Math.min(1.5,Math.max(0.35,phi-dy*0.006))}
     p.x=e.clientX;p.y=e.clientY;
+  });
+  /* one finger keeps scrolling the page (touch-action: pan-y). Two fingers belong to the 3D view. */
+  ["touchstart","touchmove"].forEach(function(t){
+    canvas.addEventListener(t,function(e){if(e.touches.length>1&&e.cancelable)e.preventDefault()},{passive:false});
   });
   var ray=new THREE.Raycaster(),ndc=new THREE.Vector2();
   function up(e){
-    var had=ptrs[e.pointerId];delete ptrs[e.pointerId];pinch=0;
-    if(!had||moved>=7||e.type!=="pointerup")return;
+    var had=ptrs[e.pointerId];delete ptrs[e.pointerId];pinch=0;pinchC=null;
+    if(!had||had.pan||moved>=7||e.type!=="pointerup")return;
     var r=canvas.getBoundingClientRect();
     ndc.set(((e.clientX-r.left)/r.width)*2-1,-((e.clientY-r.top)/r.height)*2+1);
     ray.setFromCamera(ndc,camera);
@@ -961,21 +1005,34 @@ function build(){
     if(k==="ArrowLeft")theta-=0.12;else if(k==="ArrowRight")theta+=0.12;
     else if(k==="ArrowUp")phi=Math.max(0.35,phi-0.08);else if(k==="ArrowDown")phi=Math.min(1.5,phi+0.08);
     else if(k==="+"||k==="=")zoom=Math.min(2.4,zoom*1.15);else if(k==="-")zoom=Math.max(0.6,zoom/1.15);
+    else if(k==="PageUp")moveTo((goalY===null?TARGET.y:goalY)+PAN_STEP);
+    else if(k==="PageDown")moveTo((goalY===null?TARGET.y:goalY)-PAN_STEP);
     else used=false;
     if(used)e.preventDefault();
   });
   $("#zin").addEventListener("click",function(){zoom=Math.min(2.4,zoom*1.2)});
   $("#zout").addEventListener("click",function(){zoom=Math.max(0.6,zoom/1.2)});
   var spinBtn=$("#spin");
-  function spinLabel(){spinBtn.textContent=auto?"Pause rotation":"Rotate plant"}
+  function spinLabel(){
+    spinBtn.querySelector(".lg").textContent=auto?"Pause rotation":"Rotate plant";
+    spinBtn.querySelector(".sm").textContent=auto?"Pause":"Rotate";
+    spinBtn.setAttribute("aria-label",auto?"Pause rotation":"Rotate plant");
+  }
   spinBtn.addEventListener("click",function(){auto=!auto;spinLabel()});spinLabel();
-  $("#front").addEventListener("click",function(){theta=0;phi=1.18;zoom=1;auto=false;spinLabel()});
+  $("#front").addEventListener("click",function(){theta=0;phi=1.18;zoom=1;resetTarget();auto=false;spinLabel()});
+  $("#up").addEventListener("click",function(){moveTo((goalY===null?TARGET.y:goalY)+PAN_STEP)});
+  $("#down").addEventListener("click",function(){moveTo((goalY===null?TARGET.y:goalY)-PAN_STEP)});
+  LEVELS.slice().reverse().forEach(function(l){
+    var b=el("button",null,"L"+l.id);b.type="button";b.setAttribute("aria-label","Go to "+l.name);
+    b.addEventListener("click",function(){moveTo(levelY[l.id]+0.45)});$("#levels").appendChild(b);
+  });
   $("#card").addEventListener("click",function(){if($("#card").hidden){selAsset=null;update()}});
 
   var v=new THREE.Vector3(),last=performance.now(),t0=last;
   function frame(now){
     var dt=Math.min(0.05,(now-last)/1000);last=now;
     if(auto&&now>holdUntil&&!Object.keys(ptrs).length)theta+=dt*0.14;
+    if(goalY!==null){TARGET.y+=(goalY-TARGET.y)*Math.min(1,dt*7);if(Math.abs(goalY-TARGET.y)<0.01){TARGET.y=goalY;goalY=null}}
     var d=dist/zoom;
     camera.position.set(TARGET.x+d*Math.sin(phi)*Math.sin(theta),TARGET.y+d*Math.cos(phi),TARGET.z+d*Math.sin(phi)*Math.cos(theta));
     camera.lookAt(TARGET);
@@ -1002,7 +1059,7 @@ function build(){
   if(window.matchMedia)window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change",function(){update()});
   new MutationObserver(function(){update()}).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
   resize();update();requestAnimationFrame(frame);
-  return {update:update};
+  return {update:update,view:function(){return {x:TARGET.x,y:TARGET.y,z:TARGET.z,zoom:zoom,theta:theta,phi:phi,yMin:Y_MIN,yMax:Y_MAX,auto:auto}}};
 }
 
 /* ================= start ================= */
@@ -1012,6 +1069,8 @@ paint();paintRecs();
 try{
   if(!window.THREE)throw new Error("no three");
   scene3d=build();
+  /* read-only hook for the automated page tests */
+  window.__sentinelot={view:function(){return scene3d.view()}};
 }catch(err){
   var s=$("#stage");s.textContent="";
   s.appendChild(el("div","nogl","The 3D view needs WebGL, which isn’t available in this browser. The alarms, traffic and verdicts on this page still work."));
