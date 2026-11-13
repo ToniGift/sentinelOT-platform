@@ -1,168 +1,283 @@
 # SentinelOT Platform
 
+**Security and change control for small industrial plants: an AI copilot that triages OT/ICS security alerts, and a gate that measures every change to an alarm limit before it ships.**
+
+The rule for everything here: **it recommends, it never acts.** Nothing in this repository writes to a control network, blocks traffic, changes a setting on a controller or deploys anything to a plant. A person makes every decision. Everything it runs on is simulated or synthetic, and each part says so where it is shown.
+
 ![SentinelOT: an AI copilot that triages OT/ICS security alerts](docs/images/cover.jpg)
 
-**OT/ICS security tooling for plants without a security team:** AI-assisted alert triage, a showcase page and, later, alarm operations. It recommends. It never acts, and nothing in it writes to a control network.
+## What it is and the problem it solves
 
-This is a research prototype, not a production security tool.
+Factories run on equipment that controls physical processes: PLCs, SCADA servers, HMIs, DCS controllers. Monitoring tools watch the industrial network and raise alerts, such as a write command to a PLC from a computer that never writes to it, a new device appearing, or a program download at two in the morning. Every alert needs a person to work out which equipment is involved, whether this is normal for it, what it could do to the process and what to do next. In a small plant there is often no security team to do that. SentinelOT does the first pass automatically: it reads the alert, adds what it knows about the assets, looks up current threat intelligence, maps the activity to MITRE ATT&CK for ICS and gives an analyst a verdict with evidence and suggested next steps.
+
+The second problem is quieter. A control system raises an alarm when a measurement crosses a limit, for example a sealer running too hot. Limits get edited over time, and a bad edit is dangerous in both directions: too wide and a real fault raises no alarm, too narrow and operators drown in nuisance alarms and start ignoring them. In practice the review of such a change is manual and nobody measures what it does. AlarmOps replays a fault-labelled sensor dataset against the old and new limits, reports how many faults the new limits would miss, and blocks a change that loses too much detection. The two halves meet on one page: the simulated attack on the showcase page raises a sealer setpoint, and the alarm that catches it is the limit AlarmOps protects.
 
 ## Status
 
 | Part | Where | Status |
 |---|---|---|
-| Alert triage (five agents and code checks) | `triage/`, `static/index.html` | Working. Evaluated on synthetic alerts only |
-| Lab feeds (ELK adapter, passive Modbus sniffer) | `triage/lab_elk.py`, `triage/lab_sniffer.py` | Built and unit tested. Not yet run against a lab. No lab results exist |
-| Showcase page | `static/sentinelot.html` | Working. The plant and traffic on it are simulated in the browser |
-| AlarmOps (alarm-limit change control) | `alarmops/`, `plant/`, `triage/alarm_limits.py` | Connected, simulated. The showcase page runs its replay and gate through `/api/alarmops/`. Its GitLab pipeline runs only in the original repository. No data passes between AlarmOps and triage |
+| Alert triage: five AI agents with code checks on their output | `triage/`, `static/index.html` | Built and tested. Evaluated on synthetic alerts only |
+| Lab feeds: Elasticsearch adapter and passive Modbus sniffer | `triage/lab_elk.py`, `triage/lab_sniffer.py` | Built, not yet run against a lab. Unit tested. No lab results exist |
+| AlarmOps: alarm-limit change gate | `alarmops/`, `plant/`, `triage/alarm_limits.py` | Built and tested, connected to the showcase page. Simulated data. Its GitLab pipeline runs only in its original repository |
+| Showcase page: 3D plant, simulated attacks, alarm-limit check | `static/sentinelot.html` | Built. Checked in a headless browser at 390 and 1280 px |
+| Docker | `Dockerfile`, `docker-compose.yml`, `Caddyfile` | Tested on 12 November 2026 with Docker Desktop on Windows (Docker 29.9.3, Compose 5.7.0). `docker compose up --build` built both images and started three containers. Through Caddy on port 80, `/api/health`, `/`, `/sentinelot.html`, `/api/scenarios`, `/api/alarmops/baseline` and `/api/alarmops/compare` returned 200, and the app's health check reported healthy. The AlarmOps page answered on port 8080. Placeholder API keys were used, so no triage run was made through Docker |
+| SentinelOT-to-AlarmOps feed | not started | Planned. Today no data passes between the two |
+| Shadow-mode trial on a company's past alerts | not started | Planned |
 
-## Modules
+## How the modules fit together
 
-### Triage
+```mermaid
+flowchart LR
+  subgraph inputs["Alert sources"]
+    syn["Synthetic scenarios<br/>32, with expected labels"]
+    elk["Lab feed: Elasticsearch adapter<br/>built, not yet run"]
+    snf["Lab feed: passive Modbus sniffer<br/>built, not yet run"]
+  end
 
-An ordinary Python program runs five AI agents in a fixed order: Intake, Intel, ATT&CK mapper, Triage analyst and Response advisor. After each step, code (not the model) removes sources that were never retrieved and technique IDs that do not exist, makes sure the verdict agrees with the priority, and flags instructions hidden in alert text. Every suggested action is labelled read-only or needs operator approval.
+  subgraph server["FastAPI server, triage/main.py"]
+    api["POST /api/triage<br/>POST /api/demo/id"]
+    pipe["Five agents and code checks<br/>triage/orchestrator.py"]
+    lim["GET /api/alarmops/*<br/>triage/alarm_limits.py"]
+  end
 
-![SentinelOT architecture](docs/images/architecture.png)
+  subgraph ao["AlarmOps library, alarmops/src, unchanged"]
+    rep["replay, gate, drift"]
+  end
 
-Alerts arrive at `POST /api/triage` in the `Alert` schema in `triage/schemas.py`. The agents and every check are described on the [How it works](docs/HOW_IT_WORKS.md) page.
+  plant["plant/<br/>alarm limits, labelled dataset,<br/>tag-to-equipment map"]
 
-### Lab feeds
+  subgraph pages["Pages served from static/"]
+    idx["index.html<br/>triage interface"]
+    show["sentinelot.html<br/>showcase: 3D plant, attacks,<br/>recorded alerts, alarm limits"]
+  end
 
-Two ways to feed triage with alerts from a home lab instead of hand-written ones. Both only listen.
-
-- `triage/lab_elk.py` reads alert documents from the lab's Elasticsearch.
-- `triage/lab_sniffer.py` listens passively to Modbus/TCP and applies a fixed rule.
-
-The planned lab is LabShock. The test has not been run yet. Expected verdicts for the planned attacks were written down first, in `triage/scenarios_lab.py`. The lab has its own asset file, `data/assets_lab.json`, so the fictional plant and its evaluation numbers stay untouched. See [Lab alerts](docs/LABSHOCK.md).
-
-### Showcase page
-
-`static/sentinelot.html`, served at `/sentinelot.html`. It shows a 3D plant, a live console on simulated Modbus/TCP traffic, three simulated attacks, eight recorded alerts with the verdicts from the evaluation run on 6 October 2026, and an "Alarm limits" tab that checks a limit change with AlarmOps. Everything simulated is labelled on the page. Some items on the page (Level 5, the firewalls, the ERP server, the MES server, the OT domain controller, the DCS, the utilities tank, pump and flow meter, the robot and the conveyor motor) were added for the demo and are not in `data/assets.json`.
-
-### AlarmOps
-
-`alarmops/` measures a change to an industrial alarm limit before it ships. It replays a simulated, fault-labelled sensor dataset against the old and new limits, reports the fault-detection rate and the false-alarm count, and blocks a change that loses too much detection. It is a simulation: it reads CSV files and does not connect to or control any plant equipment.
-
-The folder is a copy of [ToniGift/AlarmOps](https://github.com/ToniGift/AlarmOps), brought in with `git subtree` and unchanged. Its own [README](alarmops/README.md) has the measured results and the architecture.
-
-What works here and what does not:
-
-- **Works:** the library, the replay and gate code, the web page with its "Try it yourself" lab, and the 86 tests.
-- **Runs only in the original repository:** the GitLab CI/CD pipeline (review, scan, staging, approval, monitoring). The pipeline file is in the folder but GitHub does not run it.
-- **Not built:** any exchange of data between AlarmOps and triage. An attack is never sent to AlarmOps, and AlarmOps does not watch network traffic.
-
-#### How it is connected to the showcase page
-
-- `triage/alarm_limits.py` adds three read-only routes, `/api/alarmops/baseline`, `/compare` and `/monitor`. They call the AlarmOps rules, replay, gate and drift code from `alarmops/src`. Nothing is stored, and nothing is written to any control network.
-- `plant/` holds the alarm limits and the dataset those routes replay. It keeps the three AlarmOps tags and their data exactly as they are and adds two tags for packaging line 1: `sealer_temperature` and `conveyor_speed`. `plant/generate_dataset.py` runs the unchanged AlarmOps generator with the two extra tags, and `plant/tag_assets.json` maps each tag to equipment on the page.
-- The page's "Alarm limits" tab sends edited limits to `/compare` and shows the detection rate, the false alarms and whether the change passes or is blocked. A blocked change lights the equipment the tag belongs to. Opened without the server, the tab shows saved results labelled "Recorded" (refresh them with `python plant/save_page_copy.py`).
-- The link between the two halves is one limit. The simulated attack raises the sealer setpoint to 240 °C, and the alarm that catches it is the 190 °C high limit. The tab has a preset that widens that limit to 250 °C, which the gate blocks. The page shows only that the limit AlarmOps protects is the one that catches the attack.
-
-To pull later AlarmOps changes into this repository:
-
+  syn --> api
+  elk -. "Alert JSON" .-> api
+  snf -. "Alert JSON" .-> api
+  api --> pipe --> idx
+  show --> lim --> rep
+  plant --> rep
+  show -. "same equipment names" .- plant
 ```
-git subtree pull --prefix=alarmops https://github.com/ToniGift/AlarmOps main --squash
-```
+
+- **Triage** is the original SentinelOT: a FastAPI server, five agents, the checks, a SQLite store of results and the interface in `static/index.html`.
+- **Lab feeds** turn lab traffic into `Alert` objects and post them to `/api/triage`. They only listen.
+- **AlarmOps** is a copy of its own repository under `alarmops/`, used as a library and not modified. The server imports its replay, gate and drift code and exposes three read-only routes.
+- **The showcase page** draws the plant in 3D, simulates Modbus traffic and three attacks in the browser, shows recorded triage verdicts, and runs the alarm-limit check through the routes.
+
+**The shared plant.** The 3D page and the alarm-limit check describe the same fictional plant. `plant/alarms.yaml` holds limits for five tags; `plant/tag_assets.json` maps each tag to the equipment it is measured at and the controller that reads it, using the names the page draws (`sealer_temperature` is measured at SENSOR-GW-1 and read by PLC-Line1; `tank_level` at TANK-Utility-1, read by DCS-CTRL-01). When the gate blocks a change, the page lights that equipment. The 14 assets in `data/assets.json` are the ones triage knows about and the evaluation was run on. The page adds demo-only items (Level 5, the firewalls, the ERP and MES servers, the OT domain controller, the DCS, the utilities tank, pump and flow meter, the robot and the conveyor motor) and says so in its footer.
+
+## How triage works
+
+An ordinary Python program runs five agents in a fixed order. Each one is a model call with a JSON schema; the orchestrator checks the result before passing it on.
+
+| # | Agent | Job |
+|---|---|---|
+| 1 | Intake | Summarises the alert, extracts indicators (addresses, CVEs, protocols, function codes), writes search queries, flags text that tries to give the AI orders |
+| 2 | Intel | Summarises threat-intelligence results from the Tavily search, citing only links that were retrieved |
+| 3 | ATT&CK mapper | Picks techniques from the official MITRE ATT&CK for ICS list |
+| 4 | Triage analyst | Decides verdict (escalate, investigate, likely benign), priority (P1 to P4), confidence, process impact and evidence |
+| 5 | Response advisor | Suggests next steps, each labelled read-only or needs operator approval |
+
+The search runs beside the mapper to save time. Before each result is used, code, not the model, does these checks:
+
+- any cited link that was not in the search results is removed;
+- any technique ID that is not in the ATT&CK for ICS data file is removed, and names come from the file;
+- the verdict and the priority must agree (escalate with P1 or P2, investigate with P2 or P3, likely benign with P3 or P4); a mismatch triggers one re-check, then a fallback;
+- evidence that cites an empty or missing field is removed;
+- alert text that tries to give orders to the AI is flagged and shown as a warning;
+- every model call has a timeout and one retry.
+
+Why code makes the final checks: a language model can produce a confident citation that does not exist, a technique ID that was retired, or a verdict that contradicts its own priority, and it cannot be relied on to notice. The checks are simple, deterministic and testable, and they decide what reaches the analyst. The model proposes; the code verifies. The agents and the checks are described in full on the [How it works](docs/HOW_IT_WORKS.md) page, and the fictional plant on the [Test plant](docs/TEST_PLANT.md) page.
+
+## How AlarmOps works
+
+AlarmOps answers one question: if this alarm limit is changed, what happens to detection? Everything is simulated. It reads CSV files and never touches equipment.
+
+- **The dataset.** A seeded generator produces 6,000 samples per tag of a slowly varying signal with noise, and injects labelled faults into it: spikes, drifts and stuck readings, each recorded in `faults.csv` with its start and end. The labels are the ground truth.
+- **The replay.** The alarm engine runs over the dataset with a set of limits. A fault counts as detected if an alarm for that tag fires inside its window; an alarm outside any fault window is a false alarm. The result is a detection rate and a false-alarm count, computed, never typed in.
+- **The gate.** `gate.yaml` sets the policy: a minimum detection rate (90%), a maximum drop against the current limits (5 points), a ceiling on false alarms (3) and on their increase (2). A change that breaches any of them is blocked, and the report lists exactly which faults it would no longer catch.
+- **The change record.** In the original repository, a GitLab pipeline runs the replay on every merge request that edits `alarms.yaml`, posts the measured result on the request, scans for hard-coded credentials, writes a change record (what changed, measured effect, scan status, an approval line and a reference mapping to ISA-18.2 and IEC 62443) and a software bill of materials, deploys to staging, waits for a person before production, and watches the alarm rate afterwards for drift. That pipeline runs only in [ToniGift/AlarmOps](https://github.com/ToniGift/AlarmOps). GitHub does not run it, and this repository does not reproduce the staging, approval or deployment stages.
+
+In this repository the library is reached through three read-only routes in `triage/alarm_limits.py`:
+
+| Route | What it does |
+|---|---|
+| `GET /api/alarmops/baseline` | Replays the current limits in `plant/alarms.yaml`; lists every tag with its limits, faults and equipment |
+| `GET /api/alarmops/compare?tag=…&low_low=…&low=…&high=…&high_high=…` | Replays edited limits for one tag, applies the gate, and returns pass or blocked with the faults newly missed |
+| `GET /api/alarmops/monitor?log=healthy` or `log=drift` | Runs the drift check on a bundled, simulated post-deploy alarm log |
+
+Nothing is stored; a "change" exists only in the reply. The routes accept GET only, so nothing can be written through them.
+
+## The showcase page
+
+`static/sentinelot.html`, served at `/sentinelot.html`. One file, no build step; three.js is loaded from a CDN for the 3D view.
+
+- **Live:** the Modbus/TCP traffic in the console is generated in the browser, frame by frame, by the page itself. The three attacks (a sealer setpoint write and a robot stop from an office PC, and a register scan from a new host) are simulated the same way. A fixed rule raises the alarm; the 3D view traces the path and lights the firewalls crossed. The analyst note is pre-written unless the page runs where a live model is available, and it says which.
+- **Recorded:** the "Recorded" tab holds eight alerts from the synthetic scenarios with the verdicts SentinelOT returned in its evaluation run on 6 October 2026. These are real outputs of the triage module on synthetic inputs, not new runs.
+- **Simulated:** the plant, every host, every address, the process values and the alarm-limit dataset are invented. The page carries a "Simulated data, no real plant connected" label on the demo board and a footer that lists what was added for the demo.
+- **Alarm limits:** the "Limits" tab sends edited limits to `/api/alarmops/compare` and shows the detection rate, the false alarms and whether the change passes or is blocked. Opened without the server, it shows saved results labelled "Recorded".
+
+How the attack and the alarm limit relate, in one sentence: the attack does not feed AlarmOps and AlarmOps does not watch traffic; the page shows that the 190 °C sealer limit that catches the attack is the same limit AlarmOps refuses to let anyone widen to 250 °C.
 
 ## Results
 
-All numbers below come from synthetic alerts or simulated sensor data. There are no results from real or lab traffic yet. The numbers have two origins, kept apart here.
+All numbers come from synthetic alerts or simulated sensor data. There are no results from real or lab traffic. The two origins are kept apart.
 
-### From the hackathon repositories
+### Numbers from the hackathon repositories
 
-**Triage**, measured on the hackathon version in [ToniGift/sentinelOT](https://github.com/ToniGift/sentinelOT), with synthetic alerts written with AI assistance (Claude), then reviewed and run by me:
+**Triage**, measured on the hackathon version in [ToniGift/sentinelOT](https://github.com/ToniGift/sentinelOT) with synthetic alerts written with AI assistance (Claude), then reviewed and run by me. Not re-measured here.
 
 - **Fresh held-out set (10 scenarios, 3 runs each):** 29 of 30 verdicts correct, 28 of 30 technique choices acceptable
 - **Prompt injection:** 0 of 10 injected runs followed the hidden instruction
 - **Speed:** median 26 seconds per alert across 66 runs
 
-How these were produced, and their limits, are on the [Evaluation](docs/EVALUATION.md) page. They were not re-measured in this repository.
+How these were produced, and their limits, are on the [Evaluation](docs/EVALUATION.md) page.
 
-**AlarmOps**, measured in [ToniGift/AlarmOps](https://github.com/ToniGift/AlarmOps) on its own dataset (3 tags, 21 labelled faults). These are the numbers in `alarmops/README.md`, and `alarmops/` still reproduces them:
+**AlarmOps**, measured in [ToniGift/AlarmOps](https://github.com/ToniGift/AlarmOps) on its own dataset of 3 tags and 21 labelled faults. `alarmops/` still reproduces them.
 
 - **Baseline limits:** 21 of 21 faults detected, 0 false alarms
 - **Tank limits widened to 88 / 95:** blocked, detection 100% to 81.0% (17 of 21)
 
-### From this repository
+### Numbers from this repository
 
-**Alarm limits on the showcase plant**, measured here on the `plant/` dataset (5 tags, 35 labelled faults: the 21 above plus 7 each for the sealer temperature and the conveyor speed). The percentages differ from the AlarmOps ones because the same missed faults are counted out of 35, not 21:
+Measured here on the `plant/` dataset: 5 tags, 35 labelled faults. The 21 AlarmOps faults are kept byte for byte, and 14 new ones were generated for the two tags added for the demo, `sealer_temperature` and `conveyor_speed`. **Those 14 faults were generated for the demo by the same seeded generator and are not independent evidence of anything.** The percentages differ from the AlarmOps ones only because the same missed faults are counted out of 35 instead of 21.
 
 | Change | Result |
 |---|---|
 | Baseline limits | 35 of 35 faults detected, 0 false alarms |
 | Tank limits widened to 88 / 95 | Blocked. Detection 100% to 88.6% (31 of 35). The same four tank faults are missed |
 | Tank limits tightened to 75 / 88 | Passes. 35 of 35, 0 false alarms |
-| Sealer high limit widened from 190 to 250 °C (high high 205 to 265) | Blocked. Detection 100% to 85.7% (30 of 35). Five sealer faults are missed |
+| Sealer high limit widened from 190 to 250 °C (high-high from 205 to 265) | Blocked. Detection 100% to 85.7% (30 of 35). Five sealer faults missed |
 
-`tests/test_alarm_limits.py` checks these numbers.
+`tests/test_alarm_limits.py` checks every number in this table.
 
 ## Quick start
 
-You need Docker, a Nebius Token Factory API key and a Tavily API key.
+### Settings
+
+Copy `.env.example` to `.env` and fill it in. The names, never the values, are:
+
+| Name | Needed for |
+|---|---|
+| `NEBIUS_API_KEY`, `NEBIUS_BASE_URL` | the five model calls, through Nebius Token Factory |
+| `TAVILY_API_KEY` | the threat-intelligence search |
+| `MODEL_INTAKE`, `MODEL_INTEL`, `MODEL_MAPPER`, `MODEL_TRIAGE`, `MODEL_ADVISOR` | which model each agent uses; the server refuses to start if any is empty |
+| `APP_ADMIN_TOKEN` | the `x-admin-token` header for `POST /api/triage` and for the lab feeds |
+| `DEMO_PER_IP_HOUR`, `DEMO_DAILY_CAP` | rate limits on the public demo buttons |
+| `SITE_ADDRESS` | Docker only: `:80` for plain HTTP, or a domain name for automatic HTTPS |
+| `ALARM_LIMITS_ROOT` | optional: `alarmops` to replay the original AlarmOps files instead of `plant/` |
+| `ASSETS_FILE`, `SENTINELOT_URL`, `LAB_*` | the lab feeds only, see [docs/LABSHOCK.md](docs/LABSHOCK.md) |
+
+`.env` is listed in `.gitignore`. Never commit it. The showcase page and the alarm-limit routes work without any API key; only a triage run needs the keys.
+
+### With Docker
+
+Windows (PowerShell):
 
 ```
-copy .env.example .env            # Linux/macOS: cp .env.example .env
-# open .env, add your two API keys and fill in the MODEL_* model names, then:
+copy .env.example .env
 docker compose up --build
 ```
 
-Then open http://localhost for the triage interface, http://localhost/sentinelot.html for the showcase page and http://localhost:8080 for the AlarmOps page. Never commit `.env`.
+Linux/macOS:
 
-The Docker setup has not been run since the `app/` to `triage/` rename and the AlarmOps import, because the machine this was built on has no Docker. The app was started with the image's own command from a copy holding only the files the image includes, and it served the pages and `/api/alarmops/baseline`.
+```
+cp .env.example .env
+docker compose up --build
+```
 
-To run the tests without Docker (the two suites run separately):
+Then open:
+
+| URL | Page |
+|---|---|
+| http://localhost | the triage interface |
+| http://localhost/sentinelot.html | the showcase page |
+| http://localhost:8080 | AlarmOps's own page, with its "Try it yourself" lab |
+
+Stop with Ctrl+C, then `docker compose down`.
+
+### Without Docker
+
+Windows (PowerShell):
+
+```
+python -m venv .venv
+.venv\Scripts\python -m pip install -r requirements.txt
+copy .env.example .env
+.venv\Scripts\python -m uvicorn triage.main:app --port 8000
+```
+
+Linux/macOS:
+
+```
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+cp .env.example .env
+.venv/bin/python -m uvicorn triage.main:app --port 8000
+```
+
+Then open http://localhost:8000 and http://localhost:8000/sentinelot.html. To run AlarmOps's own page as well, `pip install -e alarmops`, then `python -m alarmops.web` from the `alarmops` folder, and open http://localhost:8080.
+
+The showcase page can also be opened as a plain file: the attacks and the 3D plant work, and the "Limits" tab shows its recorded results.
+
+## Project layout
+
+```
+sentinelot-platform/
+├── triage/          the SentinelOT server: five agents, code checks, routes, lab feeds, alarm-limit routes
+├── static/          the two pages: index.html (triage interface) and sentinelot.html (showcase)
+├── data/            the fictional plant (assets.json), the empty lab inventory, MITRE ATT&CK for ICS data
+├── plant/           alarm limits, the labelled dataset and the tag-to-equipment map the alarm-limit routes replay
+├── alarmops/        a copy of ToniGift/AlarmOps at a named commit, used as a library, unchanged
+├── tests/           the platform test suite
+├── results/         evaluation CSVs from the hackathon runs
+├── docs/            the hackathon documentation plus docs/LABSHOCK.md
+├── Dockerfile, docker-compose.yml, Caddyfile
+├── requirements.txt, requirements-lab.txt (scapy, sniffer only), pytest.ini
+└── LICENSE, NOTICE.md, .env.example
+```
+
+## Testing
+
+Two suites, run separately because AlarmOps keeps its own configuration:
 
 ```
 pip install -r requirements.txt -r alarmops/requirements-dev.txt
-python -m pytest
-python -m pytest alarmops
+python -m pytest              # platform: 47 tests
+python -m pytest alarmops     # AlarmOps: 86 tests
 ```
 
-To run only the AlarmOps page without Docker, from the `alarmops` folder:
+The platform suite covers the API and its rate limits, the guards and code checks, the orchestrator with mocked models, the held-out scenario labels, the lab feeds (Modbus parsing, the sniffer rule, the Elasticsearch field mapping, dry run), the alarm-limit routes and every number in the results table, that `plant/` leaves the AlarmOps data unchanged, and that the recorded results embedded in the page match the API. No test calls a model or the network. The AlarmOps suite covers its engine, rules, replay, gate, scripts, CI configuration and web page.
 
-```
-pip install -e .
-python -m alarmops.web
-```
+## Limits and honest caveats
 
-More on the [Run it yourself](docs/RUN_IT.md) page.
-
-## Documentation
-
-| I want to... | Go to |
-|---|---|
-| understand the problem and what it does not do | [About](docs/ABOUT.md) |
-| see how the five agents and the code checks work | [How it works](docs/HOW_IT_WORKS.md) |
-| see what a result looks like | [Examples](docs/EXAMPLES.md) |
-| feed it alerts from a lab | [Lab alerts](docs/LABSHOCK.md) |
-| understand the web page and its API | [Web interface](docs/WEB_INTERFACE.md) |
-| see the fictional plant it is tested on | [Test plant](docs/TEST_PLANT.md) |
-| read the numbers and the limits | [Evaluation](docs/EVALUATION.md) |
-| see the Nemotron, Token Factory, Nebius and Tavily details | [Nemotron and Nebius](docs/NEMOTRON_AND_NEBIUS.md) |
-| read the hackathon build log | [NOTES.md](docs/NOTES.md) |
+- **Simulated data only.** Every alert is synthetic and every sensor value is generated. The evaluation numbers say how the pipeline behaves on alerts written to resemble real ones, not how it would behave on a plant.
+- **No real plant has ever been connected,** and nothing here can connect to one. The sniffer and the Elasticsearch adapter exist, but they have not been run against the planned lab, so there is no lab result of any kind.
+- **The model calls go to a cloud API.** Alert text leaves the machine. A plant that cannot allow that would need a local model, which has not been tried.
+- **The AlarmOps gate policy and the demo faults are choices,** not a standard. The 14 faults added here were generated to make the demo work.
+- **The asset inventory is a JSON file of 14 fictional assets.** Real inventories are larger, messier and change.
+- **A real deployment would still need:** an alert source that is actually wired in; an inventory kept up to date; a trial on past, already-labelled alerts with an analyst's decision beside SentinelOT's; agreed thresholds and someone accountable for the alarm-limit gate; access control and audit logging; and a decision on where the model runs.
 
 ## What's next
 
-- **Lab run.** Fill in the lab inventory, run the planned attacks and compare the verdicts with the expected labels.
-- **AlarmOps and triage together.** They share the showcase page and one alarm limit, but no data passes between them yet.
-- **A shadow-mode trial,** with permission, on a company's past and already labelled alerts: an analyst's decision next to SentinelOT's, with nothing acted on.
+1. **The Labshock run.** Fill in the lab inventory, run the planned attacks in [docs/LABSHOCK.md](docs/LABSHOCK.md) against the expected labels written down first, and report the result, whatever it is.
+2. **A SentinelOT-to-AlarmOps feed.** Today no data passes between them. The next step is for a triage verdict about a limit-related alert to carry the measured effect of the current limits, so the analyst sees both.
+3. **A shadow-mode trial,** with permission, on a company's past and already-labelled alerts: an analyst's decision next to SentinelOT's, nothing acted on.
 
 ## Origin and credits
 
-The triage module started as **SentinelOT**, built for the **Nebius x NVIDIA Global AI Hackathon**, track Best Apps and Agents, on **NVIDIA Nemotron models served by Nebius Token Factory**, with live threat intelligence from the **Tavily Search API**.
+- **SentinelOT**, the triage module, was built for the Nebius x NVIDIA Global AI Hackathon (track Best Apps and Agents). The submission is kept unchanged at [ToniGift/sentinelOT](https://github.com/ToniGift/sentinelOT); this repository was imported from it at commit `4766d66`. Demo video: [youtu.be/G8_dhWq9-PM](https://youtu.be/G8_dhWq9-PM).
+- **AlarmOps** was built for the GitLab Transcend "Life After Code" hackathon. [ToniGift/AlarmOps](https://github.com/ToniGift/AlarmOps) stays its home; `alarmops/` is a copy at commit `834e5e1`.
+- **MITRE ATT&CK® for ICS** supplies the technique data in `data/ics-attack.json`. ATT&CK® is a registered trademark of The MITRE Corporation; this project is not affiliated with or endorsed by MITRE. MITRE's terms are reproduced in `NOTICE.md`.
+- **NVIDIA Nemotron** models, served by **Nebius Token Factory**, make the five agent calls; the hackathon demo ran on **Nebius AI Cloud**. See [docs/NEMOTRON_AND_NEBIUS.md](docs/NEMOTRON_AND_NEBIUS.md).
+- **Tavily Search API** supplies the live threat intelligence.
+- **three.js** (MIT) draws the 3D plant, loaded from the cdnjs CDN.
+- **Scapy** (GPL-2.0) is an optional dependency of the Modbus sniffer, installed from PyPI.
+- The synthetic alerts were written with AI assistance (Claude), then reviewed and run by the author. Parts of this repository were built with Claude Code.
 
-| | |
-|---|---|
-| Hackathon submission (kept unchanged) | [github.com/ToniGift/sentinelOT](https://github.com/ToniGift/sentinelOT) |
-| Demo video | [youtu.be/G8_dhWq9-PM](https://youtu.be/G8_dhWq9-PM) |
+## Licence and author
 
-This repository was imported from that submission at commit `4766d66`. The hackathon documentation is kept in `docs/`.
+Released under the **MIT License**; see [`LICENSE`](LICENSE). Third-party material and the origin of each part are in [`NOTICE.md`](NOTICE.md).
 
-The AlarmOps module was built for the **GitLab Transcend "Life After Code" hackathon**. It was imported from [github.com/ToniGift/AlarmOps](https://github.com/ToniGift/AlarmOps) at commit `834e5e1`, and that repository stays the home of its GitLab pipeline. Its own documentation is in `alarmops/`.
-
-## License and notices
-
-Released under the **MIT License** (see `LICENSE`). It uses MITRE ATT&CK® for ICS data. ATT&CK® is a registered trademark of The MITRE Corporation, and this project is not affiliated with or endorsed by MITRE. See [`NOTICE.md`](NOTICE.md) for MITRE's terms, the origin of the code and other third-party notices.
-
-## Author
-
-Built by Anthony Afonughe, an OT/ICS security practitioner.
+Built by Anthony Afonughe, an OT/ICS security engineer. Contact: anthonygift2019@gmail.com
