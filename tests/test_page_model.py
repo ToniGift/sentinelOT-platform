@@ -447,17 +447,22 @@ PLATES = [["PLC-Line1", "PLC-101"], ["HMI-Line1", "HMI-101"], ["HIST-01", "DB-60
 
 
 def plates_on_their_equipment(page):
+    """A plate sits on its equipment, unless the collision handling nudged it straight up."""
     page.wait_for_timeout(1800)                               # let a glide finish
     import json
     r = page.evaluate(PROJECT.replace("__NAMES__", json.dumps(PLATES)))
     assert r["iso"] is True
-    seen = 0
+    seen = exact = 0
     for o in r["out"]:
         if o["ex"] < o["w"] / 2 + 8 or o["ex"] > o["sw"] - o["w"] / 2 - 8:
             continue                                          # kept inside the stage on purpose
-        assert abs(o["x"] - o["ex"]) < 1.5 and abs(o["y"] - o["ey"]) < 1.5, o
+        assert abs(o["x"] - o["ex"]) < 1.5, o                 # a nudge never moves it sideways
+        if abs(o["y"] - o["ey"]) < 1.5:
+            exact += 1
+        else:
+            assert o["y"] < o["ey"], o                        # nudged up and away, never down
         seen += 1
-    assert seen >= 4
+    assert seen >= 4 and exact >= 2
     return r
 
 
@@ -518,7 +523,8 @@ def test_the_four_switches_start_as_found_and_are_labelled_by_their_rule(page):
         fw: li.querySelector('.swt').dataset.fw}))""")
     assert [r["fw"] for r in rows] == ["FW-301", "FW-302", "FW-303", "FW-304"]
     assert all(r["state"] == "ALLOW" and r["pressed"] == "true" for r in rows)
-    assert rows[3]["label"].endswith("Non-approved hosts to controllers, Modbus 502")
+    assert rows[3]["label"].endswith(
+        "Non-approved hosts across the line 1 cell boundary, Modbus 502 and DNP3 20000")
     for r in rows[:3]:                                   # each names its own rule, not the same one
         assert "Non-approved" in r["label"] and "any port" in r["label"]
     assert len({r["label"] for r in rows}) == 4
@@ -641,3 +647,170 @@ def test_the_page_has_a_drawn_favicon_and_no_emoji(page):
     assert href.startswith("data:image/svg+xml,")
     assert "<svg" in href.replace("%3C", "<") and "emoji" not in href
     assert "text" not in href                                 # drawn, not a character
+
+
+# ---------------- the design-review fixes ----------------
+
+def visible_plates(page):
+    return page.evaluate("""() => [...document.querySelectorAll('#labels .lab')]
+        .filter(e => e.style.display !== 'none')
+        .map(e => { const r = e.getBoundingClientRect();
+          return {text: e.textContent, level: e.classList.contains('level'),
+                  lit: e.classList.contains('lit'), hot: e.classList.contains('hot'),
+                  x: r.left, y: r.top, w: r.width, h: r.height,
+                  size: parseFloat(getComputedStyle(e).fontSize)} })""")
+
+
+def test_no_two_plates_overlap_and_lit_ones_stay_on_top(browser):
+    page = open_page(browser)
+    set_rule(page, "FW-304", "deny")                           # lights FW-304 with a DENY plate
+    page.click('[data-atk="setpoint"]')
+    page.wait_for_function("() => window.__sentinelot.live().blocked", timeout=20000)
+    page.wait_for_timeout(1500)
+    plates = visible_plates(page)
+    assert len(plates) > 10
+    for i, a in enumerate(plates):
+        for b in plates[i + 1:]:
+            apart = (a["x"] + a["w"] <= b["x"] or b["x"] + b["w"] <= a["x"]
+                     or a["y"] + a["h"] <= b["y"] or b["y"] + b["h"] <= a["y"])
+            assert apart, (a["text"], b["text"])
+    assert any("DENY" in p["text"] for p in plates)            # the lit one survived the sorting
+    assert page.errors == []
+    page.close()
+
+
+def test_level_names_sit_in_a_gutter_with_a_leader_line_to_their_floor(browser):
+    page = open_page(browser)
+    for camera in ("#persp", "#isob"):
+        page.click(camera)
+        page.wait_for_timeout(1500)
+        levels = [p for p in visible_plates(page) if p["level"]]
+        assert len(levels) == 7
+        lefts = {round(p["x"], 1) for p in levels}
+        assert len(lefts) == 1, lefts                          # one gutter, all of them aligned
+        # nothing else is drawn on top of a level name
+        others = [p for p in visible_plates(page) if not p["level"]]
+        for lv in levels:
+            for o in others:
+                apart = (lv["x"] + lv["w"] <= o["x"] or o["x"] + o["w"] <= lv["x"]
+                         or lv["y"] + lv["h"] <= o["y"] or o["y"] + o["h"] <= lv["y"])
+                assert apart, (lv["text"], o["text"], camera)
+        leaders = page.evaluate(
+            "() => [...document.querySelectorAll('#leaders line')].map(l => ({"
+            "x1: +l.getAttribute('x1'), y1: +l.getAttribute('y1'),"
+            "x2: +l.getAttribute('x2'), y2: +l.getAttribute('y2')}))")
+        assert len(leaders) >= 5, camera
+        for ln in leaders:
+            assert ln["x2"] > ln["x1"]                         # out from the gutter to the floor
+    assert page.errors == []
+    page.close()
+
+
+def test_at_phone_width_only_the_levels_that_matter_keep_their_plates(browser):
+    page = browser.new_page(viewport={"width": 390, "height": 844})
+    page.goto(PAGE, wait_until="domcontentloaded")
+    page.wait_for_function("() => window.ProcessModel && window.__sentinelot")
+    page.wait_for_timeout(1800)
+    plates = [p for p in visible_plates(page) if not p["level"]]
+    assert plates == [] or all(p["lit"] or p["hot"] for p in plates)
+    assert all(p["size"] >= 11 for p in visible_plates(page))
+    page.click("#levels button:text-is('L1')")
+    page.wait_for_timeout(1600)
+    shown = [p["text"] for p in visible_plates(page) if not p["level"]]
+    assert "PLC-101" in shown and "PLC-201" in shown           # the focused level
+    assert "SRV-401" not in shown                              # level 4, not focused
+    assert all(p["size"] >= 11 for p in visible_plates(page))
+    page.close()
+
+
+def test_wide_screens_still_show_every_plate(page):
+    page.wait_for_timeout(1200)
+    shown = [p["text"] for p in visible_plates(page) if not p["level"]]
+    for tag in ("PLC-101", "SRV-401", "GW-101", "FW-301", "RB-101"):
+        assert any(t.startswith(tag) for t in shown), tag
+
+
+def test_the_annunciator_is_on_the_first_screen_beside_the_stage(browser):
+    page = browser.new_page(viewport={"width": 1280, "height": 900})
+    page.goto(PAGE, wait_until="domcontentloaded")
+    page.wait_for_function("() => window.__sentinelot")
+    page.wait_for_timeout(1200)
+    box = page.evaluate("""() => { const w = document.querySelector('#windows');
+        const s = document.querySelector('#stage').getBoundingClientRect();
+        const r = w.getBoundingClientRect();
+        return {winTop: r.top, winBottom: r.bottom, stageBottom: s.bottom,
+                h: window.innerHeight} }""")
+    assert box["winTop"] < box["h"], box                       # the windows start above the fold
+    assert box["winTop"] > box["stageBottom"] - 2              # and below the stage, not beside it
+    assert box["stageBottom"] < box["h"]                       # the stage fits too
+    page.close()
+
+
+def test_the_switch_panel_folds_up_on_a_phone_and_is_open_on_a_desktop(browser):
+    for width, want_open in ((390, False), (1280, True)):
+        page = browser.new_page(viewport={"width": width, "height": 844})
+        page.goto(PAGE, wait_until="domcontentloaded")
+        page.wait_for_function("() => window.__sentinelot")
+        assert page.evaluate("() => document.querySelector('#segbox').open") is want_open
+        page.close()
+
+
+def test_phone_order_is_stage_tabs_attacks_then_annunciator(browser):
+    page = browser.new_page(viewport={"width": 390, "height": 844})
+    page.goto(PAGE, wait_until="domcontentloaded")
+    page.wait_for_function("() => window.__sentinelot")
+    page.wait_for_timeout(1000)
+    tops = page.evaluate("""() => { const t = s => document.querySelector(s).getBoundingClientRect().top
+                                      + window.scrollY;
+        return {stage: t('#stage'), tabs: t('#tabs'), attacks: t('.attacks'),
+                last: t('[data-atk="scan"]'), anun: t('#windows'),
+                h: window.innerHeight} }""")
+    assert tops["stage"] < tops["tabs"] < tops["attacks"] < tops["anun"]
+    # all three attacks and the annunciator within one screen of scrolling from the tab row
+    assert tops["last"] - tops["tabs"] < tops["h"]
+    assert tops["anun"] - tops["tabs"] < tops["h"], tops
+    page.close()
+
+
+def test_every_control_a_thumb_has_to_hit_is_tall_enough_on_a_phone(browser):
+    page = browser.new_page(viewport={"width": 390, "height": 844})
+    page.goto(PAGE, wait_until="domcontentloaded")
+    page.wait_for_function("() => window.__sentinelot")
+    page.click("#tab-lim")
+    page.wait_for_timeout(600)
+    small = page.evaluate("""() => [...document.querySelectorAll(
+        '.btn, .swt, .sq, .tabs button, .tools button, .levels button, .recs button, #lim-tag, .lims input')]
+        .filter(e => e.offsetParent !== null)
+        .map(e => ({t: (e.textContent || e.id).trim().slice(0, 24), h: e.getBoundingClientRect().height}))
+        .filter(e => e.h > 0 && e.h < 40)""")
+    assert small == [], small
+    page.close()
+
+
+def test_the_limits_heading_is_not_clipped(browser):
+    """Big Shoulders is a tall face: a tight line box cut the underscore off sealer_temperature."""
+    page = browser.new_page(viewport={"width": 1280, "height": 900})
+    page.goto(PAGE, wait_until="domcontentloaded")
+    page.wait_for_function("() => document.querySelector('#lim-tag').options.length === 5")
+    page.click("#tab-lim")
+    page.click("#lim-preset")
+    page.wait_for_selector("#lim-out h3")
+    m = page.evaluate("""() => { const h = document.querySelector('#lim-out h3');
+        const cs = getComputedStyle(h);
+        return {text: h.textContent, line: parseFloat(cs.lineHeight),
+                size: parseFloat(cs.fontSize), clip: cs.overflow,
+                scroll: h.scrollHeight, client: h.clientHeight} }""")
+    assert "sealer_temperature" in m["text"]
+    assert m["line"] / m["size"] >= 1.2, m                     # room under the baseline
+    assert m["scroll"] <= m["client"] + 1, m                   # nothing cut off
+    page.close()
+
+
+def test_the_internet_is_drawn_flat_with_no_spheres(browser):
+    page = open_page(browser)
+    kinds = page.evaluate("""() => { const seen = [];
+        // walk what the renderer holds, counting sphere geometries that belong to equipment
+        return window.__sentinelot.geometry() }""")
+    assert kinds["spheres"] == 0, kinds
+    assert kinds["shapes"] >= 2                                # the cloud, drawn front and back
+    page.close()

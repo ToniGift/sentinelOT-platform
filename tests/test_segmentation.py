@@ -114,7 +114,7 @@ def ask(page, path, denied):
 @pytest.mark.parametrize("path,denied", CASES,
                          ids=[case_id(*c) for c in CASES])
 def test_every_path_against_every_combination_of_switches(page, path, denied):
-    """All 14 paths x 16 switch combinations, against the independent table above."""
+    """All 13 paths x 16 switch combinations (208 cases), against the independent table above."""
     got = ask(page, path, denied)
     want = expected_stop(path[1], path[2], path[3], path[4], denied)
     assert got["stoppedAt"] == want

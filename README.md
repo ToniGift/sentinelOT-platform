@@ -74,7 +74,7 @@ Each firewall has one switch on the **Live** tab, and each switch controls one r
 | FW-301 | SEG-301 | Non-approved remote hosts into the plant, any port |
 | FW-302 | SEG-302 | Non-approved office hosts past the DMZ, any port |
 | FW-303 | SEG-303 | Non-approved DMZ hosts into operations, any port |
-| FW-304 | SEG-304 | Non-approved hosts to controllers, Modbus 502 (and DNP3 20000, both directions across the cell boundary) |
+| FW-304 | SEG-304 | Non-approved hosts across the line 1 cell boundary, Modbus 502 and DNP3 20000, in either direction |
 
 The **approved flows** are separate, fixed rules that no switch touches: HMI-Line1 and the historian polling the controllers, the engineering workstation reaching both, and the one configured outstation reporting to SCADA. That is why the log keeps filling even with all four set to DENY.
 
