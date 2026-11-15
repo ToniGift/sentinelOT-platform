@@ -40,7 +40,9 @@
   --slab:#6E6B60; --box:#1E2124; --fwfill:#33362F; --edge:#FFB000;
 }
 *,*::before,*::after{box-sizing:inherit;border-radius:0}
-html{scroll-padding-top:env(safe-area-inset-top,0px)}
+/* --hdr is the title strip's live height, set by a small script below: anchor jumps and
+   scrollIntoView stop under the sticky strip instead of behind it */
+html{scroll-padding-top:calc(var(--hdr,0px) + env(safe-area-inset-top,0px))}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15.5px;line-height:1.45}
 a{color:inherit}
 :focus-visible{outline:2px solid var(--live);outline-offset:2px}
@@ -53,7 +55,8 @@ button,input,select{font-family:inherit}
 .in{padding:10px 14px 0}
 
 /* title strip */
-.strip{display:grid;grid-template-columns:auto 1fr auto;gap:0;border-bottom:1px solid var(--rule);margin:4px 4px 0}
+.strip{display:grid;grid-template-columns:auto 1fr auto;gap:0;border-bottom:1px solid var(--rule);margin:4px 4px 0;
+  position:sticky;top:0;z-index:20;background:var(--bg)}
 .strip > *{padding:8px 12px;border-right:1px solid var(--rule);min-width:0}
 .strip > *:last-child{border-right:0}
 .mark{font-family:var(--head);font-weight:800;font-size:24px;letter-spacing:.06em;text-decoration:none;line-height:1}
@@ -2678,6 +2681,12 @@ window.__sentinelot={
   try{var s=localStorage.getItem("sot-theme");if(s==="light"||s==="dark")root.setAttribute("data-theme",s)}catch(e){}
   b.addEventListener("click",function(){var n=dark()?"light":"dark";root.setAttribute("data-theme",n);try{localStorage.setItem("sot-theme",n)}catch(e){}lab()});
   lab();if(mq)mq.addEventListener("change",lab);
+})();
+/* keep --hdr equal to the sticky title strip's height, through resizes and the phone layout */
+(function(){
+  var h=document.querySelector(".strip"),r=document.documentElement;
+  function s(){r.style.setProperty("--hdr",h.offsetHeight+"px")}
+  s();if(window.ResizeObserver)new ResizeObserver(s).observe(h);else window.addEventListener("resize",s);
 })();
 buildRules();buildSeg();paintSeg();buildWindows();buildEq();
 /* on a phone the firewall switches start folded, so the attack buttons and the annunciator

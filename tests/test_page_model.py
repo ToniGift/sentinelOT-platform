@@ -1376,3 +1376,26 @@ def test_every_plate_can_be_brought_back_at_any_angle(browser):
     assert stuck == [], stuck
     assert errors == []
     page.close()
+
+
+def test_the_title_strip_stays_at_the_top_while_scrolling_and_anchors_clear_it(browser):
+    """The strip with the section links is sticky at phone and desktop width. After a long
+    scroll it is still at the top and is what sits there. An anchor jump lands below it, not
+    behind it, because the page's scroll padding follows the strip's own height."""
+    for width, height in ((1280, 900), (390, 844)):
+        page = browser.new_page(viewport={"width": width, "height": height})
+        page.goto(PAGE, wait_until="domcontentloaded")
+        page.wait_for_function("() => window.__sentinelot")
+        page.evaluate("() => scrollTo(0, 1500)")
+        page.wait_for_timeout(300)
+        r = page.evaluate("""() => { const s = document.querySelector('.strip').getBoundingClientRect();
+            return {top: s.top, h: s.height,
+                    on_top: !!document.elementFromPoint(20, s.height / 2).closest('.strip'),
+                    pad: parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop)} }""")
+        assert r["top"] == 0 and r["on_top"], (width, r)
+        assert abs(r["pad"] - r["h"]) <= 1, (width, r)
+        page.evaluate("() => { location.hash = '#equipment' }")
+        page.wait_for_timeout(500)
+        sec = page.evaluate("() => document.querySelector('#equipment').getBoundingClientRect().top")
+        assert sec >= r["h"] - 1, (width, sec, r["h"])
+        page.close()

@@ -240,7 +240,7 @@ The shared plant dataset, 5 tags and 35 labelled faults:
 
 The two tables disagree on percentages because they count the same missed faults out of different totals. **The 14 extra faults were generated for this demo by the same seeded generator. They are not independent evidence of anything.** They exist so the sealer and the conveyor have something to be measured against.
 
-Test suites, run now: 438 tests for the platform, 86 for the AlarmOps copy. The platform's 438 are 47 for the server and the data, 76 that drive the plant page in a browser, 49 that check the page's colours, and 266 that check the firewall rules and the reachability model.
+Test suites, run now: 439 tests for the platform, 86 for the AlarmOps copy. The platform's 439 are 47 for the server and the data, 77 that drive the plant page in a browser, 49 that check the page's colours, and 266 that check the firewall rules and the reachability model.
 
 ## Running it yourself
 
@@ -333,7 +333,7 @@ python -m pytest
 python -m pytest alarmops
 ```
 
-The platform suite covers the API and its rate limits, the code checks, the orchestrator with the models stubbed out, the scenario labels, the lab feeds, the alarm-limit routes and every figure in the results tables, that the shared plant leaves the original dataset untouched, that the saved answers in the page still match the routes, that every colour pair on the plant page keeps a readable contrast in light and dark (`python tests/test_palette_contrast.py` prints the table), and that the firewall rules and the reachability model answer correctly for every path, every host and every combination of the four switches. Seventy-six of those tests drive the page itself in a browser, and 266 more drive the segmentation and reachability model in one. All of them need Playwright and an installed Microsoft Edge (or Chrome), which they launch directly, so no browser download is needed. Playwright is in `requirements-dev.txt` and deliberately not in `requirements.txt`. Without them they are skipped, and `pytest.ini` turns on the summary that lists every skip with its reason, so a skipped test is never mistaken for a passing one. No test calls a model or reaches the network.
+The platform suite covers the API and its rate limits, the code checks, the orchestrator with the models stubbed out, the scenario labels, the lab feeds, the alarm-limit routes and every figure in the results tables, that the shared plant leaves the original dataset untouched, that the saved answers in the page still match the routes, that every colour pair on the plant page keeps a readable contrast in light and dark (`python tests/test_palette_contrast.py` prints the table), and that the firewall rules and the reachability model answer correctly for every path, every host and every combination of the four switches. Seventy-seven of those tests drive the page itself in a browser, and 266 more drive the segmentation and reachability model in one. All of them need Playwright and an installed Microsoft Edge (or Chrome), which they launch directly, so no browser download is needed. Playwright is in `requirements-dev.txt` and deliberately not in `requirements.txt`. Without them they are skipped, and `pytest.ini` turns on the summary that lists every skip with its reason, so a skipped test is never mistaken for a passing one. No test calls a model or reaches the network.
 
 ## Repository map
 
