@@ -325,6 +325,39 @@ The platform imports AlarmOps directly, so there is no second service to start. 
 
 The plant page also opens straight from the file system. The attacks, the 3D view and the What-if sandbox all work that way. Only the gate's **Check change** needs the server, and without it the Limits tab shows a saved answer marked as recorded.
 
+### Hosting the showcase
+
+The plant page can be published as a static site, with no server behind it. The folder to publish is `site/`, which holds one file, `index.html`. It is a byte-for-byte copy of `static/sentinelot.html`, made by `scripts/build_site.py`. The triage interface (`static/index.html`) is not copied, because it needs the platform server and shows nothing useful without one.
+
+**What works on a static host:** the 3D plant, all three live attacks, the four firewall switches, the Segmentation tab, the What-if sandbox, the Limits tab showing its recorded result, and Show trace on a phone. The page does not call `/api/...` at all on a static host, so the browser logs no failed requests.
+
+**What does not work there:**
+- The live AlarmOps check. **Check change** is disabled and the Limits tab says **Recorded**: it shows the result saved from a baseline replay, not a new one.
+- The live AI note. The analyst note is the pre-written one, labelled as such.
+- The triage interface, with its five agents and its history.
+
+**How the page knows.** The platform server adds an `X-SentinelOT-API` header to every response. The page makes one HEAD request for itself and reads that header. A static host never sends it, so the page uses its recorded copy. If the header is there but an `/api/...` answer is a 404 page, any HTML, or text that is not JSON, the page also falls back to **Recorded**. A JSON answer with a `detail` is the server speaking (for example a bad limit), so it is shown as that message and Check change stays on.
+
+**Every page change needs a rebuild.** After editing `static/sentinelot.html`:
+
+```
+python scripts/build_site.py
+git add site/index.html static/sentinelot.html
+git commit
+```
+
+`tests/test_site.py` fails if `site/index.html` differs from `static/sentinelot.html`, so a forgotten rebuild is caught before it is published. The same file serves the page from a plain static server (`python -m http.server --directory site`), which is how the test checks it.
+
+**Render dashboard settings** (Static Site, then connect the repository and the branch you push to):
+
+| Setting | Value |
+|---|---|
+| Service type | Static Site |
+| Publish directory | `site` |
+| Build command | empty |
+
+Render's static-site page says it updates the site on every push to the branch you choose. I read Render's static-site and Blueprint pages while writing this. They do not state whether the dashboard accepts an empty build command, so that setting is unconfirmed. If the form insists on a value, enter a command that does nothing, such as `echo ok`. The Blueprint page says a build command is required for services that are not Docker based and gives no complete static-site example, so there is deliberately no `render.yaml` in this repository.
+
 ### Tests
 
 ```
@@ -341,6 +374,8 @@ The platform suite covers the API and its rate limits, the code checks, the orch
 sentinelot-platform/
 ├── triage/        the server: five agents, the code checks, the API, the lab feeds, the alarm-limit routes
 ├── static/        two pages: index.html for triage, sentinelot.html for the 3D plant
+├── site/          the static showcase for hosting: a copy of sentinelot.html, built by scripts/build_site.py
+├── scripts/       build_site.py
 ├── plant/         alarm limits, the generated dataset, and the tag-to-equipment map
 ├── alarmops/      an unmodified copy of the AlarmOps repository, used as a library
 ├── data/          the fictional asset inventory, an empty lab inventory, the ATT&CK for ICS data

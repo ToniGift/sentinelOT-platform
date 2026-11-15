@@ -1,0 +1,2749 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SentinelOT: OT security demo, simulated plant</title>
+<meta name="description" content="A simulated packaging plant in 3D. Send a simulated Modbus attack, switch firewall rules on and off, see network segmentation, and try an alarm-limit change. Everything on the page is invented and runs in your browser.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="SentinelOT">
+<meta property="og:title" content="SentinelOT: OT security demo, simulated plant">
+<meta property="og:description" content="A simulated packaging plant in 3D. Send a simulated Modbus attack, switch firewall rules on and off, see network segmentation, and try an alarm-limit change. Everything on the page is invented and runs in your browser.">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23F4F1E8'/%3E%3Cg fill='none' stroke='%2314171A' stroke-width='2'%3E%3Crect x='3' y='3' width='26' height='26'/%3E%3Cpath d='M3 21h26M16 3v18'/%3E%3C/g%3E%3Crect x='5' y='23' width='10' height='4' fill='%23B3261E'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Text:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Engineering drawing meets control room. Light = drawing sheet (paper, ink). Dark = night-shift control room (near-black, amber, one alarm red).
+   Text contrast is at least 4.5:1 in both: tests/test_palette_contrast.py reads the tokens below and checks every pair. */
+:root{
+  --bg:#F4F1E8; --panel:#FBF9F3; --well:#FBF9F3; --ink:#14171A; --mute:#4A4F55;
+  --line:#8E8A7C; --rule:#14171A; --live:#1F4E8C; --alarm:#B3261E; --on-alarm:#F4F1E8;
+  --warn:#F2B33D; --on-warn:#14171A; --alarm-tint:#F1D9D3;
+  --slab:#8E8A7C; --box:#E1DBC8; --fwfill:#C9C2AC; --edge:#14171A;
+  --head:"Big Shoulders Text","Arial Narrow","Liberation Sans Narrow","Segoe UI Semibold",Arial,sans-serif;
+  --sans:"IBM Plex Sans","Segoe UI",Helvetica,Arial,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0B0C0D; --panel:#151719; --well:#101214; --ink:#E8E4D8; --mute:#A8A495;
+    --line:#3A3A36; --rule:#6E6B60; --live:#FFB000; --alarm:#FF4B3E; --on-alarm:#0B0C0D;
+    --warn:#FFB000; --on-warn:#0B0C0D; --alarm-tint:#3A1512;
+    --slab:#6E6B60; --box:#1E2124; --fwfill:#33362F; --edge:#FFB000;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0B0C0D; --panel:#151719; --well:#101214; --ink:#E8E4D8; --mute:#A8A495;
+  --line:#3A3A36; --rule:#6E6B60; --live:#FFB000; --alarm:#FF4B3E; --on-alarm:#0B0C0D;
+  --warn:#FFB000; --on-warn:#0B0C0D; --alarm-tint:#3A1512;
+  --slab:#6E6B60; --box:#1E2124; --fwfill:#33362F; --edge:#FFB000;
+}
+*,*::before,*::after{box-sizing:inherit;border-radius:0}
+/* --hdr is the title strip's live height, set by a small script below: anchor jumps and
+   scrollIntoView stop under the sticky strip instead of behind it */
+html{scroll-padding-top:calc(var(--hdr,0px) + env(safe-area-inset-top,0px))}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15.5px;line-height:1.45}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--live);outline-offset:2px}
+h1,h2,h3{font-family:var(--head);font-weight:700;letter-spacing:.02em;text-transform:uppercase}
+button,input,select{font-family:inherit}
+
+/* the sheet: an outer rule and an inner rule, as on a drawing border */
+.sheet{margin:10px;border:2px solid var(--rule);position:relative}
+.sheet::after{content:"";position:absolute;inset:4px;border:1px solid var(--rule);pointer-events:none;z-index:5}
+.in{padding:10px 14px 0}
+
+/* title strip */
+.strip{display:grid;grid-template-columns:auto 1fr auto;gap:0;border-bottom:1px solid var(--rule);margin:4px 4px 0;
+  position:sticky;top:0;z-index:20;background:var(--bg)}
+.strip > *{padding:8px 12px;border-right:1px solid var(--rule);min-width:0}
+.strip > *:last-child{border-right:0}
+.mark{font-family:var(--head);font-weight:800;font-size:24px;letter-spacing:.06em;text-decoration:none;line-height:1}
+.st-title{display:flex;flex-direction:column;justify-content:center;font-family:var(--head);font-weight:700;font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);line-height:1.2}
+.st-title b{color:var(--ink);font-size:17px;font-weight:700}
+.st-meta{display:grid;grid-template-columns:repeat(5,auto);gap:0 18px;margin:0;font-size:12.5px;align-items:center}
+.st-meta div{display:grid;gap:0}
+.st-meta dt{font-family:var(--head);font-size:11px;letter-spacing:.1em;color:var(--mute);text-transform:uppercase}
+.st-meta dd{margin:0;font-family:var(--mono);font-size:13px}
+.st-nav{display:flex;gap:14px;align-items:center;font-family:var(--head);font-weight:700;font-size:15px;letter-spacing:.06em;text-transform:uppercase}
+.st-nav a{text-decoration:none;border-bottom:1px solid transparent}
+.st-nav a:hover{border-bottom-color:var(--ink)}
+.sq{font-family:var(--head);font-weight:700;font-size:14px;letter-spacing:.08em;text-transform:uppercase;border:1px solid var(--rule);background:transparent;color:var(--ink);padding:3px 9px;cursor:pointer}
+.sq:hover{background:var(--ink);color:var(--bg)}
+.st-right{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.st-meta .sm,.simtag .sm{display:none}
+.simtag{font-family:var(--head);font-weight:800;font-size:14px;letter-spacing:.1em;border:1px solid var(--rule);padding:2px 7px;color:var(--ink);white-space:nowrap}
+
+/* first screen: one plain sentence */
+.intro{display:grid;grid-template-columns:auto minmax(0,74ch);gap:4px 24px;padding:9px 14px 8px;align-items:baseline}
+.intro h1{margin:0;font-size:clamp(20px,2.2vw,26px);line-height:1;letter-spacing:.04em;white-space:nowrap}
+.intro p{margin:0;font-size:15px}
+.intro p b{font-weight:600}
+
+/* board */
+.board{margin:0 4px;border-top:1px solid var(--rule)}
+.sg{display:grid;grid-template-columns:152px minmax(0,1fr) clamp(380px,32vw,520px);
+  grid-template-areas:"rail stage panel" "anun anun tblock" "proc proc log"}
+.rail{grid-area:rail;border-right:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+/* sized against the viewport as well as the width, so the annunciator's windows are on the
+   first screen beside the stage at 1280x900 */
+.stage{grid-area:stage;position:relative;height:min(clamp(430px,44vw,660px),calc(100vh - 290px));min-height:430px;overflow:hidden;border-bottom:1px solid var(--rule)}
+/* the side panel is its own viewport, the same height as the stage, with its own scrollbar.
+   Without this the firewall switches make the column taller than the stage and push the
+   annunciator off the first screen. */
+.panel{grid-area:panel;border-left:1px solid var(--rule);border-bottom:1px solid var(--rule);padding:12px 14px;min-width:0;
+  height:min(clamp(430px,44vw,660px),calc(100vh - 290px));min-height:430px;overflow-y:auto;overscroll-behavior:contain;
+  scrollbar-width:thin;scrollbar-gutter:stable;scroll-snap-type:y proximity}
+.panel:focus-visible{outline:2px solid var(--live);outline-offset:-2px}
+/* a new alarm is scrolled into view in the panel and marked for a moment */
+@keyframes newalarm{0%,100%{box-shadow:none}25%,75%{box-shadow:inset 0 0 0 3px var(--ink)}}
+.alarm.justin{animation:newalarm 1.6s steps(1,end) 2}
+@media (prefers-reduced-motion: reduce){.alarm.justin{animation:none;box-shadow:inset 0 0 0 3px var(--ink)}}
+.anun{grid-area:anun;padding:12px 14px;border-bottom:1px solid var(--rule);min-width:0}
+.tblock{grid-area:tblock;border-left:1px solid var(--rule);border-bottom:1px solid var(--rule);padding:12px 14px;min-width:0}
+.proc{grid-area:proc;padding:12px 14px;border-bottom:1px solid var(--rule);min-width:0}
+.logc{grid-area:log;border-left:1px solid var(--rule);padding:12px 14px;border-bottom:1px solid var(--rule);min-width:0}
+.sg h2{font-size:17px;margin:0 0 8px;letter-spacing:.08em;line-height:1.2}
+.sg h2 span{font-family:var(--mono);font-weight:400;font-size:12px;letter-spacing:0;color:var(--mute);text-transform:none;margin-left:6px}
+.note{font-size:14px;color:var(--mute);margin:0 0 10px}
+
+/* rail: views, as an index */
+.rail h2{padding:10px 12px 0}
+.tabs{display:flex;flex-direction:column;margin:0}
+.tabs button{display:flex;gap:8px;align-items:baseline;text-align:left;font-family:var(--head);font-weight:700;font-size:17px;letter-spacing:.05em;text-transform:uppercase;padding:9px 12px;border:0;border-top:1px solid var(--line);background:transparent;color:var(--ink);cursor:pointer}
+.tabs button .n{font-family:var(--mono);font-weight:500;font-size:11px;color:var(--mute);letter-spacing:0}
+.tabs button .sm{display:none}
+.tabs button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.tabs button[aria-pressed="true"] .n{color:var(--bg)}
+.railnote{padding:10px 12px;font-size:12.5px;color:var(--mute);border-top:1px solid var(--line)}
+.pane[hidden]{display:none}
+
+/* 3D stage */
+.stage canvas{position:absolute;inset:0;display:block;width:100%;height:100%;touch-action:pan-y;cursor:grab}
+.stage canvas:active{cursor:grabbing}
+.labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.leaders{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.leaders line{stroke:var(--rule);stroke-width:1;stroke-dasharray:2 3}
+.lab{position:absolute;left:0;top:0;font-family:var(--mono);font-size:11.5px;line-height:1.1;white-space:nowrap;color:var(--ink);background:var(--panel);border:1px solid var(--rule);padding:1px 4px;will-change:transform}
+.lab.level{background:var(--bg);border:0;color:var(--mute);font-family:var(--head);font-weight:700;font-size:13px;letter-spacing:.07em;text-transform:uppercase;padding:0 5px 0 0;z-index:2}
+.lab.hot{background:var(--ink);color:var(--bg);font-weight:500;z-index:3}
+.lab.sig{border-style:dashed}
+.lab.lit{background:var(--alarm);color:var(--on-alarm);border-color:var(--alarm);z-index:4}
+.lab.dim{opacity:.32}
+.tools{position:absolute;right:10px;bottom:10px;display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;max-width:calc(100% - 64px)}
+.tools button,.proj button,.levels button{font-family:var(--head);font-weight:700;letter-spacing:.05em;text-transform:uppercase;font-size:15px;min-width:38px;height:36px;padding:0 9px;border:1px solid var(--rule);background:var(--panel);color:var(--ink);cursor:pointer}
+.tools button:hover,.levels button:hover,.proj button:hover{background:var(--ink);color:var(--bg)}
+.tools .sm{display:none}
+.proj{position:absolute;right:10px;top:10px;display:flex}
+.proj button + button{border-left:0}
+.proj button[aria-pressed="true"],.levels button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.levels{position:absolute;left:10px;top:10px;display:flex;flex-direction:column;gap:3px}
+.levels button{min-width:44px;height:32px;font-size:14px;padding:0 6px}
+.cap{position:absolute;left:10px;bottom:10px;max-width:calc(100% - 330px);font-size:12.5px;color:var(--mute);background:var(--bg);padding:2px 6px 2px 0}
+.card{position:absolute;left:66px;top:10px;max-width:min(300px,calc(100% - 150px));background:var(--panel);border:1px solid var(--rule);padding:10px 12px;font-size:14px;z-index:6}
+.card[hidden]{display:none}
+.card h3{font-size:19px;margin:0 28px 4px 0;line-height:1.24;overflow-wrap:anywhere}
+.card p{margin:0 0 6px}
+.card .x{position:absolute;right:2px;top:2px;width:32px;height:32px;border:0;background:transparent;color:var(--ink);font-size:20px;cursor:pointer}
+.nogl{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;color:var(--mute)}
+
+/* buttons */
+.btn{font-family:var(--head);font-weight:700;font-size:16px;letter-spacing:.05em;text-transform:uppercase;border:1px solid var(--rule);background:var(--ink);color:var(--bg);padding:8px 14px;cursor:pointer;text-align:left}
+.btn.ghost{background:transparent;color:var(--ink)}
+.btn.ghost:hover{background:var(--ink);color:var(--bg)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.attacks{display:grid;gap:6px;margin-bottom:12px}
+.attacks .btn span{display:block;font-family:var(--sans);font-weight:400;font-size:13.5px;letter-spacing:0;text-transform:none;opacity:.9}
+
+/* the alarm detail for the selected alarm */
+.alarm{border:1px solid var(--rule);background:var(--well);padding:10px 12px}
+.alarm.quiet{border-style:dashed;border-color:var(--line)}
+.alarm.quiet p{margin:0;color:var(--mute)}
+.sev{display:inline-block;font-family:var(--head);font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-size:15px;padding:1px 8px;background:var(--alarm);color:var(--on-alarm)}
+.alarm.warnbox .sev{background:var(--warn);color:var(--on-warn)}
+.alarm.crit{border-color:var(--alarm);border-width:2px}
+.alarm.warnbox{border-color:var(--warn);border-width:2px}
+/* Big Shoulders is a tall face: 1.1 clips an underscore in a tag like sealer_temperature */
+.alarm h3,.detail h3{font-size:21px;line-height:1.24;margin:8px 0;padding-bottom:1px;overflow-wrap:anywhere}
+.facts{margin:0 0 10px;display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:13.5px}
+.facts dt{color:var(--mute);font-family:var(--head);font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:12.5px}
+.facts dd{margin:0;overflow-wrap:anywhere}
+.ai{border-top:1px solid var(--line);padding-top:10px;margin-top:6px}
+.ai .who{font-size:12.5px;color:var(--mute);margin:0 0 4px;font-family:var(--mono)}
+.ai .text{margin:0;white-space:pre-line;font-size:15px}
+.ack{margin-top:10px;margin-right:8px}
+.fold{border-top:1px solid var(--line);margin-top:8px}
+.fold .foldhd{display:flex;align-items:center;gap:8px;cursor:pointer;list-style:none;
+  font-family:var(--head);font-weight:700;letter-spacing:.07em;text-transform:uppercase;font-size:14px;
+  color:var(--mute);padding:7px 0;min-height:34px}
+.fold .foldhd::-webkit-details-marker{display:none}
+.fold .foldhd::after{content:"\2212";margin-left:auto;font-family:var(--mono);font-weight:400}
+.fold:not([open]) .foldhd::after{content:"+"}
+.fold .foldhd:hover,.fold[open] .foldhd{color:var(--ink)}
+.fold .foldhd:focus-visible{outline:2px solid var(--live);outline-offset:2px}
+.fold .ai{border-top:0;padding-top:0;margin-top:0}
+.ai.note .lead{margin:0;white-space:pre-line;font-size:15px}
+.ai.note.open .lead{display:none}
+.ai.note:not(.open) .text,.ai.note:not(.open) .extra{display:none}
+.ai.note.short .more{display:none}
+.ai.note .more{margin-top:6px;padding:0;border:0;background:none;color:var(--ink);cursor:pointer;
+  font-family:var(--head);font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:14px;
+  text-decoration:underline;text-underline-offset:3px;min-height:34px}
+.ai.note .more:focus-visible{outline:2px solid var(--live);outline-offset:2px}
+.btnrow{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.btnrow .ack{margin:0}
+
+/* recorded alerts */
+.recs{display:grid;gap:0;margin-bottom:10px;border:1px solid var(--rule)}
+.recs button{font-size:14.5px;text-align:left;display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center;padding:7px 10px;border:0;border-bottom:1px solid var(--line);background:var(--well);color:var(--ink);cursor:pointer}
+.recs button:last-child{border-bottom:0}
+.recs button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.recs button:disabled{opacity:.45;cursor:not-allowed}
+.dot{width:10px;height:10px;border:1px solid var(--rule)}
+.v-escalate{background:var(--alarm)} .v-investigate{background:var(--warn)} .v-likely_benign{background:var(--live)}
+.detail{background:var(--well);border:1px solid var(--rule);padding:10px 12px}
+.detail .empty{margin:0;color:var(--mute)}
+.detail p{margin:0 0 10px;font-size:15px}
+.badge{display:inline-block;font-family:var(--head);font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-size:14px;padding:1px 8px;color:var(--on-alarm)}
+.badge.v-investigate{color:var(--on-warn)}
+.badge.v-likely_benign{color:var(--bg)}
+.badge.g-pass{background:var(--live);color:var(--bg)}
+.badge.g-block{background:var(--alarm);color:var(--on-alarm)}
+.badge.g-rec{background:var(--mute);color:var(--bg)}
+.lims{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px}
+.lims label{display:grid;gap:3px;font-size:13px;color:var(--mute);font-family:var(--head);font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.lims label.wide{grid-column:1/-1}
+.lims input,.lims select{font-family:var(--mono);font-size:15px;text-transform:none;letter-spacing:0;color:var(--ink);background:var(--well);border:1px solid var(--rule);padding:6px 8px;min-width:0;width:100%}
+.limbtns{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.sim-ctl{display:grid;gap:10px;margin-bottom:10px}
+.sl{display:grid;grid-template-columns:1fr auto;gap:3px 10px;align-items:center;font-size:14px}
+.sl label{grid-column:1/-1;color:var(--mute);font-size:13px;font-family:var(--head);font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.sl input[type=range]{width:100%;min-width:0;height:28px;accent-color:var(--ink)}
+.sl .nb{white-space:nowrap}
+.sl .nb input{font-family:var(--mono);font-size:15px;width:78px;color:var(--ink);background:var(--well);border:1px solid var(--rule);padding:4px 6px}
+.simrow{display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.chk{display:flex;gap:8px;align-items:center;font-size:15px}
+.chk input{width:18px;height:18px;accent-color:var(--ink)}
+.note.model{border-left:3px solid var(--rule);padding-left:9px}
+.sub{font-size:16px;margin:14px 0 6px}
+.fx{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.fx li{background:var(--well);border:1px solid var(--line);border-left:4px solid var(--line);padding:6px 9px;font-size:14px}
+.fx li.warn{border-left-color:var(--warn)}
+.fx li.alarm{border-left-color:var(--alarm)}
+.fx li span{display:block;color:var(--mute);font-size:13px;font-family:var(--mono)}
+.cmp{width:100%;border-collapse:collapse;font-size:13.5px;margin-bottom:6px}
+.cmp th,.cmp td{text-align:left;padding:4px 6px 4px 0;border-bottom:1px solid var(--line);vertical-align:top}
+.cmp th{color:var(--mute);font-weight:500;font-family:var(--head);letter-spacing:.06em;text-transform:uppercase;font-size:12.5px}
+.cmp small{display:block;color:var(--mute);font-size:12px;font-family:var(--mono)}
+.pill{display:inline-block;font-family:var(--head);font-weight:800;letter-spacing:.06em;text-transform:uppercase;font-size:13px;padding:0 6px;border:1px solid var(--rule);white-space:nowrap}
+.pill.warn{background:var(--warn);color:var(--on-warn);border-color:var(--warn)}
+.pill.alarm{background:var(--alarm);color:var(--on-alarm);border-color:var(--alarm)}
+.miss{border:2px solid var(--alarm);background:var(--well);padding:8px 10px;margin:8px 0;font-size:15px}
+.miss b{display:block;margin-bottom:2px;font-family:var(--head);letter-spacing:.06em;text-transform:uppercase}
+
+/* annunciator: one window per alarm */
+.seg{border:1px solid var(--rule);padding:10px 12px;margin-bottom:12px}
+.seg .hd{display:flex;gap:8px;align-items:center;flex-wrap:wrap;cursor:pointer;list-style:none;min-height:34px}
+.seg .hd::-webkit-details-marker{display:none}
+.seg .hd::after{content:"\2212";margin-left:auto;font-family:var(--mono);color:var(--mute)}
+.seg:not([open]) .hd::after{content:"+"}
+.sgh{font-family:var(--head);font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:16px}
+.rules{list-style:none;margin:8px 0;padding:0;border-top:1px solid var(--line)}
+/* every switch row is the same height, so the panel's scroll never cuts one in half */
+.rules li{display:grid;grid-template-columns:1fr auto;grid-template-areas:"lb sw" "dt dt";gap:2px 10px;align-items:center;padding:0;
+  height:104px;border-bottom:1px solid var(--line);scroll-snap-align:start;overflow:hidden}
+.rules .lb{grid-area:lb}
+.rules .swt{grid-area:sw}
+.rules .dt{grid-area:dt;margin:0}
+.rules .lb{display:flex;flex-direction:column;gap:2px;font-size:13.5px;line-height:1.25;min-width:0}
+.rules .lb b{font-family:var(--mono);font-weight:500;font-size:12px;color:var(--mute)}
+.rules .lb .tx{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.rules .dt{font-family:var(--mono);font-size:11.5px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.swt{font-family:var(--head);font-weight:800;letter-spacing:.08em;font-size:15px;min-width:74px;padding:5px 10px;border:1px solid var(--rule);background:var(--panel);color:var(--ink);cursor:pointer}
+.swt[aria-pressed="false"]{background:var(--ink);color:var(--bg)}
+/* On a narrow screen the plant sits above the controls, so reading a tall alarm scrolls the trace
+   off the top. This brings it back. It only appears while there is a trace to see and the plant is
+   off screen, it scrolls once and lets go, and it never pins or locks the page. */
+.tracebtn{position:fixed;right:12px;bottom:12px;z-index:30;min-height:44px;padding:10px 14px;
+  font-family:var(--head);font-weight:800;letter-spacing:.07em;text-transform:uppercase;font-size:15px;
+  border:2px solid var(--rule);background:var(--panel);color:var(--ink);cursor:pointer;
+  margin-bottom:env(safe-area-inset-bottom,0px)}
+.tracebtn::before{content:"\2191";margin-right:7px;font-family:var(--mono);font-weight:400}
+.tracebtn:hover{background:var(--ink);color:var(--bg)}
+.tracebtn[hidden]{display:none}
+@media (min-width:1001px){.tracebtn{display:none}}
+.segsum{font-family:var(--mono);font-size:12.5px;color:var(--mute);border-top:1px solid var(--rule);padding-top:7px}
+.segsum b{color:var(--ink);font-weight:500}
+.row.deny{box-shadow:inset 4px 0 0 var(--mute);background:transparent}
+.row.deny .meta .fc{color:var(--mute)}
+/* the informational window is a thin full-width strip under the four alarm windows: it is not an
+   alarm, so it does not take an alarm-sized box or wrap the row onto a second line */
+.windows li:last-child{grid-column:1/-1}
+.win.info{min-height:0;display:flex;gap:4px 12px;align-items:baseline;flex-wrap:wrap;padding:6px 9px;border-style:dashed}
+.win.info .w-txt{font-size:17px}
+.win.info.on{border-style:solid}
+.anun-h{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin-bottom:8px}
+.anun-h h2{margin:0}
+.an-st{font-family:var(--mono);font-size:12.5px;color:var(--mute);flex:1 1 200px}
+.anun-btns{display:flex;gap:6px}
+.windows{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.win{position:relative;display:grid;grid-template-rows:auto 1fr auto;gap:2px;width:100%;min-height:92px;text-align:left;padding:7px 9px;border:1px solid var(--rule);background:var(--panel);color:var(--ink);cursor:pointer}
+.win .w-tag{font-family:var(--mono);font-size:12px}
+.win .w-txt{font-family:var(--head);font-weight:800;font-size:22px;line-height:1;letter-spacing:.04em;text-transform:uppercase;align-self:center}
+.win .w-st{font-family:var(--mono);font-size:11.5px;letter-spacing:.02em}
+.win .w-fo{position:absolute;right:0;top:0;font-family:var(--head);font-weight:800;font-size:12px;letter-spacing:.08em;padding:1px 6px;background:var(--ink);color:var(--bg);display:none}
+.win.fo .w-fo{display:block}
+.win.sel{outline:2px solid var(--live);outline-offset:1px}
+/* alarm: filled in the alarm colour (red) or the warning colour (amber), with the state in words as well */
+.win.on.crit{background:var(--alarm);color:var(--on-alarm);border-color:var(--alarm)}
+.win.on.warn{background:var(--warn);color:var(--on-warn);border-color:var(--warn)}
+.win.on.crit .w-fo,.win.on.warn .w-fo{background:var(--on-alarm);color:var(--alarm)}
+.win.on.unack{border-width:3px;padding:5px 7px}
+.win.on.unack.warn .w-fo{color:var(--on-warn);background:var(--bg)}
+/* acknowledged and still active: steady. Returned to normal: outlined, with the word RETURNED. */
+.win.ret{background:var(--panel);color:var(--ink);border-style:dashed}
+@keyframes flash{50%{background:var(--panel);color:var(--alarm)}}
+@keyframes flashw{50%{background:var(--panel);color:var(--ink)}}
+.win.on.unack.crit{animation:flash 1s steps(2,jump-none) infinite}
+.win.on.unack.warn{animation:flashw 1s steps(2,jump-none) infinite}
+@media (prefers-reduced-motion: reduce){.win.on.unack.crit,.win.on.unack.warn{animation:none}}
+
+/* process, log */
+.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;border:1px solid var(--rule)}
+.tile{background:var(--well);border-right:1px solid var(--line);padding:6px 10px}
+.tile:last-child{border-right:0}
+.tile .tag{font-family:var(--head);font-weight:700;letter-spacing:.05em;text-transform:uppercase;font-size:12.5px;color:var(--mute);display:flex;justify-content:space-between;gap:8px}
+.tile .val{font-family:var(--head);font-weight:700;font-size:32px;line-height:1.1;color:var(--live);font-variant-numeric:tabular-nums}
+.tile .val small{font-size:15px;font-weight:500;color:var(--mute)}
+.tile.bad{background:var(--alarm-tint)}
+.tile.bad .val,.tile.bad .state{color:var(--alarm)}
+.tile .state{font-weight:800}
+.coils{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 10px}
+.coil{background:var(--well);border:1px solid var(--rule);padding:3px 9px;font-size:13.5px;font-family:var(--mono)}
+.coil b{color:var(--live);font-weight:500}
+.coil.bad{background:var(--alarm-tint);border-color:var(--alarm)}
+.coil.bad b{color:var(--alarm)}
+.trend{background:var(--well);border:1px solid var(--rule);padding:6px 10px}
+.trend svg{display:block;width:100%;height:84px}
+.key{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--mute);margin-top:4px;font-family:var(--mono)}
+.key i{display:inline-block;width:18px;border-top:2px solid var(--live);vertical-align:middle;margin-right:5px}
+.key i.sp{border-top:2px dashed var(--mute)}
+.key i.hi{border-top:2px solid var(--alarm)}
+.log{height:300px;overflow-y:auto;background:var(--well);border:1px solid var(--rule)}
+.row{padding:5px 10px;border-bottom:1px solid var(--line);font-size:13px}
+.row .meta{display:flex;gap:10px;flex-wrap:wrap;color:var(--mute);font-family:var(--mono);font-size:12px}
+.row .meta .fc{color:var(--ink);font-weight:500}
+.row .hex{font-family:var(--mono);font-size:11.5px;color:var(--mute);overflow-x:auto;white-space:nowrap}
+.row.flag{background:var(--alarm-tint);box-shadow:inset 4px 0 0 var(--alarm)}
+.row.flag .meta,.row.flag .hex{color:var(--ink)}
+
+/* title block and revisions */
+.tb{width:100%;border-collapse:collapse;font-size:13px}
+.tb th,.tb td{border:1px solid var(--rule);padding:4px 7px;text-align:left;vertical-align:top}
+.tb th{font-family:var(--head);font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:12px;color:var(--mute);width:5.5em}
+.tb td{font-family:var(--mono);font-size:12.5px}
+.rev{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:10px}
+.rev th,.rev td{border:1px solid var(--rule);padding:3px 6px;text-align:left;vertical-align:top}
+.rev th{font-family:var(--head);font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:11.5px;color:var(--mute)}
+.rev td.d{font-family:var(--mono);white-space:nowrap}
+.rev td.blank{min-width:3.2em}
+
+/* sections */
+.sec{margin:0 4px;border-top:1px solid var(--rule);padding:14px 14px 18px;display:grid;grid-template-columns:152px minmax(0,1fr);gap:0 24px}
+.sec > h2{margin:0;font-size:22px;line-height:1;letter-spacing:.06em}
+.sec > h2 .n{display:block;font-family:var(--mono);font-weight:500;font-size:12px;letter-spacing:0;color:var(--mute);margin-bottom:4px}
+.sec .body{min-width:0;max-width:112ch}
+.notes{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+.notes li{display:grid;grid-template-columns:2.2em minmax(0,1fr);gap:0 10px;padding:8px 0;border-bottom:1px solid var(--line)}
+.notes .n{font-family:var(--mono);color:var(--mute);font-size:13px}
+.notes h3{margin:0 0 2px;font-size:18px}
+.notes p{margin:0;max-width:78ch}
+.rule{margin:14px 0 0;font-size:15.5px;max-width:78ch}
+.about{display:grid;grid-template-columns:minmax(0,60ch) minmax(0,1fr);gap:22px 48px}
+.about p{margin:0 0 12px;max-width:62ch}
+.cv{margin:0;border-top:1px solid var(--rule)}
+.cv div{display:grid;grid-template-columns:104px 1fr;gap:12px;padding:7px 0;border-bottom:1px solid var(--line);font-size:14.5px}
+.cv dt{color:var(--mute);font-family:var(--head);font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:13px}
+.cv dd{margin:0}
+.contact{display:flex;gap:8px;flex-wrap:wrap}
+.contact .btn{text-decoration:none;display:inline-block}
+.tagline{margin:0 0 8px;font-size:14px}
+.eqwrap{overflow-x:auto}
+.eq{width:100%;border-collapse:collapse;font-size:13px;min-width:620px}
+.eq th,.eq td{text-align:left;padding:4px 8px 4px 0;border-bottom:1px solid var(--line);vertical-align:top}
+.eq th{font-family:var(--head);font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:12.5px;color:var(--mute);border-bottom:1px solid var(--rule)}
+.eq td.tg{font-family:var(--mono);font-weight:500;white-space:nowrap}
+.eq td.mono{font-family:var(--mono);font-size:12px;color:var(--mute)}
+.eq tr.sig td{background:var(--panel)}
+.eq tr.lit td{background:var(--alarm);color:var(--on-alarm)}
+.eq tr.lit td.mono{color:var(--on-alarm)}
+.eq .why{font-family:var(--head);font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+.eqnote{font-size:13.5px;color:var(--mute);margin:8px 0 0;max-width:90ch}
+footer{margin:0 4px;border-top:1px solid var(--rule);padding:12px 14px 16px;font-size:13px;color:var(--mute)}
+footer p{margin:0;max-width:110ch}
+
+/* ---- 05 Segmentation: mode, reach counter, flow matrix, path test. Existing tokens only. ---- */
+.lab.zone{border-style:dashed;font-size:10.5px}
+.segmode{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
+.segmode button{font-family:var(--head);font-weight:800;letter-spacing:.06em;font-size:14px;min-height:40px;padding:6px 11px;border:1px solid var(--rule);background:var(--panel);color:var(--ink);cursor:pointer}
+.segmode button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.reach{border:1px solid var(--rule);padding:9px 11px;margin-bottom:10px;font-size:13.5px}
+.reach table{border-collapse:collapse;margin:6px 0 4px;width:100%}
+.reach th{text-align:left;font-weight:400;padding:2px 10px 2px 0;font-size:13.5px}
+.reach td{font-family:var(--mono);font-size:13px;white-space:nowrap;padding:2px 0;vertical-align:top}
+.reach .foot{color:var(--mute);margin:4px 0 0;font-size:12.5px}
+.seglists{font-size:13px;margin:6px 0 2px}
+.seglists p{margin:0 0 6px;color:var(--mute)}
+.seglists ul{margin:0 0 8px;padding-left:18px}
+.seglists li{margin:1px 0}
+.seglists .dm{font-family:var(--mono);font-size:11px;color:var(--mute);border:1px solid var(--rule);padding:0 4px;margin-left:5px;white-space:nowrap}
+.segsel{min-height:40px;border:1px solid var(--rule);background:var(--panel);color:var(--ink);font-size:13.5px;font-family:inherit;max-width:100%}
+.mxbar{display:flex;gap:8px;align-items:center;margin:0 0 8px;font-size:13px;color:var(--mute)}
+.mxwrap{overflow-x:auto;border:1px solid var(--rule);margin:0 0 8px;-webkit-overflow-scrolling:touch}
+.mxwrap:focus-visible{outline:2px solid var(--live);outline-offset:-2px}
+.mx{border-collapse:separate;border-spacing:0}
+.mx th,.mx td{border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:0}
+.mx thead th,.mx tbody th{font-family:var(--mono);font-weight:500;font-size:11.5px;padding:6px 7px;background:var(--well);text-align:left;white-space:nowrap}
+.mx tbody th{position:sticky;left:0;z-index:1}
+.mx td button{display:block;width:100%;min-width:64px;min-height:40px;border:0;background:transparent;color:var(--ink);cursor:pointer;padding:4px 6px;text-align:center}
+.mx td.no button{background:var(--well)}
+.mx td button b{display:block;font-family:var(--head);font-weight:800;letter-spacing:.04em;font-size:12px}
+.mx td button .fw{display:block;font-family:var(--mono);font-size:10.5px;color:var(--mute)}
+.mx td button[aria-pressed="true"]{outline:2px solid var(--live);outline-offset:-3px}
+.ptest{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 8px}
+.ptest label{display:flex;flex-direction:column;gap:3px;font-size:12.5px;color:var(--mute);min-width:0;flex:1 1 130px}
+.ptout{border:1px solid var(--rule);padding:9px 11px;font-size:13.5px;margin-bottom:12px}
+.ptout .vd{font-family:var(--head);font-weight:800;letter-spacing:.05em;margin:0 0 4px}
+.ptout ol{margin:4px 0 0;padding-left:20px}
+.ptout li{margin:2px 0;font-size:13px}
+
+@media (max-width:1180px){
+  .st-meta{grid-template-columns:repeat(3,auto)}
+  .st-meta .x2{display:none}
+}
+@media (max-width:1000px){
+  /* phone order: the plant, the tab row, the attack buttons, then the annunciator */
+  .sg{grid-template-columns:minmax(0,1fr);grid-template-areas:"stage" "rail" "panel" "anun" "proc" "log" "tblock"}
+  .rail{border-right:0;border-bottom:1px solid var(--rule)}
+  .rail h2,.railnote{display:none}
+  .tabs{flex-direction:row}
+  .tabs button{flex:1;justify-content:center;border-top:0;border-left:1px solid var(--line);padding:9px 4px;font-size:16px}
+  .tabs button:first-child{border-left:0}
+  .panel,.tblock,.logc{border-left:0}
+  .panel{height:auto;min-height:0;overflow:visible}
+  /* the strip has no room for its subtitle at tablet width: it wrapped into a tall thin cell */
+  .st-title{display:none}
+  .strip{grid-template-columns:auto 1fr}
+  .stage{min-height:0;height:min(66vh,640px)}
+  .sec{grid-template-columns:minmax(0,1fr)}
+  .sec > h2{margin-bottom:10px}
+  .sec > h2 .n{display:inline;margin:0 8px 0 0}
+  .about{grid-template-columns:1fr}
+  .intro{grid-template-columns:1fr}
+  .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .tile:nth-child(2){border-right:0}
+  .tile:nth-child(-n+2){border-bottom:1px solid var(--line)}
+  .cap{display:none}
+}
+@media (max-width:767px){
+  .tabs button .lg{display:none}
+  .tabs button .sm{display:inline}
+  .tabs button .n{display:none}
+  .tabs button{font-size:15px;padding:12px 2px;min-height:44px;letter-spacing:.03em}
+  /* every control a thumb has to hit is at least 40px tall */
+  .btn,.swt,.sq{min-height:42px;padding-top:9px;padding-bottom:9px}
+  .recs button{min-height:44px}
+  .fold .foldhd{min-height:44px;font-size:15px}
+  .ai.note .more{min-height:44px}
+  .lims input,.lims select,.sl .nb input{min-height:42px}
+  .windows{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .win{min-height:84px}
+  .win .w-txt{font-size:20px}
+  .strip{grid-template-columns:auto 1fr}
+  .st-title,.st-nav,.st-meta .x3{display:none}
+  .st-right{flex-wrap:nowrap;gap:8px;justify-content:flex-end}
+  .st-meta .lg,.simtag .lg{display:none}
+  .st-meta .sm,.simtag .sm{display:inline}
+  .st-meta{grid-template-columns:repeat(2,auto)}
+  .sq{padding:3px 7px;font-size:13px}
+  .simtag{font-size:13px;padding:2px 5px}
+  .levels{left:10px;right:10px;top:auto;bottom:58px;flex-direction:row;flex-wrap:wrap;gap:4px}
+  .st-meta{grid-template-columns:repeat(2,auto);gap:0 10px}
+  .strip > *{padding:6px 8px}
+  .mark{font-size:20px}
+  .intro{padding:10px 12px}
+  .intro p{font-size:15.5px}
+  .tools .lg{display:none}
+  .tools .sm{display:inline}
+  .tools button{min-width:40px;padding:0 7px;font-size:14px;height:42px}
+  .lab{font-size:11px;padding:0 3px}
+  .rules .dt{font-size:11px}
+  .levels button{min-width:42px;height:42px;font-size:13px;padding:0 4px}
+  .mx td button{min-width:52px;min-height:44px}
+  .segmode button,.segsel{min-height:44px}
+  .card{left:56px;max-width:calc(100% - 66px)}
+  .sheet{margin:6px}
+  .lims{grid-template-columns:1fr 1fr}
+}
+</style>
+</head>
+<body>
+<div class="sheet">
+
+<header class="strip">
+  <a class="mark" href="#demo">SENTINELOT</a>
+  <div class="st-title"><b>OT security demo</b><span>Packaging plant, line 1</span></div>
+  <div class="st-right">
+    <dl class="st-meta">
+      <div class="x3"><dt>Dwg</dt><dd>SOT-0001</dd></div>
+      <div><dt>Rev</dt><dd>E</dd></div>
+      <div class="x2"><dt>Scale</dt><dd>NTS</dd></div>
+      <div><dt>Sheet</dt><dd><span class="lg">1 of 1</span><span class="sm">1/1</span></dd></div>
+      <div class="x2 x3"><dt>Drawn</dt><dd>ToniGift</dd></div>
+    </dl>
+    <nav class="st-nav" aria-label="Sections"><a href="#demo">Plant</a><a href="#equipment">Tags</a><a href="#method">Method</a><a href="#about">About</a></nav>
+    <span class="simtag"><span class="lg">SIMULATED</span><span class="sm">SIM</span></span>
+    <button type="button" class="sq" id="theme" aria-label="Switch colour scheme"></button>
+  </div>
+</header>
+
+<section class="intro">
+  <h1>PLC-101 write watch</h1>
+  <p><b>SentinelOT watches a simulated plant’s Modbus traffic, flags writes that don’t belong and checks alarm-limit changes. It recommends, never acts:</b> a person acknowledges every alarm.</p>
+</section>
+
+<section class="board" id="demo" aria-label="Live demo">
+  <div class="sg">
+
+    <nav class="rail" aria-label="Views">
+      <h2>Views</h2>
+      <div class="tabs" id="tabs">
+        <button type="button" id="tab-live" aria-pressed="true" aria-label="Live attack"><span class="n">01</span><span class="lg">Live attack</span><span class="sm">Live</span></button>
+        <button type="button" id="tab-rec" aria-pressed="false" aria-label="Recorded alerts"><span class="n">02</span>Recorded</button>
+        <button type="button" id="tab-lim" aria-pressed="false" aria-label="Alarm limits"><span class="n">03</span>Limits</button>
+        <button type="button" id="tab-sim" aria-pressed="false" aria-label="What-if process sandbox"><span class="n">04</span>What-if</button>
+        <button type="button" id="tab-seg" aria-pressed="false" aria-label="Network segmentation"><span class="n">05</span><span class="lg">Segmentation</span><span class="sm">Seg</span></button>
+      </div>
+      <p class="railnote">Tag plates are ISA-style on the plant; names show when you select equipment. Simulated.</p>
+    </nav>
+
+    <div class="stage" id="stage">
+      <canvas id="gl" tabindex="0" aria-label="3D model of the plant. Drag or use the arrow keys to rotate. Shift and drag, right-drag or Page Up and Page Down move the view."></canvas>
+      <div class="labels" id="labels" aria-hidden="true"><svg class="leaders" id="leaders"></svg></div>
+      <div class="card" id="card" hidden></div>
+      <div class="levels" id="levels" role="group" aria-label="Jump to a level"></div>
+      <div class="proj" role="group" aria-label="Camera">
+        <button type="button" id="persp" aria-pressed="true" aria-label="Perspective camera">Persp</button>
+        <button type="button" id="isob" aria-pressed="false" aria-label="Orthographic isometric camera">Iso</button>
+      </div>
+      <p class="cap">Tags are ISA-style. IT equipment uses plain asset-class prefixes.</p>
+      <div class="tools">
+        <button type="button" id="zin" aria-label="Zoom in">+</button>
+        <button type="button" id="zout" aria-label="Zoom out">−</button>
+        <button type="button" id="up" aria-label="Move the view up">Up</button>
+        <button type="button" id="down" aria-label="Move the view down">Down</button>
+        <button type="button" id="front" aria-label="Front view"><span class="lg">Front view</span><span class="sm">Front</span></button>
+        <button type="button" id="spin"><span class="lg"></span><span class="sm"></span></button>
+      </div>
+    </div>
+
+    <div class="panel" id="panel" tabindex="0" role="region" aria-label="Attack controls, firewall rules and alarm detail">
+      <div class="pane" id="pane-live">
+        <p class="note">Each button sends simulated Modbus frames to PLC-101 (PLC-Line1) from a host that isn’t an approved master. Start a second attack before acknowledging the first and both alarms stay active.</p>
+        <div class="attacks">
+          <button class="btn atk" data-atk="setpoint">Raise the sealer setpoint<span>OFFICE-PC-14 writes register 40001 (TIC-101 setpoint) to 240 °C</span></button>
+          <button class="btn atk" data-atk="robot">Stop the packing robot<span>OFFICE-PC-14 writes coil 00003 (RB-101 enable) to off</span></button>
+          <button class="btn atk" data-atk="scan">Scan the register map<span>A new host reads address ranges on PLC-101 until something answers</span></button>
+        </div>
+        <details class="seg" id="segbox" open>
+          <summary class="hd"><span class="sgh">Firewall rules</span><span class="simtag">SIMULATED</span></summary>
+          <p class="note">Demo rules, not a recommendation for a real plant. As found. Each switch removes one over-broad rule. The approved flows &mdash; HMI-Line1 and the historian to the controllers, the engineering workstation to both, the configured outstation to SCADA &mdash; have their own fixed rules that no switch touches, so the polling in the log keeps running whatever you set here.</p>
+          <ul class="rules" id="rules"></ul>
+          <p class="note">A firewall rule sees source, destination and port, not the change window or the value being written. That is what triage is for.</p>
+          <div class="segsum" id="seg-sum" role="status"></div>
+        </details>
+        <div class="alarm quiet" id="alarm" aria-live="polite">
+          <p>No active alarm. Only HMI-Line1 and the historian are talking to the PLC.</p>
+        </div>
+      </div>
+
+      <div class="pane" id="pane-rec" hidden>
+        <p class="note">Alerts from the SentinelOT evaluation run, with the verdict its AI triage returned.</p>
+        <div class="recs" id="recs"></div>
+        <div class="detail" id="detail" aria-live="polite"><p class="empty">Pick an alert to trace it through the plant.</p></div>
+      </div>
+
+      <div class="pane" id="pane-lim" hidden>
+        <p class="note">Simulated. AlarmOps replays a generated, fault-labelled sensor dataset against the alarm limits you enter, and blocks a change that would lose too much detection. Nothing is sent to a plant.</p>
+        <div class="limbtns">
+          <button type="button" class="btn" id="lim-preset">Widen the sealer high limit to 250 °C</button>
+        </div>
+        <div class="lims">
+          <label class="wide">Tag<select id="lim-tag"></select></label>
+          <label>Low low<input id="lim-low_low" type="number" step="any" inputmode="decimal"></label>
+          <label>Low<input id="lim-low" type="number" step="any" inputmode="decimal"></label>
+          <label>High<input id="lim-high" type="number" step="any" inputmode="decimal"></label>
+          <label>High high<input id="lim-high_high" type="number" step="any" inputmode="decimal"></label>
+        </div>
+        <div class="limbtns">
+          <button type="button" class="btn" id="lim-check">Check change</button>
+          <button type="button" class="btn ghost" id="lim-reset">Reset to current limits</button>
+        </div>
+        <div class="detail" id="lim-out" aria-live="polite"><p class="empty">Loading the baseline replay…</p></div>
+        <p class="note" style="margin-top:12px">The attack on the Live tab does not feed AlarmOps, and AlarmOps does not watch network traffic. This page only shows that the limit AlarmOps protects is the one that catches the attack.</p>
+      </div>
+
+      <div class="pane" id="pane-sim" hidden>
+        <p class="note"><b>Simulated.</b> Change the process and watch the plant and its alarms react. Nothing is sent to a plant or a network.</p>
+        <div class="sim-ctl">
+          <div class="sl"><label for="sim-sp">Sealer setpoint</label><input type="range" id="sim-sp" min="100" max="260" step="1"><span class="nb"><input type="number" id="sim-sp-n" min="100" max="260" step="1" aria-label="Sealer setpoint in degrees Celsius"> °C</span></div>
+          <div class="sl"><label for="sim-rpm">Conveyor motor speed</label><input type="range" id="sim-rpm" min="0" max="2000" step="10"><span class="nb"><input type="number" id="sim-rpm-n" min="0" max="2000" step="10" aria-label="Conveyor motor speed in rpm"> rpm</span></div>
+          <div class="sl"><label for="sim-level">Tank level</label><input type="range" id="sim-level" min="0" max="100" step="1"><span class="nb"><input type="number" id="sim-level-n" min="0" max="100" step="1" aria-label="Tank level in percent"> %</span></div>
+          <div class="simrow"><label class="chk"><input type="checkbox" id="sim-pump" checked> Pump running</label>
+            <button type="button" class="btn ghost" id="sim-reset">Reset to normal</button></div>
+        </div>
+        <p class="note model"><b>Simplified demo model, not plant physics.</b> The sealer follows its setpoint with a lag. Packs follow the conveyor speed, and the robot picks at most 45 a minute. Pressure and flow follow the pump and the tank level.</p>
+        <h3 class="sub">What the plant does</h3>
+        <ul class="fx" id="sim-fx"></ul>
+        <h3 class="sub">Which alarm fires</h3>
+        <table class="cmp">
+          <thead><tr><th scope="col">Tag</th><th scope="col">Now</th><th scope="col">Current limits</th><th scope="col">Proposed limits</th></tr></thead>
+          <tbody id="sim-cmp"></tbody>
+        </table>
+        <p class="note">Instant comparison for the demo; the AlarmOps gate uses deadband and delay.</p>
+        <div id="sim-missed" role="status"></div>
+        <div class="limbtns">
+          <button type="button" class="btn ghost" id="sim-edit">Edit proposed limits</button>
+          <button type="button" class="btn ghost" id="sim-preset">Propose sealer high 250 °C</button>
+        </div>
+      </div>
+
+      <div class="pane" id="pane-seg" hidden>
+        <p class="note"><b>SIMULATED.</b> Demo rules, demo subnets and demo VLAN numbers, not a recommendation for a real plant. One /24 subnet and one VLAN per level, read from the demo addresses. Nothing is sent to a network.</p>
+        <div class="segmode" role="group" aria-label="Network mode and zone display">
+          <button type="button" id="mode-seg" aria-pressed="true">Segmented</button>
+          <button type="button" id="mode-flat" aria-pressed="false">Flat network</button>
+          <button type="button" id="zones-btn" aria-pressed="false">Show zones in 3D</button>
+        </div>
+        <div class="reach" id="reach" role="status"></div>
+        <details class="fold">
+          <summary class="foldhd">Who the counter counts</summary>
+          <div class="seglists" id="reach-list"></div>
+        </details>
+        <h3 class="sub">Zone-to-zone flows</h3>
+        <p class="note">Source zone by row, destination zone by column, under the switches below. A diagonal cell is traffic inside one zone: it crosses no conduit, so no firewall ever sees it. Pick a cell to light that path in the 3D view.</p>
+        <div class="mxbar"><label for="mx-proto">Protocol</label><select id="mx-proto" class="segsel"></select></div>
+        <div class="mxwrap" id="mxwrap" role="region" tabindex="0" aria-label="Zone-to-zone flow matrix. On a narrow screen this table scrolls sideways.">
+          <table class="mx" id="mx"></table>
+        </div>
+        <p class="note mxsel" id="mx-sel" role="status">No cell picked yet.</p>
+        <h3 class="sub">Test a path</h3>
+        <div class="ptest">
+          <label>From<select id="pt-src" class="segsel"></select></label>
+          <label>To<select id="pt-dst" class="segsel"></select></label>
+          <label>Protocol<select id="pt-proto" class="segsel"></select></label>
+        </div>
+        <div class="ptout" id="pt-out" role="status"></div>
+        <details class="seg" id="segbox2" open>
+          <summary class="hd"><span class="sgh">Firewall rules</span><span class="simtag">SIMULATED</span></summary>
+          <p class="note">The same four switches as the Live attack tab: one state, two places. Set them here or there and the matrix, the path test and the reach counter follow together.</p>
+          <ul class="rules" id="rules-seg"></ul>
+        </details>
+        <p class="note model" id="fw304-note">FW-304 (FW-Cell-1) is the cell firewall on the level 2 to level 1 boundary. This model has a single conduit between those levels, so FW-304 stands in front of every level 1 controller: PLC-Line1, PLC-Line2, DCS-CTRL-01 and RTU-Outstation-3. As found it was named the line 1 cell firewall. A real plant would give each line its own cell firewall; this page shows the model it has.</p>
+      </div>
+    </div>
+
+    <section class="anun" aria-label="Annunciator">
+      <div class="anun-h">
+        <h2>Annunciator<span>ISA-style, simulated</span></h2>
+        <span class="an-st" id="an-st" role="status"></span>
+        <div class="anun-btns">
+          <button type="button" class="btn ghost" id="an-ack">Ack all</button>
+          <button type="button" class="btn ghost" id="an-reset">Reset</button>
+        </div>
+      </div>
+      <ul class="windows" id="windows"></ul>
+      <p class="note" style="margin:8px 0 0">First out marks the alarm that came first and stays on it until Reset. Acknowledge stops the flashing and nothing else. Reset clears acknowledged alarms whose condition has returned to normal.</p>
+    </section>
+
+    <section class="tblock" aria-label="Title block and revisions">
+      <h2>Title block</h2>
+      <table class="tb">
+        <tr><th scope="row">Dwg no.</th><td>SOT-0001</td><th scope="row">Rev</th><td>E</td></tr>
+        <tr><th scope="row">Title</th><td colspan="3">OT security demo, packaging plant line 1, simulated</td></tr>
+        <tr><th scope="row">Drawn</th><td>ToniGift</td><th scope="row">Scale</th><td>NTS</td></tr>
+        <tr><th scope="row">Checked</th><td></td><th scope="row">Sheet</th><td>1 of 1</td></tr>
+        <tr><th scope="row">Approved</th><td></td><th scope="row">Date</th><td>2026-11-13</td></tr>
+      </table>
+      <table class="rev">
+        <thead><tr><th scope="col">Rev</th><th scope="col">Date</th><th scope="col">Description</th><th scope="col"><abbr title="Checked">Chk</abbr></th><th scope="col"><abbr title="Approved">App</abbr></th></tr></thead>
+        <tbody>
+          <tr><td>A</td><td class="d">2026-10-06</td><td>Hackathon build: triage and its evaluation run</td><td class="blank"></td><td class="blank"></td></tr>
+          <tr><td>B</td><td class="d">2026-11-12</td><td>Imported here; 3D plant; AlarmOps connected as a module</td><td class="blank"></td><td class="blank"></td></tr>
+          <tr><td>C</td><td class="d">2026-11-13</td><td>Pan; What-if sandbox; README</td><td class="blank"></td><td class="blank"></td></tr>
+          <tr><td>D</td><td class="d">2026-11-13</td><td>Drawing-sheet layout; annunciator; tag plates</td><td class="blank"></td><td class="blank"></td></tr>
+          <tr><td>E</td><td class="d">2026-11-13</td><td>Firewall rule editor; zone and conduit model</td><td class="blank"></td><td class="blank"></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="proc">
+      <h2 id="proc-h">Line 1 process</h2>
+      <div class="tiles">
+        <div class="tile" id="t-sp"><div class="tag"><span>Sealer setpoint <span style="font-family:var(--mono);font-weight:400">TIC-101</span></span><span class="state"></span></div><div class="val"><span class="v">160.0</span> <small>°C</small></div></div>
+        <div class="tile" id="t-pv"><div class="tag"><span>Sealer temp <span style="font-family:var(--mono);font-weight:400">TT-101</span></span><span class="state"></span></div><div class="val"><span class="v">160.0</span> <small>°C</small></div></div>
+        <div class="tile" id="t-rpm"><div class="tag"><span>Conveyor <span style="font-family:var(--mono);font-weight:400">ST-101</span></span><span class="state"></span></div><div class="val"><span class="v">1200</span> <small>rpm</small></div></div>
+        <div class="tile" id="t-ppm"><div class="tag"><span>Packs per minute</span><span class="state"></span></div><div class="val"><span class="v">42</span></div></div>
+      </div>
+      <div class="coils">
+        <span class="coil" id="c-heat">Sealer heater <b>on</b></span>
+        <span class="coil" id="c-conv">Conveyor <b>running</b></span>
+        <span class="coil" id="c-robot">Robot <b>running</b></span>
+      </div>
+      <div class="trend">
+        <svg viewBox="0 0 300 90" preserveAspectRatio="none" role="img" aria-label="Sealer temperature trend">
+          <line id="l-hi" x1="0" x2="300" y1="0" y2="0" stroke="var(--alarm)" stroke-width="1.2" vector-effect="non-scaling-stroke"/>
+          <line id="l-sp" x1="0" x2="300" y1="0" y2="0" stroke="var(--mute)" stroke-width="1.2" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>
+          <polyline id="l-pv" fill="none" stroke="var(--live)" stroke-width="2" vector-effect="non-scaling-stroke" points=""/>
+        </svg>
+        <div class="key"><span><i></i>TT-101 sealer temperature</span><span><i class="sp"></i>TIC-101 setpoint</span><span><i class="hi"></i>High limit 190 °C</span></div>
+      </div>
+    </section>
+
+    <section class="logc">
+      <h2 id="log-h">Modbus/TCP traffic</h2>
+      <div class="log" id="log" tabindex="0" aria-label="Frame log, newest first"></div>
+    </section>
+
+  </div>
+  <button type="button" class="tracebtn" id="showtrace" hidden>Show trace</button>
+</section>
+
+<section class="sec" id="equipment">
+  <h2><span class="n">06</span>Equipment list</h2>
+  <div class="body">
+    <p class="tagline">Tags are ISA-style. IT equipment uses plain asset-class prefixes. The first digit of a number is the area: 1 line 1, 2 line 2, 3 network security, 4 enterprise and DMZ, 5 utilities, 6 operations and supervisory servers and workstations.</p>
+    <div class="eqwrap">
+      <table class="eq" id="eq">
+        <thead><tr><th scope="col">Tag</th><th scope="col">Name</th><th scope="col">Type</th><th scope="col">Level</th><th scope="col">AlarmOps tag</th><th scope="col">Origin</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="eqnote">FT-501 is a drawn device, so it has an asset tag. LT-501, PT-501, TT-101 and ST-101 are signal tags: a measurement on a drawn device, read through another one. TIC-101 is the sealer temperature controller, a function inside PLC-101. A highlighted row is a tag in alarm, or one whose limit change is blocked or would miss an alarm.</p>
+  </div>
+</section>
+
+<section class="sec" id="method">
+  <h2><span class="n">07</span>How it works</h2>
+  <div class="body">
+    <ol class="notes">
+      <li><span class="n">N1</span><div><h3>Listen</h3><p>A sensor on a mirror port reads every frame between the masters and the PLC. It never writes to the control network.</p></div></li>
+      <li><span class="n">N2</span><div><h3>Judge</h3><p>Rules check who is talking, which function code they used and whether the value fits the engineering limits.</p></div></li>
+      <li><span class="n">N3</span><div><h3>Explain</h3><p>AI adds asset context, maps the activity to MITRE ATT&amp;CK for ICS and tells the analyst what to do first. It recommends and never acts.</p></div></li>
+    </ol>
+    <p class="rule">In the live demo a fixed rule raises the alarm and the AI only explains it. The recorded alerts come from the full project, where five AI agents triage each alert and code checks their output. <a href="https://github.com/ToniGift/sentinelOT" target="_blank" rel="noopener">Read the code on GitHub</a>.</p>
+  </div>
+</section>
+
+<section class="sec" id="about">
+  <h2><span class="n">08</span>Built by Anthony Afonughe</h2>
+  <div class="body about">
+
+    <div>
+      <p>I’m an OT/ICS security engineer based in Bydgoszcz, Poland. I spent about three years on the floor of a manufacturing plant, working across PLC, SCADA, HMI, DCS and RTU systems, so I build security tools around how plants really run.</p>
+      <p>SentinelOT is my prototype for OT security a small factory can install without a security team.</p>
+    </div>
+    <dl class="cv">
+      <div><dt>Experience</dt><dd>About 3 years hands-on across PLC, SCADA, HMI, DCS and RTU environments</dd></div>
+      <div><dt>Tools</dt><dd>Nozomi Networks, Elastic SIEM</dd></div>
+      <div><dt>Protocols</dt><dd>Modbus, OPC UA, EtherNet/IP, DNP3, PROFINET</dd></div>
+      <div><dt>Education</dt><dd>B.Eng Computer Engineering and Mechatronics, WSG Bydgoszcz, 2025</dd></div>
+      <div><dt>Also built</dt><dd>MQTT to InfluxDB telemetry pipeline with anomaly detection; ESP32 NFC and keypad access control</dd></div>
+    </dl>
+  </div>
+</section>
+
+<section class="sec" id="contact">
+  <h2><span class="n">09</span>Contact</h2>
+  <div class="body">
+    <p class="tagline">Hiring for OT security, or running a plant?</p>
+    <div class="contact">
+      <a class="btn" href="mailto:anthonygift2019@gmail.com?subject=OT%20security%20role">Email me about a role</a>
+      <a class="btn ghost" href="mailto:anthonygift2019@gmail.com?subject=SentinelOT%20pilot">Ask about a SentinelOT pilot</a>
+    </div>
+  </div>
+</section>
+
+<footer><p>The plant, hosts and traffic on this page are invented and simulated in your browser. No real control system is connected. The recorded verdicts are the ones SentinelOT returned in its evaluation run on 6 October 2026. Demo only, not in the project’s asset file: the internet and VPN-GW-01 (level 5), the four firewalls FW-Edge, FW-IT-DMZ, FW-DMZ-OT and FW-Cell-1, ERP-SRV-01, MES-SRV-01, AD-OT-01, DCS-OPS-01, DCS-SRV-01 and DCS-CTRL-01 (the DCS and its server and operator station), TANK-Utility-1, PUMP-Utility-1, FLOW-Meter-1, SEALER-Line1, ROBOT-Pick-1 and MOTOR-Conveyor-1. The signal tags TT-101, ST-101, LT-501, PT-501 and TIC-101 are drawn for the demo too. The other 14 assets come from the project’s asset file. The Alarm limits results come from replaying a generated dataset with labelled faults. They are not measurements from a plant. The What-if tab runs a simplified demo model in your browser, not plant physics: the tank fill, the pump and flow response, the sealer lag and the conveyor backlog are invented for the demo, and nothing is sent anywhere. Tags are ISA-style, assigned for this demo. The Segmentation tab's subnets and VLAN numbers are derived from the demo addresses, one per level, and are demo-only, as are its firewall rules, its flow matrix and its reach counter: none of it is a recommendation for a real plant.</p></footer>
+</div>
+
+<script id="process-model">
+/* What-if process model. SIMPLIFIED DEMO MODEL, NOT PLANT PHYSICS.
+   Pure functions only: no DOM, no timers, no network. tests/test_page_model.py calls these directly. */
+(function(root){
+"use strict";
+var LIMIT_KEYS=["low_low","low","high","high_high"];
+var ALARM_LABEL={low_low:"Low low",low:"Low",high:"High",high_high:"High high"};
+var TAGS=["sealer_temperature","conveyor_speed","tank_level","pump_pressure","flow_rate"];
+var NAME={sealer_temperature:"Sealer",conveyor_speed:"Conveyor",tank_level:"Tank",pump_pressure:"Pump pressure",flow_rate:"Flow"};
+var UNIT={sealer_temperature:"°C",conveyor_speed:"rpm",tank_level:"%",pump_pressure:"bar",flow_rate:"m3/h"};
+var DEVICE={sealer_temperature:"SEALER-Line1",conveyor_speed:"MOTOR-Conveyor-1",tank_level:"TANK-Utility-1",pump_pressure:"PUMP-Utility-1",flow_rate:"FLOW-Meter-1"};
+/* what would happen, unnoticed, if an alarm on that side of the tag did not fire */
+var CONSEQ={
+  sealer_temperature:{high:"The film would burn with no alarm.",low:"Weak seals would leave the line with no alarm."},
+  conveyor_speed:{high:"Product would pile up at the robot with no alarm.",low:"The line would starve with no alarm."},
+  tank_level:{high:"The tank could overflow with no alarm.",low:"The tank could run empty with no alarm."},
+  pump_pressure:{high:"The pipework could be over-pressured with no alarm.",low:"The pump could run dry with no alarm."},
+  flow_rate:{high:"Too much flow would go unnoticed.",low:"A loss of flow would go unnoticed."}};
+var NORMAL={sp:160,rpm:1200,level:50,pump:true};
+var RANGE={sp:[100,260],rpm:[0,2000],level:[0,100]};
+/* the whole model, as numbers:
+   tick        seconds of process time per step
+   lag         share of the gap to the setpoint the sealer closes each step
+   ppmAt1200   packs per minute arriving at the nominal 1200 rpm
+   robotMax    packs per minute the robot can pick
+   pumpBar     pump pressure with liquid to pump;  dryBar: pressure when it runs dry
+   dryLevel    tank level (%) at or below which the pump runs dry
+   pumpLag     share of the gap to the target pressure closed each step
+   flowAt5bar  flow (m3/h) at 5 bar; flow is proportional to pressure */
+var C={tick:0.7,lag:0.06,ppmAt1200:42,robotMax:45,pumpBar:5,dryBar:1,dryLevel:10,pumpLag:0.25,flowAt5bar:120};
+
+function fmt(tag,v){return tag==="conveyor_speed"?String(Math.round(v)):(tag==="pump_pressure"?v.toFixed(2):v.toFixed(1))}
+function arriving(inp){return C.ppmAt1200*inp.rpm/1200}
+function pressureTarget(inp){return !inp.pump?0:(inp.level<=C.dryLevel?C.dryBar:C.pumpBar)}
+function initial(inp){
+  inp=inp||NORMAL;var pr=pressureTarget(inp);
+  return {pv:inp.sp,backlog:0,picked:Math.min(C.robotMax,arriving(inp)),pressure:pr,flow:C.flowAt5bar*pr/C.pumpBar};
+}
+/* one step of process time. Returns a new state; never changes its arguments. */
+function step(state,inp){
+  var arr=arriving(inp),perTick=C.tick/60;
+  var picked=Math.min(C.robotMax,arr+state.backlog/perTick);
+  var target=pressureTarget(inp),pressure=state.pressure+(target-state.pressure)*C.pumpLag;
+  if(Math.abs(pressure-target)<0.005)pressure=target;
+  return {pv:state.pv+(inp.sp-state.pv)*C.lag,
+          backlog:Math.max(0,state.backlog+(arr-picked)*perTick),picked:picked,
+          pressure:pressure,flow:C.flowAt5bar*pressure/C.pumpBar};
+}
+function run(state,inp,steps){for(var i=0;i<steps;i++)state=step(state,inp);return state}
+function values(inp,state){
+  return {sealer_temperature:state.pv,conveyor_speed:inp.rpm,tank_level:inp.level,pump_pressure:state.pressure,flow_rate:state.flow};
+}
+function validLimits(l){
+  return !!l&&LIMIT_KEYS.every(function(k){return typeof l[k]==="number"&&isFinite(l[k])})&&l.low_low<l.low&&l.low<l.high&&l.high<l.high_high;
+}
+/* instant comparison: no deadband, no delay. The AlarmOps gate uses both. */
+function alarmState(v,lim){
+  if(!validLimits(lim))return null;
+  if(v>=lim.high_high)return "high_high";
+  if(v>=lim.high)return "high";
+  if(v<=lim.low_low)return "low_low";
+  if(v<=lim.low)return "low";
+  return null;
+}
+function evaluate(vals,limits){var o={};TAGS.forEach(function(t){o[t]=alarmState(vals[t],limits[t])});return o}
+/* the sentence shown when the proposed limits stay silent where the current limits raise an alarm */
+function missed(tag,value,cur,prop){
+  if(!cur||prop)return null;
+  var side=(cur==="high"||cur==="high_high")?"high":"low";
+  return NAME[tag]+" at "+fmt(tag,value)+" "+UNIT[tag]+": the current limits raise "+ALARM_LABEL[cur]+"; the proposed limits raise nothing. "+CONSEQ[tag][side];
+}
+function allMissed(vals,curLimits,propLimits){
+  var c=evaluate(vals,curLimits),pr=evaluate(vals,propLimits),out=[];
+  TAGS.forEach(function(t){var m=missed(t,vals[t],c[t],pr[t]);if(m)out.push({tag:t,text:m})});
+  return out;
+}
+function sev(a){return (a==="high_high"||a==="low_low")?"alarm":(a?"warn":"ok")}
+/* what goes wrong, per device, judged against the CURRENT limits. level is ok, warn or alarm; every level has text. */
+function effects(inp,state,lim){
+  var v=values(inp,state),a=evaluate(v,lim),o={};
+  function put(tag,level,text){o[DEVICE[tag]]={tag:tag,level:level,text:text,value:fmt(tag,v[tag])+" "+UNIT[tag]}}
+  var s=a.sealer_temperature;
+  put("sealer_temperature",sev(s),s==="high_high"?"Film burns on the bars":s==="high"?"Sealer running hot; film starts to scorch":
+    s==="low_low"?"Seals fail; packs open":s==="low"?"Weak seals, rejects rise":"Sealing normally");
+  var c=a.conveyor_speed,stopped=inp.rpm<=0;
+  put("conveyor_speed",stopped?"alarm":sev(c),stopped?"Conveyor stopped; line starved":
+    (c==="high"||c==="high_high")?"Packs arrive faster than the robot can pick; product piles up":
+    (c==="low"||c==="low_low")?"Throughput falls; line starved":"Running at line speed");
+  if(state.backlog>=1)o["ROBOT-Pick-1"]={tag:"conveyor_speed",level:state.backlog>=20?"alarm":"warn",
+    text:"Robot cannot keep up; packs are waiting",value:Math.round(state.backlog)+" packs waiting"};
+  var t=a.tank_level,full=inp.level>=100,dry=inp.level<=C.dryLevel;
+  put("tank_level",(full||dry)?"alarm":sev(t),full?"Overflow, spill":(t==="high"||t==="high_high")?"Overflow risk":
+    dry?"Tank almost empty":(t==="low"||t==="low_low")?"Tank level low":"Level normal");
+  var runsDry=inp.pump&&dry,pa=a.pump_pressure;
+  put("pump_pressure",runsDry?"alarm":(!inp.pump?"warn":sev(pa)),runsDry?"Pump runs dry; pressure drops":
+    !inp.pump?"Pump off; no circulation":pa?"Pressure outside its limits":"Pumping normally");
+  var f=a.flow_rate;
+  put("flow_rate",sev(f),state.flow<=0.5?"No flow":(f==="low"||f==="low_low")?"Low flow":f?"High flow":"Flow normal");
+  return o;
+}
+root.ProcessModel={LIMIT_KEYS:LIMIT_KEYS,ALARM_LABEL:ALARM_LABEL,TAGS:TAGS,NAME:NAME,UNIT:UNIT,DEVICE:DEVICE,NORMAL:NORMAL,RANGE:RANGE,C:C,
+  fmt:fmt,arriving:arriving,pressureTarget:pressureTarget,initial:initial,step:step,run:run,values:values,validLimits:validLimits,
+  alarmState:alarmState,evaluate:evaluate,missed:missed,allMissed:allMissed,effects:effects};
+})(window);
+</script>
+<script id="network-model">
+/* The plant's network segmentation, as data: zones, conduits and flows.
+   SIMULATED. Demo rules, not a recommendation for a real plant.
+
+   Pure functions only: no DOM, no timers, no network. tests/test_segmentation.py calls these
+   directly, and a later network-segmentation view reads the same ZONES, CONDUITS and FLOWS
+   rather than keeping a second copy of the model. */
+(function(root){
+"use strict";
+/* Zones, lowest first. The route between two zones is the slice of this list that lies between them. */
+var ZONES=[
+  {id:"L0",  level:"0",  name:"Field"},
+  {id:"L1",  level:"1",  name:"Control"},
+  {id:"L2",  level:"2",  name:"Supervisory"},
+  {id:"L3",  level:"3",  name:"Operations"},
+  {id:"L3.5",level:"3.5",name:"DMZ"},
+  {id:"L4",  level:"4",  name:"Enterprise"},
+  {id:"L5",  level:"5",  name:"Internet"}
+];
+/* A conduit joins two neighbouring zones. CONDUITS[n] joins ZONES[n] and ZONES[n+1].
+   Two conduits have no firewall at all. They are in the model rather than left out: an
+   unfiltered boundary is a fact about the plant, and the segmentation view has to show it. */
+var CONDUITS=[
+  {id:"C-0-1",   a:"L0",  b:"L1",  firewall:null,     rule:null},
+  {id:"C-1-2",   a:"L1",  b:"L2",  firewall:"FW-304", rule:"SEG-304"},
+  {id:"C-2-3",   a:"L2",  b:"L3",  firewall:null,     rule:null},
+  {id:"C-3-3.5", a:"L3",  b:"L3.5",firewall:"FW-303", rule:"SEG-303"},
+  {id:"C-3.5-4", a:"L3.5",b:"L4",  firewall:"FW-302", rule:"SEG-302"},
+  {id:"C-4-5",   a:"L4",  b:"L5",  firewall:"FW-301", rule:"SEG-301"}
+];
+/* Every flow has from, to, protocol, port and approved.
+     kind "host"    from and to are asset names. These are the approved flows: fixed rules that
+                    no switch touches, which is why normal polling keeps running whatever the
+                    switches say.
+     kind "conduit" from and to are zone ids. These are the four as-found over-broad allows,
+                    one per firewall, and each one is a switch.
+   port is a number, an array of numbers, or "any". */
+var FLOWS=[
+  {id:"hmi-plc1", kind:"host", from:"HMI-Line1", to:"PLC-Line1", protocol:"Modbus/TCP", port:502, approved:true,
+   note:"Operator screen for line 1: the approved master, read and write"},
+  {id:"hist-plc1", kind:"host", from:"HIST-01", to:"PLC-Line1", protocol:"Modbus/TCP", port:502, approved:true,
+   note:"Historian: polls read-only"},
+  {id:"hist-plc2", kind:"host", from:"HIST-01", to:"PLC-Line2", protocol:"Modbus/TCP", port:502, approved:true,
+   note:"Historian: polls read-only"},
+  {id:"eng-plc1", kind:"host", from:"ENG-WS-01", to:"PLC-Line1", protocol:"Modbus/TCP", port:502, approved:true,
+   note:"Engineering workstation. Its change window is a procedure, not a firewall rule"},
+  {id:"eng-plc2", kind:"host", from:"ENG-WS-01", to:"PLC-Line2", protocol:"Modbus/TCP", port:502, approved:true,
+   note:"Engineering workstation. Its change window is a procedure, not a firewall rule"},
+  {id:"rtu-scada", kind:"host", from:"RTU-Outstation-3", to:"SCADA-SRV-01", protocol:"DNP3", port:20000, approved:true,
+   note:"The one configured outstation"},
+
+  {id:"SEG-301", kind:"conduit", conduit:"C-4-5", firewall:"FW-301", from:"L5", to:"L4",
+   protocol:"any", port:"any", approved:false,
+   label:"Non-approved remote hosts into the plant, any port",
+   detail:"L5 → L4 · any protocol · any port"},
+  {id:"SEG-302", kind:"conduit", conduit:"C-3.5-4", firewall:"FW-302", from:"L4", to:"L3.5",
+   protocol:"any", port:"any", approved:false,
+   label:"Non-approved office hosts past the DMZ, any port",
+   detail:"L4 → L3.5 · any protocol · any port"},
+  {id:"SEG-303", kind:"conduit", conduit:"C-3-3.5", firewall:"FW-303", from:"L3.5", to:"L3",
+   protocol:"any", port:"any", approved:false,
+   label:"Non-approved DMZ hosts into operations, any port",
+   detail:"L3.5 → L3 · any protocol · any port"},
+  {id:"SEG-304", kind:"conduit", conduit:"C-1-2", firewall:"FW-304", from:"L2", to:"L1",
+   protocol:"Modbus/TCP, DNP3", port:[502,20000], approved:false,
+   label:"Non-approved hosts across the level 2 to level 1 cell boundary, Modbus 502 and DNP3 20000",
+   detail:"L2 ⇄ L1 · Modbus/TCP, DNP3 · ports 502, 20000"}
+];
+
+function zoneIndex(id){for(var i=0;i<ZONES.length;i++)if(ZONES[i].id===id)return i;return -1}
+function zoneOf(level){for(var i=0;i<ZONES.length;i++)if(ZONES[i].level===String(level))return ZONES[i].id;return null}
+function flow(id){for(var i=0;i<FLOWS.length;i++)if(FLOWS[i].id===id)return FLOWS[i];return null}
+function switches(){return FLOWS.filter(function(f){return f.kind==="conduit"})}
+/* does this rule's port list cover the port in question? */
+function portMatches(rule,port){
+  if(rule.port==="any")return true;
+  if(port==null)return true;
+  var list=[].concat(rule.port);
+  for(var i=0;i<list.length;i++)if(Number(list[i])===Number(port))return true;
+  return false;
+}
+/* the approved flow that covers this source, destination and port, or null */
+function approvedFlow(from,to,port){
+  for(var i=0;i<FLOWS.length;i++){
+    var f=FLOWS[i];
+    if(f.kind!=="host"||!f.approved)continue;
+    if(f.from===from&&f.to===to&&(port==null||Number(f.port)===Number(port)))return f;
+  }
+  return null;
+}
+/* the conduits between two zones, in the order traffic meets them, nearest the source first */
+function route(from,to){
+  var i=zoneIndex(from),j=zoneIndex(to),out=[];
+  if(i<0||j<0||i===j)return out;
+  var step=i<j?1:-1;
+  for(var k=i;k!==j;k+=step)out.push(CONDUITS[Math.min(k,k+step)]);
+  return out;
+}
+/* Can this path cross the plant under these switch settings?
+     path  {from, to, approved, protocol, port}   from and to are zone ids
+     rules {"FW-301":"allow"|"deny", ...}         anything not named counts as allow
+   The first DENY on the route wins, so every combination of the four switches follows from
+   which firewalls lie on a path. An approved flow has its own fixed rule and no switch touches it. */
+function canPass(path,rules){
+  rules=rules||{};
+  var cs=route(path.from,path.to),crossed=[],unfiltered=[],i=zoneIndex(path.from),
+      step=zoneIndex(path.to)>i?1:-1,at=path.from;
+  for(var n=0;n<cs.length;n++){
+    var c=cs[n];
+    if(!c.firewall){unfiltered.push(c.id);at=ZONES[zoneIndex(at)+step].id;continue}
+    crossed.push(c.firewall);
+    if(!path.approved&&rules[c.firewall]==="deny"&&portMatches(flow(c.rule),path.port))
+      return {passed:false,stoppedAt:c.firewall,stoppedBy:c.rule,conduit:c.id,
+              crossed:crossed,unfiltered:unfiltered,reached:at};
+    at=ZONES[zoneIndex(at)+step].id;
+  }
+  return {passed:true,stoppedAt:null,stoppedBy:null,conduit:null,
+          crossed:crossed,unfiltered:unfiltered,reached:path.to};
+}
+/* ---- the segmentation view's additions: subnets, demo VLANs and reachability ---- */
+/* One subnet and one demo VLAN per zone, derived from the addresses of the hosts standing in
+   it: the third octet of 10.10.x.y. SIMULATED: demo numbering for the segmentation view, not
+   a recommendation for a real plant. Pure: a fresh object from the given host list. */
+function zoneNets(hosts){
+  var nets={};
+  hosts.forEach(function(h){
+    if(!h.ip)return;
+    var zid=zoneOf(h.level),m=h.ip.split(".");
+    if(!zid||m.length!==4)return;
+    if(!nets[zid])nets[zid]={subnet:m[0]+"."+m[1]+"."+m[2]+".0/24",vlan:Number(m[2]),hosts:[]};
+    nets[zid].hosts.push(h.name);
+  });
+  return nets;
+}
+/* The addressed hosts the reachability questions are asked about, registered once by the page.
+   The functions below only read it; an item with no address is not on the network and is left
+   out, which the Segmentation pane says in words. */
+var HOSTS=[];
+function register(assets){HOSTS=assets.filter(function(a){return !!a.ip});return zoneNets(HOSTS)}
+function hosts(){return HOSTS.slice()}
+function hostByName(name){for(var i=0;i<HOSTS.length;i++)if(HOSTS[i].name===name)return HOSTS[i];return null}
+/* Which addressed hosts can this one reach? Pure: the answer follows from the registered host
+   list, the switch settings, the mode and the port, and none of them is changed.
+     mode "segmented"  every path runs through canPass under these rules
+     mode "flat"       one flat network: no zones, no VLANs, no firewalls, so every other
+                       addressed host is reached
+   port defaults to 502, the live attacks' protocol. An approved flow has its own fixed rule,
+   exactly as in canPass, so it is reached whatever the switches say. */
+function reachableFrom(name,rules,mode,port){
+  var me=hostByName(name);if(!me)return null;
+  if(port==null)port=502;
+  var from=zoneOf(me.level),reached=[],blocked=[];
+  HOSTS.forEach(function(h){
+    if(h.name===name)return;
+    if(mode==="flat"){reached.push(h.name);return}
+    var r=canPass({from:from,to:zoneOf(h.level),port:port,
+                   approved:!!approvedFlow(name,h.name,port)},rules);
+    if(r.passed)reached.push(h.name);else blocked.push({name:h.name,stoppedAt:r.stoppedAt});
+  });
+  return {from:name,mode:mode,port:port,total:HOSTS.length-1,count:reached.length,
+          reached:reached,blocked:blocked};
+}
+/* The hop-by-hop story of one path between two zones: every conduit in the order traffic meets
+   it, with its firewall or its gap and what happens there. Pure, and it agrees with canPass:
+   the first DENY wins and nothing past it is reached. */
+function hops(fromZone,toZone,port,approved,rules){
+  rules=rules||{};
+  var cs=route(fromZone,toZone),out=[],stoppedAt=null;
+  var i=zoneIndex(fromZone),step=zoneIndex(toZone)>i?1:-1,at=fromZone;
+  for(var n=0;n<cs.length;n++){
+    var c=cs[n],next=ZONES[zoneIndex(at)+step].id,
+        h={conduit:c.id,from:at,to:next,firewall:c.firewall,gap:!c.firewall};
+    if(stoppedAt)h.verdict="unreached";
+    else if(!c.firewall)h.verdict="gap";
+    else if(approved)h.verdict="approved";
+    else if(rules[c.firewall]==="deny"&&portMatches(flow(c.rule),port)){h.verdict="deny";stoppedAt=c.firewall}
+    else h.verdict="pass";
+    out.push(h);at=next;
+  }
+  return {hops:out,passed:!stoppedAt,stoppedAt:stoppedAt};
+}
+root.NetworkModel={ZONES:ZONES,CONDUITS:CONDUITS,FLOWS:FLOWS,
+  zoneIndex:zoneIndex,zoneOf:zoneOf,flow:flow,switches:switches,
+  portMatches:portMatches,approvedFlow:approvedFlow,route:route,canPass:canPass,
+  zoneNets:zoneNets,register:register,hosts:hosts,reachableFrom:reachableFrom,hops:hops};
+})(window);
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+"use strict";
+var $=function(s){return document.querySelector(s)};
+function el(tag,cls,text){var e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e}
+function css(name){return getComputedStyle(document.documentElement).getPropertyValue(name).trim()}
+
+/* ================= plant data ================= */
+var LEVELS=[
+  {id:"0",name:"Level 0 field"},{id:"1",name:"Level 1 control"},{id:"2",name:"Level 2 supervisory"},
+  {id:"3",name:"Level 3 operations"},{id:"3.5",name:"Level 3.5 DMZ"},{id:"4",name:"Level 4 enterprise"},
+  {id:"5",name:"Level 5 internet"}
+];
+var GAP=1.7,levelY={};LEVELS.forEach(function(l,i){levelY[l.id]=i*GAP});
+var ASSETS=[
+ ["","INTERNET","Internet","5","low","Public internet and cloud services","cloud"],
+ ["10.10.90.1","VPN-GW-01","VPN gateway","5","high","Remote access for staff and vendors, hands out the 10.10.90.0/24 pool","router"],
+ ["10.10.50.7","OFFICE-PC-14","Office PC","4","low","Office workstation, not an engineering station","pc"],
+ ["10.10.50.20","ERP-SRV-01","ERP server","4","medium","Production planning and customer orders","server"],
+ ["10.10.45.5","JUMP-SRV-01","Jump server","3.5","high","Remote access entry point for OT","server"],
+ ["10.10.45.10","PATCH-SRV-01","Patch server","3.5","medium","Stages approved patches for OT","server"],
+ ["10.10.45.20","HIST-DMZ-01","Historian replica","3.5","medium","Read-only copy of historian data for the enterprise network","db"],
+ ["10.10.40.8","ENG-WS-01","Engineering workstation","3","high","PLC programming. Approved change window: Tuesday 08:00 to 10:00","ws"],
+ ["10.10.40.20","HIST-01","Historian","3","medium","Process data historian, polls PLCs read-only","db"],
+ ["10.10.40.30","MES-SRV-01","MES server","3","medium","Manufacturing execution system: schedules production orders and tracks batches","server"],
+ ["10.10.40.40","AD-OT-01","OT domain controller","3","high","Logins and group policy for the OT workstations and servers","server"],
+ ["10.10.30.5","HMI-Line1","HMI","2","medium","Operator screen for line 1, the approved Modbus master","hmi"],
+ ["10.10.30.10","SCADA-SRV-01","SCADA server","2","high","SCADA server with OPC UA endpoint and DNP3 master","server"],
+ ["10.10.30.20","DCS-OPS-01","DCS operator station","2","high","Operator console for the plant utilities: steam, compressed air and chilled water","ws"],
+ ["10.10.30.21","DCS-SRV-01","DCS server","2","high","DCS application server: holds the control configuration, alarms and trends for the utilities","server"],
+ ["10.10.20.40","DCS-CTRL-01","DCS controller","1","high","Redundant controller pair running the utilities control loops. Reads the level of TANK-Utility-1","dcs"],
+ ["10.10.20.11","PLC-Line1","PLC","1","high","Packaging line 1 control","plc"],
+ ["10.10.20.12","PLC-Line2","PLC","1","high","Packaging line 2 control","plc"],
+ ["10.10.20.30","RTU-Outstation-3","RTU","1","high","Utility metering outstation, reports to SCADA over DNP3","rtu"],
+ ["","TANK-Utility-1","Utilities tank","0","medium","Chilled-water buffer tank. Its level transmitter is wired to DCS-CTRL-01","tank"],
+ ["10.10.10.21","VFD-Conveyor-1","Variable frequency drive","0","medium","Drives the line 1 conveyor motor","vfd"],
+ ["","MOTOR-Conveyor-1","Conveyor motor","0","medium","Line 1 conveyor motor, driven by VFD-Conveyor-1","motor"],
+ ["10.10.10.40","ROBOT-Pick-1","Pick-and-place robot","0","high","Packs line 1 product into cases, enabled by PLC-Line1","robot"],
+ ["10.10.10.12","IO-Module-Line2","Remote I/O module","0","high","EtherNet/IP remote I/O for PLC-Line2","io"],
+ ["","PUMP-Utility-1","Utilities pump","0","medium","Chilled-water circulation pump. Its pressure transmitter is wired to PLC-Line2","pump"],
+ ["","FLOW-Meter-1","Flow meter","0","medium","Chilled-water flow meter on the pump discharge. Wired to PLC-Line2","flow"],
+ ["","SEALER-Line1","Sealer","0","high","Heat-seals the film on line 1. Its temperature sensors are read through SENSOR-GW-1","sealer"],
+ ["10.10.10.30","SENSOR-GW-1","Sensor gateway","0","medium","Modbus TCP gateway for the line 1 sealer temperature sensors","gw"]
+].map(function(a){return {ip:a[0],name:a[1],type:a[2],level:a[3],crit:a[4],fn:a[5],kind:a[6],zone:"Level "+a[3]}});
+var FWS=[
+ ["FW-Edge","5","4","Internet edge firewall. Only the VPN gateway and outbound web traffic may pass"],
+ ["FW-IT-DMZ","4","3.5","Separates the office network from the OT DMZ. Office hosts may reach the DMZ servers only"],
+ ["FW-DMZ-OT","3.5","3","Separates the DMZ from operations. No direct path from the office network to the plant floor"],
+ ["FW-Cell-1","2","1","Cell firewall on the level 2 to level 1 boundary: this model has one conduit between those levels, so every level 1 controller sits behind it. Only HMI-Line1, the historian and the engineering workstation may reach PLC-Line1. As found it was named the line 1 cell firewall"]
+].map(function(f){return {ip:"",name:f[0],type:"Firewall",level:f[1],crit:"high",fn:f[3],kind:"fw",
+  zone:"Between level "+f[1]+" and level "+f[2],lo:f[2],fy:(levelY[f[1]]+levelY[f[2]])/2,ya:levelY[f[1]],yb:levelY[f[2]]}});
+/* a trace names its ends by address (src, dst) or, for items with no address, by asset (srcA, dstA) */
+function traceEnd(tr,which){return tr[which+"A"]||byIp[tr[which]]||null}
+function traceY(tr,which){var a=traceEnd(tr,which);return a?levelY[a.level]:levelY[tr.unk.level]}
+function crossed(tr){var y1=traceY(tr,"src"),y2=traceY(tr,"dst"),lo=Math.min(y1,y2),hi=Math.max(y1,y2);
+  return FWS.filter(function(f){return f.fy>lo&&f.fy<hi})}
+var byIp={},byName={};ASSETS.forEach(function(a){if(a.ip)byIp[a.ip]=a;byName[a.name]=a});
+/* field devices with no network address: [device, what its signal cable runs to] */
+var WIRED={"TANK-Utility-1":"DCS-CTRL-01","PUMP-Utility-1":"PLC-Line2","FLOW-Meter-1":"PLC-Line2","SEALER-Line1":"SENSOR-GW-1"};
+
+/* ISA-style tags. A tag is a letter code and a three-digit number; the first digit is the area:
+   1 line 1, 2 line 2, 3 network security, 4 enterprise and DMZ, 5 utilities, 6 operations and supervisory servers and workstations.
+   IT equipment uses plain asset-class prefixes (SRV, WS, DB, PC). A transmitter prefix (TT, LT, PT, FT, ST) goes only on a measuring device. */
+var TAGOF={"VPN-GW-01":"VPN-301","OFFICE-PC-14":"PC-401","ERP-SRV-01":"SRV-401","JUMP-SRV-01":"SRV-402","PATCH-SRV-01":"SRV-403","HIST-DMZ-01":"DB-401",
+  "ENG-WS-01":"WS-601","HIST-01":"DB-601","MES-SRV-01":"SRV-601","AD-OT-01":"SRV-602","SCADA-SRV-01":"SRV-603",
+  "HMI-Line1":"HMI-101","DCS-OPS-01":"WS-501","DCS-SRV-01":"SRV-501","DCS-CTRL-01":"DCS-501",
+  "PLC-Line1":"PLC-101","PLC-Line2":"PLC-201","RTU-Outstation-3":"RTU-501",
+  "TANK-Utility-1":"T-501","VFD-Conveyor-1":"VFD-101","MOTOR-Conveyor-1":"M-101","ROBOT-Pick-1":"RB-101","IO-Module-Line2":"IO-201",
+  "PUMP-Utility-1":"P-501","FLOW-Meter-1":"FT-501","SEALER-Line1":"SL-101","SENSOR-GW-1":"GW-101",
+  "FW-Edge":"FW-301","FW-IT-DMZ":"FW-302","FW-DMZ-OT":"FW-303","FW-Cell-1":"FW-304"};
+/* the assets that are in the project's own asset file (data/assets.json); every other item was added for this demo */
+var IN_FILE={"PLC-Line1":1,"PLC-Line2":1,"RTU-Outstation-3":1,"HMI-Line1":1,"SCADA-SRV-01":1,"ENG-WS-01":1,"HIST-01":1,"OFFICE-PC-14":1,
+  "IO-Module-Line2":1,"VFD-Conveyor-1":1,"SENSOR-GW-1":1,"JUMP-SRV-01":1,"PATCH-SRV-01":1,"HIST-DMZ-01":1};
+ASSETS.concat(FWS).forEach(function(a){a.tag=TAGOF[a.name]||"";a.demo=!IN_FILE[a.name]});
+var byTag={};ASSETS.concat(FWS).forEach(function(a){if(a.tag)byTag[a.tag]=a});
+/* the five AlarmOps tags, each mapped to a tag on the plant. FT-501 is a drawn device (the flow meter); the others are signal tags. */
+var ALARM_TAG={sealer_temperature:"TT-101",conveyor_speed:"ST-101",tank_level:"LT-501",pump_pressure:"PT-501",flow_rate:"FT-501"};
+var SIGS=[
+  {tag:"TT-101",what:"Sealer temperature",on:"SEALER-Line1",via:"SENSOR-GW-1",lim:"sealer_temperature"},
+  {tag:"ST-101",what:"Conveyor speed",on:"MOTOR-Conveyor-1",via:"VFD-Conveyor-1",lim:"conveyor_speed"},
+  {tag:"LT-501",what:"Utilities tank level",on:"TANK-Utility-1",via:"DCS-CTRL-01",lim:"tank_level"},
+  {tag:"PT-501",what:"Pump pressure",on:"PUMP-Utility-1",via:"PLC-Line2",lim:"pump_pressure"},
+  {tag:"TIC-101",what:"Sealer temperature controller, setpoint",on:"PLC-Line1",via:"inside PLC-Line1",lim:null}
+];
+SIGS.forEach(function(s){s.asset=byName[s.on]});
+function tagName(n){var a=byName[n];return a&&a.tag?a.tag+" ("+n+")":n}
+function litSet(){
+  var m={};
+  if((curTab==="lim"||curTab==="sim")&&LIM.blocked&&ALARM_TAG[LIM.blocked])m[ALARM_TAG[LIM.blocked]]="limit change blocked";
+  if(curTab==="sim"&&SB.missed)SB.missed.forEach(function(x){if(ALARM_TAG[x.tag]&&!m[ALARM_TAG[x.tag]])m[ALARM_TAG[x.tag]]="alarm missed"});
+  alarms.forEach(function(a){if(a.cleared)return;if(a.kind==="setpoint")m["TIC-101"]="SP changed";if(a.kind==="temp")m["TT-101"]="high"});
+  return m;
+}
+function buildEq(){
+  var tb=$("#eq tbody");tb.textContent="";
+  var limOf={};Object.keys(ALARM_TAG).forEach(function(k){limOf[ALARM_TAG[k]]=k});
+  function row(cls,key,cells,origin){
+    var tr=el("tr",cls);tr.setAttribute("data-tag",key);
+    cells.forEach(function(c){tr.appendChild(el("td",c[1]||null,c[0]))});
+    var td=el("td",null,origin);td.appendChild(el("span","why"));tr.appendChild(td);tb.appendChild(tr);
+  }
+  ASSETS.concat(FWS).forEach(function(a){
+    row("",a.tag||"-",[[a.tag||"-","tg"],[a.name],[a.type],[a.kind==="fw"?"L"+a.level+" / L"+a.lo:"L"+a.level],[limOf[a.tag]||"","mono"]],a.demo?"Demo only":"Project asset file");
+  });
+  SIGS.forEach(function(s){
+    row("sig",s.tag,[[s.tag,"tg"],[s.what+", on "+tagName(s.on)+", "+(s.via.indexOf("inside")===0?s.via:"read through "+tagName(s.via))],["Signal tag"],["L"+s.asset.level],[s.lim||"","mono"]],"Signal, demo only");
+  });
+}
+function paintEq(){
+  var lit=litSet();
+  document.querySelectorAll("#eq tbody tr").forEach(function(tr){
+    var on=lit[tr.getAttribute("data-tag")];tr.classList.toggle("lit",!!on);
+    tr.querySelector(".why").textContent=on?" · "+on.toUpperCase():"";
+  });
+}
+
+
+var RECS=[
+ {title:"Modbus write coil to PLC from an office PC",v:"escalate",p:"P1",t:"T0835",src:"10.10.50.7",dst:"10.10.20.11",port:502,proto:"Modbus/TCP",
+  d:"Modbus/TCP function code 5 sent from 10.10.50.7 to 10.10.20.11, coil 12, value ON. The source has never written to this PLC before."},
+ {title:"PLC program download outside the change window",v:"escalate",p:"P1",t:"T0843.001",src:"10.10.40.8",dst:"10.10.20.12",port:502,proto:"Modbus/TCP",
+  d:"Full program download to 10.10.20.12 from 10.10.40.8 at 02:40 on a Thursday. No change ticket is referenced."},
+ {title:"Setpoint written outside its normal range",v:"escalate",p:"P1",t:"T0836",src:"10.10.30.5",dst:"10.10.20.11",port:502,proto:"Modbus/TCP",
+  d:"Modbus function code 6 from the HMI to 10.10.20.11, register 40021 set to 9500. Normal range is 1000 to 3000."},
+ {title:"New remote session to the HMI from the VPN pool",v:"investigate",p:"P2",t:"T0822",src:"10.10.90.14",dst:"10.10.30.5",port:3389,proto:"RDP",unk:{label:"VPN pool host",level:"5"},
+  d:"RDP session from 10.10.90.14 to 10.10.30.5. The account has not logged in to this HMI before."},
+ {title:"Modbus unit ID and port sweep from a new host",v:"investigate",p:"P2",t:"T0846.001",src:"10.10.50.99",dst:"10.10.20.11",port:502,proto:"Modbus/TCP",unk:{label:"New host",level:"4"},
+  d:"Host 10.10.50.99 probed 10.10.20.0/24 on ports 502, 44818 and 20000 and tried Modbus unit IDs 1 to 247 within 90 seconds."},
+ {title:"DNP3 responses from an unknown outstation",v:"investigate",p:"P2",t:"T1692.002",src:"10.10.20.99",dst:"10.10.30.10",port:20000,proto:"DNP3",unk:{label:"Unknown outstation",level:"1"},
+  d:"The SCADA master received unsolicited DNP3 responses from 10.10.20.99, which is not a configured outstation."},
+ {title:"Repeated failed OPC UA logins",v:"investigate",p:"P2",t:"T0822",src:"10.10.50.7",dst:"10.10.30.10",port:4840,proto:"OPC UA",
+  d:"47 failed OPC UA session activations against 10.10.30.10 within 5 minutes from 10.10.50.7, using different usernames."},
+ {title:"Engineering workstation reading PLC registers",v:"likely_benign",p:"P4",t:"",src:"10.10.40.8",dst:"10.10.20.11",port:502,proto:"Modbus/TCP",
+  d:"Modbus function code 3 from 10.10.40.8 to 10.10.20.11, 120 registers, polled every 5 seconds for 20 minutes."}
+];
+var VLABEL={escalate:"Escalate",investigate:"Investigate",likely_benign:"Likely benign"};
+var VVAR={escalate:"--alarm",investigate:"--warn",likely_benign:"--live"};
+
+/* ================= live console ================= */
+var HMI={ip:"10.10.30.5",name:"HMI-Line1"},HIST={ip:"10.10.40.20",name:"HIST-01"},
+    PLC={ip:"10.10.20.11",name:"PLC-Line1"},OFFICE={ip:"10.10.50.7",name:"OFFICE-PC-14"},
+    NEWHOST={ip:"10.10.50.99",name:"New host"};
+var APPROVED={};APPROVED[HMI.ip]=1;APPROVED[HIST.ip]=1;
+var WRITE_FC={5:1,6:1,15:1,16:1};
+var HI_SEAL=190,SP_NORMAL=160;
+var st={sp:SP_NORMAL,pv:159.7,rpm:1200,ppm:42,heater:1,conv:1,robot:1};
+var hist=[],queue=[],rows=[],tid=0x1A00,lastTid=0,step=0,ticks=0;
+var NM=window.NetworkModel;
+/* the segmentation view asks its reachability questions about the addressed assets; NETS holds
+   the demo subnet and VLAN per zone, derived from those addresses */
+var NETS=NM.register(ASSETS);
+/* The four switches, as found: every one ALLOW, which is the state these paths were actually in,
+   so a first-time visitor still sees an alarm. SIMULATED; demo rules, not advice for a real plant. */
+var SEG={};NM.switches().forEach(function(r){SEG[r.firewall]="allow"});
+/* the Segmentation tab's own state: mode, zone display, matrix protocol and picked cell */
+/* touched: the 3D highlight appears once the reader picks a path or a cell, not before */
+var SEGV={mode:"segmented",zones:false,mxPort:502,sel:null,cellPath:false,hostTrace:null,touched:false};
+var segEvent=null;
+var alarms=[],alarmSeq=0,firstOut=null,active=null,selRec=null,scan={addrs:[],frames:[]},scene3d=null,curTab="live";
+
+var samplePromise=(window.claude&&typeof window.claude.use==="function")
+  ? window.claude.use("sample").catch(function(){return null}) : Promise.resolve(null);
+
+function w(n){n=Math.round(n)&0xFFFF;return [n>>8,n&255]}
+function hx(b){return b.map(function(x){return (x<16?"0":"")+x.toString(16).toUpperCase()}).join(" ")}
+function adu(id,pdu){return w(id).concat([0,0],w(pdu.length+1),[1],pdu)}
+function clock(){var d=new Date();function p(n){return (n<10?"0":"")+n}return p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds())}
+function rnd(a){return (Math.random()*2-1)*a}
+function f1(n){return n.toFixed(1)}
+function mk(src,dst,fc,pdu,text,isResp,extra){var f={src:src,dst:dst,fc:fc,pdu:pdu,text:text,resp:isResp};if(extra)for(var k in extra)f[k]=extra[k];
+  if(!isResp)f.path=pathBetween(src,dst,502);return f}
+/* the path a frame takes, in the form the segmentation model wants: two zones, a port, and whether
+   an approved flow covers it. An approved flow has its own fixed rule, so no switch can stop it. */
+function pathBetween(src,dst,port,level){
+  var s=byIp[src.ip]||byName[src.name]||null,d=byIp[dst.ip]||byName[dst.name]||null;
+  return {from:NM.zoneOf(s?s.level:(level||"4")),to:NM.zoneOf(d?d.level:(level||"4")),port:port,
+          approved:!!(s&&d&&NM.approvedFlow(s.name,d.name,port))};
+}
+
+function nextPoll(){
+  var pattern=[0,1,0,1,2,3],s=pattern[step%pattern.length];step++;
+  if(s===0)return mk(HMI,PLC,3,[3,0,0,0,4],"Read 4 holding registers from 40001",false);
+  if(s===1)return mk(PLC,HMI,3,[3,8].concat(w(st.sp*10),w(st.pv*10),w(st.rpm),w(st.ppm)),
+    "Returns "+f1(st.sp)+" / "+f1(st.pv)+" °C, "+Math.round(st.rpm)+" rpm, "+Math.round(st.ppm)+" packs/min",true);
+  if(s===2)return mk(HIST,PLC,1,[1,0,0,0,3],"Read 3 coils from 00001",false);
+  return mk(PLC,HIST,1,[1,1,st.heater|(st.conv<<1)|(st.robot<<2)],
+    "Returns heater "+(st.heater?"on":"off")+", conveyor "+(st.conv?"on":"off")+", robot "+(st.robot?"on":"off"),true);
+}
+var ATTACKS={
+  setpoint:function(){
+    queue.push(mk(OFFICE,PLC,6,[6,0,0].concat(w(2400)),"Write register 40001 = 2400 (240.0 °C)",false,{addr:"40001",kind:"setpoint",effect:function(){st.sp=240}}));
+    queue.push(mk(PLC,OFFICE,6,[6,0,0].concat(w(2400)),"Echo: write accepted",true));
+  },
+  robot:function(){
+    queue.push(mk(OFFICE,PLC,5,[5,0,2,0,0],"Write coil 00003 = OFF (packing robot)",false,{addr:"00003",kind:"robot",effect:function(){st.robot=0}}));
+    queue.push(mk(PLC,OFFICE,5,[5,0,2,0,0],"Echo: write accepted",true));
+  },
+  scan:function(){
+    [100,200,300,400,500].forEach(function(a){
+      queue.push(mk(NEWHOST,PLC,3,[3].concat(w(a),[0,10]),"Read 10 holding registers from "+(40001+a),false,{start:a,kind:"scan"}));
+      queue.push(mk(PLC,NEWHOST,3,[0x83,2],"Exception 02: illegal data address",true));
+    });
+  }
+};
+
+function detect(f){
+  /* runs on every frame, whether or not an alarm is already active */
+  if(f.resp||f.dst!==PLC||APPROVED[f.src.ip])return;
+  if(WRITE_FC[f.fc]){
+    f.flag=true;
+    raise({sev:"crit",kind:f.kind,label:"Critical",
+      title:f.kind==="robot"?"RB-101 stopped by an unapproved host":"TIC-101 SP changed by an unapproved host",
+      rule:"Write command from a host that is not an approved master",
+      src:f.src,target:(f.fc===5?"Coil ":"Register ")+f.addr+" on PLC-101 (PLC-Line1)",frames:[f]});
+    return;
+  }
+  if(alarmOf("scan")){f.flag=true;return}
+  scan.addrs.push(f.start);scan.frames.push(f);
+  if(scan.addrs.length>=3){
+    scan.frames.forEach(function(x){x.flag=true});
+    raise({sev:"warn",kind:"scan",label:"Warning",
+      title:"New host is scanning the PLC-101 register map",
+      rule:"Three or more reads of unmapped address ranges from one unapproved host",
+      src:f.src,target:"Holding registers 40101 onwards on PLC-101 (PLC-Line1)",frames:scan.frames.slice()});
+  }
+}
+function emit(f){
+  if(f.resp){f.tid=lastTid}else{tid=(tid+1)&0xFFFF;f.tid=lastTid=tid}
+  f.time=clock();f.hex=hx(adu(f.tid,f.pdu));
+  /* a frame the firewalls deny never reaches PLC-101: no effect on the plant, nothing for the
+     mirror-port sensor to see, and no reply, so the queued response is dropped with it */
+  var blocked=f.resp?null:(f.path?segOf(f.path):null);
+  if(blocked&&!blocked.passed){
+    f.deny=blocked.stoppedAt;f.denyRule=blocked.stoppedBy;
+    if(queue.length&&queue[0].resp)queue.shift();
+    segBlocked(f,blocked);
+    rows.unshift(f);if(rows.length>60)rows.pop();
+    return;
+  }
+  if(f.effect)f.effect();
+  if(alarmOf("scan")&&!f.resp&&f.kind==="scan")f.flag=true;
+  detect(f);
+  rows.unshift(f);if(rows.length>60)rows.pop();
+}
+/* SIMULATED. What the page shows when the firewalls stop an attempt: an informational entry, not
+   an alarm, because nothing in the plant changed. The note is always pre-written. The live AI is
+   never asked about this, because there are no process consequences for it to describe. */
+var SEG_NOTE={
+  setpoint:["tried to write 240 \u00b0C to the sealer setpoint on PLC-101",
+            "The setpoint did not change, the sealer is still at its normal 160 \u00b0C, and no process alarm fired. Nothing on line 1 is affected."],
+  robot:["tried to force the packing robot enable coil off on PLC-101",
+         "The robot is still running and no process alarm fired. Nothing on line 1 is affected."],
+  scan:["tried to read address ranges on PLC-101",
+        "The controller answered nothing, because nothing reached it. No process value changed."]
+};
+function segBlocked(f,r){
+  var k=f.kind||"scan",n=SEG_NOTE[k]||SEG_NOTE.scan,rule=NM.flow(r.stoppedBy);
+  segEvent={fw:r.stoppedAt,rule:r.stoppedBy,kind:k,time:clock(),src:f.src,reached:r.reached,
+    label:rule?rule.label:"",
+    trace:{src:f.src.ip,dst:f.dst.ip,cvar:"--mute",stopAt:r.stoppedAt,
+           unk:byIp[f.src.ip]?null:{label:f.src.name,level:"4"}},
+    who:"Not seen by SentinelOT \u00b7 simulated firewall log",
+    note:f.src.name+" "+n[0]+". "+r.stoppedAt+" denied it under rule "+r.stoppedBy+
+         " and no frame reached the controller.\n\n"+n[1]+
+         "\n\nThe frames never reached the mirror port, so the Modbus sensor saw nothing: this entry comes from the firewall log, not from SentinelOT. Worth asking why that host is addressing a controller at all. The attempt is the finding, not the result."};
+  active=null;refresh();
+}
+function simulate(){
+  ticks++;
+  st.pv+=(st.sp-st.pv)*0.06+rnd(0.3);
+  st.rpm=1200+Math.sin(ticks/3)*8+rnd(3);
+  st.ppm+=((st.robot?42:0)-st.ppm)*0.25+(st.robot?rnd(0.5):0);if(st.ppm<0.3)st.ppm=0;
+  hist.push(st.pv);if(hist.length>70)hist.shift();
+}
+
+var SCRIPTED={
+  temp:"TT-101, the sealer temperature, is over its 190 °C high limit. The limit still fires because AlarmOps blocked the change that would have widened it.\n\nThe film can scorch on the bars. This alarm is a consequence: look at the first-out alarm to find the cause.\n\nRestore the setpoint from HMI-Line1 and let the sealer cool.",
+  setpoint:"OFFICE-PC-14, an office workstation, wrote 240 °C to the sealer setpoint on PLC-Line1. Only HMI-Line1 is allowed to write to this PLC.\n\nThe sealer will climb past its 190 °C high limit. Film can burn or melt onto the sealing bars and the line may need to stop for cleaning.\n\nPut the setpoint back to 160 °C from the HMI, block 10.10.50.7 from the control network and find out who or what is using that PC.",
+  robot:"OFFICE-PC-14, an office workstation, forced the robot enable coil off on PLC-Line1. Only HMI-Line1 is allowed to write to this PLC.\n\nThe packing robot has stopped while the conveyor keeps running, so product will pile up at the end of line 1.\n\nCheck the cell is safe, re-enable the robot from the HMI and block 10.10.50.7 from the control network.",
+  scan:"A host first seen today, 10.10.50.99, is reading address ranges PLC-Line1 doesn’t use, and the PLC is answering with exception 02 each time.\n\nNothing in the process has changed yet. This is how someone maps a controller before sending a write.\n\nBlock 10.10.50.99 from the control network, find out what that host is and watch for write commands from it."
+};
+function buildPrompt(a){
+  var lines=a.frames.map(function(f){return f.time+" "+f.src.ip+" -> "+f.dst.ip+" FC"+("0"+f.fc).slice(-2)+" "+f.text+" ["+f.hex+"]"}).join("\n");
+  return "You are an OT security analyst. Write a short note for a plant operator about an alarm from a passive Modbus/TCP monitor. The data is simulated for a demo.\n\n"+
+    "Plant: packaging line 1, controlled by PLC-Line1 "+PLC.ip+". Approved masters: HMI-Line1 "+HMI.ip+" (read and write), historian HIST-01 "+HIST.ip+" (read only). OFFICE-PC-14 10.10.50.7 is an office workstation on the enterprise level and is not an engineering station. Three firewalls (FW-IT-DMZ, FW-DMZ-OT, FW-Cell-1) sit between the office network and PLC-Line1 and should have blocked office hosts. 10.10.50.99 is not in the asset inventory.\n"+
+    "Register map: 40001 sealer setpoint (x10 °C, normal 160.0), 40002 sealer temperature (high limit 190 °C), 40003 conveyor motor speed (rpm), 40004 packs per minute. Coils: 00001 sealer heater, 00002 conveyor run, 00003 packing robot enable.\n\n"+
+    "Alarm: "+a.title+"\nRule that fired: "+a.rule+"\nSource: "+a.src.ip+" ("+a.src.name+")\nFrames:\n"+lines+"\n\n"+
+    "Write exactly three short paragraphs in plain text, no headings, no markdown, no lists, 80 words at most in total: first what happened, then what it could do to the process, then what the operator should do first. Use plain words. Do not invent facts beyond what is given.";
+}
+/* ---- alarms: several can be active at once ----
+   alarms[] holds every alarm that has been raised and not yet reset, in the order raised (seq 1, 2, ...).
+   firstOut is the alarm that came first in the current sequence. It stays marked until Reset, whatever else happens.
+   Acknowledge only stops the flashing. Restore (from HMI-Line1) puts the plant back. Reset removes alarms that are both
+   acknowledged and restored, and clears the first-out mark. `active` is the alarm shown in the detail box. */
+var KINDS={
+  setpoint:{tag:"TIC-101",txt:"SP changed",sev:"crit"},
+  robot:{tag:"RB-101",txt:"Robot stopped",sev:"crit"},
+  scan:{tag:"PLC-101",txt:"Register scan",sev:"warn"},
+  temp:{tag:"TT-101",txt:"High 190 °C",sev:"warn"},
+  /* not an alarm: nothing is wrong in the plant, so this window never flashes,
+     is never marked first out, and is not counted in the active total */
+  seg:{tag:"FW-30x",txt:"Blocked",sev:"info"}
+};
+var KIND_ORDER=["setpoint","robot","scan","temp","seg"];
+function alarmOf(kind){for(var i=0;i<alarms.length;i++)if(alarms[i].kind===kind)return alarms[i];return null}
+function alive(a){return alarms.indexOf(a)>=0}
+function raise(a){
+  var old=alarmOf(a.kind);
+  if(old){old.count++;old.frames=old.frames.concat(a.frames);refresh();return old}
+  a.time=clock();a.seq=++alarmSeq;a.ack=false;a.cleared=false;a.count=1;a.note="";a.who="Writing the analyst note…";
+  a.trace=a.trace||{src:a.src.ip,dst:PLC.ip,cvar:a.sev==="crit"?"--alarm":"--warn",unk:byIp[a.src.ip]?null:{label:a.src.name,level:"4"}};
+  alarms.push(a);if(!firstOut)firstOut=a;active=a;selRec=null;cardOpen={facts:null,note:null};
+  if(a.kind!=="temp")showTab("live");
+  refresh();revealAlarm();
+  if(a.kind==="temp"){fallback(a);return a}
+  samplePromise.then(function(sample){
+    if(!alive(a))return;
+    if(!sample){fallback(a);return}
+    return sample(buildPrompt(a),{modelTier:"quick",onText:function(e){
+      if(!alive(a))return;a.who="Analyst note, written live by AI";a.note=e.text;paintNote(a);
+    }}).then(function(r){
+      if(!alive(a))return;
+      if(r&&r.text){a.who="Analyst note, written live by AI";a.note=r.text;paintNote(a)}else fallback(a);
+    });
+  }).catch(function(){if(alive(a))fallback(a)});
+  return a;
+}
+function fallback(a){a.who="Analyst note (pre-written, live AI isn’t available in this view)";a.note=SCRIPTED[a.kind];paintNote(a)}
+function paintNote(a){
+  var who=$("#ai-who"),t=$("#ai-text");
+  if(a!==active)return;
+  if(who)who.textContent=a.who;
+  if(t)t.textContent=a.note;
+  var ld=$("#ai-lead");if(ld)ld.textContent=firstSentence(a.note);
+}
+function fwNames(tr){var c=crossed(tr).map(function(f){return f.name});return c.length?c.join(", "):"No firewall"}
+function factsEl(pairs){var dl=el("dl","facts");pairs.forEach(function(p){dl.appendChild(el("dt",null,p[0]));dl.appendChild(el("dd",null,p[1]))});return dl}
+function stateWord(a){
+  if(a.cleared)return a.ack?"RETURNED · ACK":"RETURNED · UNACK";
+  return a.ack?"ALARM · ACK":"ALARM · UNACK";
+}
+/* Which folding sections the reader has opened. Null means "whatever this screen defaults to":
+   open on a wide screen, closed on a phone, where the card was a whole screen tall. A new alarm
+   clears the memory, so each one arrives folded the same way. */
+var cardOpen={facts:null,note:null};
+function foldDefault(){return !(window.matchMedia&&window.matchMedia("(max-width:767px)").matches)}
+/* the analyst note is the point of the page, so it is never folded away. On a phone its first
+   sentence is always in view and the rest is one tap away; on a wide screen it is all there. */
+function firstSentence(t){
+  t=String(t||"").trim();var m=t.match(/^[\s\S]*?[.!?](?=\s|$)/);return m?m[0]:t;
+}
+function noteBlock(who,text){
+  var ai=el("div","ai note"),w=el("p","who",who),lead=el("p","lead",firstSentence(text)),
+      full=el("p","text",text),rest=String(text||"").trim().length>firstSentence(text).length;
+  w.id="ai-who";full.id="ai-text";lead.id="ai-lead";
+  var open=cardOpen.note===null?foldDefault():cardOpen.note;
+  ai.appendChild(w);ai.appendChild(lead);ai.appendChild(full);
+  var b=el("button","more",open?"Show less":"Read the full note");b.type="button";
+  b.setAttribute("aria-controls","ai-text");b.setAttribute("aria-expanded",open?"true":"false");
+  b.addEventListener("click",function(){cardOpen.note=!(cardOpen.note===null?foldDefault():cardOpen.note);paintAlarm()});
+  ai.classList.toggle("open",open);ai.classList.toggle("short",!rest);
+  ai.appendChild(b);
+  return ai;
+}
+function fold(key,label){
+  var d=document.createElement("details");d.className="fold";d.setAttribute("data-fold",key);
+  d.open=cardOpen[key]===null?foldDefault():cardOpen[key];
+  var sm=document.createElement("summary");sm.className="foldhd";sm.textContent=label;
+  d.appendChild(sm);
+  d.addEventListener("toggle",function(){cardOpen[key]=d.open});
+  return d;
+}
+function paintAlarm(){
+  var box=$("#alarm"),mark=box.classList.contains("justin");box.textContent="";
+  function cls(c){box.className=c+(mark?" justin":"")}
+  if(!active&&segEvent){
+    /* informational, not an alarm: no severity flag, no flashing, no acknowledge */
+    var g=segEvent;
+    cls("alarm quiet");
+    box.appendChild(el("span","badge g-rec","Blocked by "+g.fw));
+    box.appendChild(el("h3",null,"Stopped at the firewall, not by SentinelOT"));
+    box.appendChild(factsEl([["Source",g.src.ip?g.src.ip+" ("+g.src.name+")":g.src.name],
+      ["Denied by",g.fw+" \u00b7 rule "+g.rule]]));
+    var gd=fold("facts","Alarm detail");
+    gd.appendChild(factsEl([["Time",g.time],["Rule",g.label],
+      ["Got as far as",NM.ZONES[NM.zoneIndex(g.reached)].name+" (level "+NM.ZONES[NM.zoneIndex(g.reached)].level+")"],
+      ["Reached PLC-101","No frame arrived"]]));
+    box.appendChild(gd);
+    box.insertBefore(noteBlock(g.who,g.note),gd);
+    var cl=el("button","btn ghost ack","Clear");cl.type="button";
+    cl.addEventListener("click",function(){segEvent=null;refresh()});box.appendChild(cl);
+    return;
+  }
+  if(!active){
+    cls("alarm quiet");
+    box.appendChild(el("p",null,"No active alarm. Only HMI-Line1 and the historian are talking to the PLC."
+      +(Object.keys(SEG).some(function(k){return SEG[k]==="deny"})?" Some firewall rules are set to DENY.":"")));
+    return;
+  }
+  var a=active;
+  cls("alarm "+(a.ack?"":"unack ")+(a.sev==="crit"?"crit":"warnbox"));
+  box.appendChild(el("span","sev",a.label));
+  box.appendChild(el("h3",null,a.title));
+  /* what an operator reads first stays in the open: who, and what they touched */
+  box.appendChild(factsEl([["Source",a.src.ip?a.src.ip+" ("+a.src.name+")":a.src.name],
+    ["Target",a.target]]));
+  /* the rest folds away on a phone, where the whole card was a screen tall */
+  var det=fold("facts","Alarm detail");
+  det.appendChild(factsEl([["Seq",a.seq+(a===firstOut?" · FIRST OUT":"")+(alarms.length>1?" of "+alarms.length+" active":"")],
+    ["State",stateWord(a)+(a.count>1?" · "+a.count+" occurrences":"")],
+    ["Time",a.time],["Rule",a.rule],["Crossed",fwNames(a.trace)]]));
+  box.appendChild(det);
+  var note=noteBlock(a.who,a.note);
+  if(a.kind==="setpoint"){
+    /* the link to AlarmOps: one sentence and a jump to the blocked change. The attack itself is not sent to AlarmOps. */
+    var lk=el("div","ai");
+    lk.appendChild(el("p","text","The 190 °C high limit still fires because AlarmOps blocked the change that would have widened it."));
+    var jb=el("button","btn ghost ack","See the blocked change");jb.type="button";
+    jb.addEventListener("click",function(){showTab("lim");limPreset()});lk.appendChild(jb);
+    lk.classList.add("extra");note.insertBefore(lk,note.lastChild);
+  }
+  /* the note comes straight after source and target; the extra fact rows fold below it */
+  box.insertBefore(note,det);
+  var row=el("div","btnrow");
+  if(!a.ack){var b=el("button","btn ack","Acknowledge");b.type="button";b.addEventListener("click",function(){ackAlarm(a)});row.appendChild(b)}
+  if(!a.cleared&&a.kind!=="temp"){var r=el("button","btn ghost ack","Restore from HMI-Line1");r.type="button";r.disabled=queue.length>0;r.addEventListener("click",function(){restore(a)});row.appendChild(r)}
+  if(row.children.length)box.appendChild(row);
+}
+function ackAlarm(a){a.ack=true;refresh()}
+function ackAll(){alarms.forEach(function(a){a.ack=true});refresh()}
+function restore(a){
+  if(queue.length)return;
+  if(a.kind==="setpoint"){st.sp=SP_NORMAL;rows.unshift({time:clock(),text:"Operator restored the sealer setpoint (TIC-101) from HMI-Line1.",hex:"",note:true})}
+  else if(a.kind==="robot"){st.robot=1;rows.unshift({time:clock(),text:"Operator restored the packing robot (RB-101) from HMI-Line1.",hex:"",note:true})}
+  else if(a.kind==="scan"){scan={addrs:[],frames:[]};rows.unshift({time:clock(),text:"Operator cleared the scan alarm on PLC-101.",hex:"",note:true})}
+  a.cleared=true;refresh();paint();
+}
+function resetAlarms(){
+  segEvent=null;
+  alarms=alarms.filter(function(a){return !(a.ack&&a.cleared)});
+  firstOut=null;if(!alarms.length)alarmSeq=0;
+  if(alarms.indexOf(active)<0)active=alarms.length?alarms[alarms.length-1]:null;
+  refresh();
+}
+function selectAlarm(a){active=a;cardOpen={facts:null,note:null};refresh()}
+/* is there anything drawn on the plant right now that the reader would want to look at? */
+function traceLive(){
+  return !!(alarms.length||segEvent||selRec||(curTab==="lim"&&LIM.trace));
+}
+var stageSeen=true;
+function paintTraceBtn(){
+  var b=$("#showtrace");if(!b)return;
+  var narrowNow=!window.matchMedia||window.matchMedia("(max-width:1000px)").matches;
+  b.hidden=!(narrowNow&&traceLive()&&!stageSeen);
+}
+function showTrace(){
+  var reduceM=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  $("#stage").scrollIntoView({block:"start",behavior:reduceM?"auto":"smooth"});
+}
+/* Bring a newly raised alarm into view in the side panel and mark it for a moment. The panel is its
+   own scroll area on a wide screen; on a phone it is not, and the page is left where the reader put
+   it. Under reduced motion the scroll jumps instead of gliding and the mark is steady, not flashing. */
+var justInTimer=0;
+function revealAlarm(){
+  var box=$("#alarm"),p=$("#panel");if(!box||!p)return;
+  var reduceM=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if(p.scrollHeight>p.clientHeight+2){
+    var top=box.offsetTop-p.offsetTop-8;
+    if(p.scrollTo)p.scrollTo({top:top,behavior:reduceM?"auto":"smooth"});else p.scrollTop=top;
+  }
+  box.classList.remove("justin");void box.offsetWidth;box.classList.add("justin");
+  clearTimeout(justInTimer);
+  justInTimer=setTimeout(function(){box.classList.remove("justin")},3400);
+}
+/* launching an attack clears the previous blocked note, so the panel shows this attempt */
+function clearSeg(){segEvent=null}
+/* the three live attacks and the eight recorded alerts as paths, so one model drives the
+   switch summary, the 3D traces and the recorded detail */
+function attackPath(kind){return pathBetween(kind==="scan"?NEWHOST:OFFICE,PLC,502,"4")}
+function recPath(a){
+  var src=byIp[a.src]||{ip:a.src,name:a.src},dst=byIp[a.dst]||{ip:a.dst,name:a.dst};
+  return pathBetween(src,dst,a.port,a.unk?a.unk.level:"4");
+}
+function segOf(path){return NM.canPass(path,SEG)}
+function buildRules(){
+  /* the same four switches twice: once on the Live attack tab, once on the Segmentation tab.
+     One SEG state behind both; the buttons carry data-fw, never a duplicate id. */
+  ["#rules","#rules-seg"].forEach(function(sel){
+    var ul=$(sel);if(!ul)return;ul.textContent="";
+    NM.switches().forEach(function(r){
+      var li=el("li"),lb=el("div","lb");
+      lb.appendChild(el("b",null,r.firewall+" · rule "+r.id));
+      lb.appendChild(el("span","tx",r.label));
+
+      var b=el("button","swt");b.type="button";b.setAttribute("data-fw",r.firewall);
+      b.addEventListener("click",function(){
+        SEG[r.firewall]=SEG[r.firewall]==="deny"?"allow":"deny";refresh();
+      });
+      li.appendChild(lb);li.appendChild(b);li.appendChild(el("p","dt",r.detail));
+      ul.appendChild(li);
+    });
+  });
+}
+function paintRules(){
+  NM.switches().forEach(function(r){
+    var on=SEG[r.firewall]!=="deny";
+    document.querySelectorAll('.swt[data-fw="'+r.firewall+'"]').forEach(function(b){
+      b.textContent=on?"ALLOW":"DENY";b.setAttribute("aria-pressed",on?"true":"false");
+      b.setAttribute("aria-label",r.label+": "+(on?"allow":"deny"));
+    });
+  });
+  var stop=0;
+  ["setpoint","robot","scan"].forEach(function(k){if(!segOf(attackPath(k)).passed)stop++});
+  var recStop=RECS.filter(function(a){return !segOf(recPath(a)).passed}).length;
+  var sum=$("#seg-sum");sum.textContent="";
+  sum.appendChild(el("b",null,stop+" of 3 live attacks stop"));
+  sum.appendChild(document.createTextNode(" \u00b7 "+recStop+" of 8 recorded alerts would stop \u00b7 simulated"));
+}
+
+/* ================= 05 Segmentation ================= */
+/* SIMULATED. Demo subnets, demo VLANs and demo rules, not a recommendation for a real plant. */
+var PROTOS=[["Modbus/TCP",502],["DNP3",20000],["OPC UA",4840],["RDP",3389]];
+function protoName(port){for(var i=0;i<PROTOS.length;i++)if(PROTOS[i][1]===port)return PROTOS[i][0];return "port "+port}
+function zoneTitle(zid){return zid+" "+NM.ZONES[NM.zoneIndex(zid)].name}
+function zoneNetText(zid){var n=NETS[zid];return n?n.subnet+" \u00b7 VLAN "+n.vlan:"no addressed hosts"}
+var MXZONES=NM.ZONES.slice().reverse();   /* L5 first, like the drawing */
+/* the reach counter's figures, measured from the model every paint, never typed in */
+function segReach(which){
+  if(which==="flat")return NM.reachableFrom("OFFICE-PC-14",{},"flat",502);
+  var rules={};
+  NM.switches().forEach(function(r){rules[r.firewall]=which==="deny"?"deny":(which==="found"?"allow":SEG[r.firewall])});
+  return NM.reachableFrom("OFFICE-PC-14",rules,"segmented",502);
+}
+function fillProto(sel){PROTOS.forEach(function(p){var o=el("option",null,p[0]+" \u00b7 port "+p[1]);o.value=p[1];sel.appendChild(o)})}
+function buildSeg(){
+  if(!$("#pane-seg"))return;
+  fillProto($("#mx-proto"));fillProto($("#pt-proto"));
+  [["#pt-src","OFFICE-PC-14"],["#pt-dst","PLC-Line2"]].forEach(function(cfg){
+    var sel=$(cfg[0]);
+    NM.hosts().forEach(function(h){var o=el("option",null,h.name+" \u00b7 "+zoneTitle(NM.zoneOf(h.level)));o.value=h.name;sel.appendChild(o)});
+    sel.value=cfg[1];
+  });
+  /* who the counter counts, and who it leaves out */
+  var box=$("#reach-list"),inc=el("ul"),exc=el("ul");
+  box.appendChild(el("p",null,"Counted: every item with a network address, "+NM.hosts().length+" hosts. OFFICE-PC-14 is the source, so the counter asks about the other "
+    +(NM.hosts().length-1)+". An address marked demo-only belongs to an asset invented for this demo, not to the project's asset file."));
+  NM.hosts().forEach(function(h){
+    var a=byName[h.name],li=el("li",null,h.name+" \u00b7 "+h.ip+" \u00b7 "+zoneTitle(NM.zoneOf(h.level)));
+    if(a&&a.demo)li.appendChild(el("span","dm","demo-only address"));
+    inc.appendChild(li);
+  });
+  box.appendChild(inc);
+  box.appendChild(el("p",null,"Left out, because they have no network address: the drawn internet cloud, the field devices wired straight to a controller or gateway, and the four firewalls, which are the boundaries the paths cross, not targets."));
+  ASSETS.concat(FWS).filter(function(a){return !a.ip}).forEach(function(a){
+    exc.appendChild(el("li",null,a.name+" \u00b7 "+(a.kind==="fw"?"firewall, demo only":(WIRED[a.name]?"wired to "+WIRED[a.name]:"drawn for the demo"))));
+  });
+  box.appendChild(exc);
+  /* the matrix skeleton: one header row, then one row per source zone */
+  var mx=$("#mx"),thead=el("thead"),hr=el("tr"),c0=el("th",null,"from \\ to");
+  c0.setAttribute("scope","col");hr.appendChild(c0);
+  MXZONES.forEach(function(z){var th=el("th",null,z.id);th.setAttribute("scope","col");th.title=z.name;hr.appendChild(th)});
+  thead.appendChild(hr);mx.appendChild(thead);
+  var tb=el("tbody");
+  MXZONES.forEach(function(zs){
+    var tr=el("tr"),th=el("th",null,zs.id+" "+zs.name);th.setAttribute("scope","row");tr.appendChild(th);
+    MXZONES.forEach(function(zd){
+      var td=el("td"),b=el("button");b.type="button";
+      b.setAttribute("data-from",zs.id);b.setAttribute("data-to",zd.id);
+      b.addEventListener("click",function(){
+        SEGV.sel={from:zs.id,to:zd.id};SEGV.cellPath=true;
+        paintSeg();if(scene3d)scene3d.update();
+      });
+      td.appendChild(b);tr.appendChild(td);
+    });
+    tb.appendChild(tr);
+  });
+  mx.appendChild(tb);
+  $("#mode-seg").addEventListener("click",function(){SEGV.mode="segmented";paintSeg();if(scene3d)scene3d.update()});
+  $("#mode-flat").addEventListener("click",function(){SEGV.mode="flat";paintSeg();if(scene3d)scene3d.update()});
+  $("#zones-btn").addEventListener("click",function(){SEGV.zones=!SEGV.zones;paintSeg();if(scene3d)scene3d.update()});
+  $("#mx-proto").addEventListener("change",function(){SEGV.mxPort=Number(this.value);paintSeg();if(scene3d)scene3d.update()});
+  ["#pt-src","#pt-dst","#pt-proto"].forEach(function(s){
+    $(s).addEventListener("change",function(){SEGV.cellPath=false;SEGV.touched=true;paintSeg();if(scene3d)scene3d.update()});
+  });
+}
+function paintSeg(){
+  if(!$("#reach"))return;
+  var flat=SEGV.mode==="flat";
+  $("#mode-seg").setAttribute("aria-pressed",flat?"false":"true");
+  $("#mode-flat").setAttribute("aria-pressed",flat?"true":"false");
+  var zb=$("#zones-btn");zb.setAttribute("aria-pressed",SEGV.zones?"true":"false");
+  zb.textContent=SEGV.zones?"Hide zones in 3D":"Show zones in 3D";
+  /* the reach counter: three fixed, measured states, plus the switches as they stand now */
+  var rf=segReach("flat"),ra=segReach("found"),rd=segReach("deny"),rn=segReach("now");
+  var r=$("#reach");r.textContent="";
+  r.appendChild(el("b",null,"If OFFICE-PC-14 is compromised, how many of the other "+rf.total+" addressed hosts can it reach?"));
+  var t=el("table");
+  [["One flat network, no segmentation",rf],
+   ["Segmented, as found: all four switches ALLOW",ra],
+   ["Segmented, all four switches DENY",rd],
+   ["Segmented, with the switches as set now",rn]].forEach(function(row){
+    var tr=el("tr"),th=el("th",null,row[0]);th.setAttribute("scope","row");
+    tr.appendChild(th);tr.appendChild(el("td",null,row[1].count+" of "+row[1].total));t.appendChild(tr);
+  });
+  r.appendChild(t);
+  r.appendChild(el("p","foot","Counted on Modbus/TCP port 502, the live attacks' protocol, every figure measured from the model on this page. Mode now: "+(flat?"flat network":"segmented")+". Simulated."));
+  /* the matrix cells */
+  document.querySelectorAll("#mx td button").forEach(function(b){
+    var from=b.getAttribute("data-from"),to=b.getAttribute("data-to"),txt,fw="",cls="";
+    if(from===to){txt="Same zone";fw="no conduit"}
+    else if(flat){txt="Allowed";fw="flat network"}
+    else{
+      var v=NM.canPass({from:from,to:to,approved:false,port:SEGV.mxPort},SEG);
+      if(v.passed){txt="Allowed";fw=v.crossed.length?"":"no firewall"}
+      else{txt="Denied";cls="no";fw="at "+v.stoppedAt}
+    }
+    b.textContent="";b.appendChild(el("b",null,txt));b.appendChild(el("span","fw",fw||"\u00a0"));
+    b.parentNode.className=cls;
+    var sel=!!(SEGV.sel&&SEGV.sel.from===from&&SEGV.sel.to===to);
+    b.setAttribute("aria-pressed",sel?"true":"false");
+    b.setAttribute("aria-label",zoneTitle(from)+" to "+zoneTitle(to)+", "+protoName(SEGV.mxPort)+" port "+SEGV.mxPort+": "+txt+(fw?", "+fw:""));
+  });
+  paintMxSel();paintPathTest();
+}
+function paintMxSel(){
+  var s=$("#mx-sel");if(!s)return;
+  if(!SEGV.sel){s.textContent="No cell picked yet.";return}
+  var from=SEGV.sel.from,to=SEGV.sel.to,p=protoName(SEGV.mxPort)+" port "+SEGV.mxPort;
+  if(from===to){
+    s.textContent=zoneTitle(from)+" to itself, "+p+": traffic inside one zone crosses no conduit, so no firewall ever sees it. Flat or segmented makes no difference inside a zone.";return;
+  }
+  if(SEGV.mode==="flat"){
+    s.textContent=zoneTitle(from)+" to "+zoneTitle(to)+", "+p+": allowed. A flat network puts nothing between them. Shown in the 3D view.";return;
+  }
+  var h=NM.hops(from,to,SEGV.mxPort,false,SEG),parts=[];
+  h.hops.forEach(function(x){
+    if(x.verdict==="gap")parts.push(x.conduit+" ("+x.from+" to "+x.to+") has no firewall");
+    else if(x.verdict==="deny")parts.push(x.firewall+" denies it on "+x.conduit);
+    else if(x.verdict==="pass")parts.push(x.firewall+" allows it");
+  });
+  s.textContent=zoneTitle(from)+" to "+zoneTitle(to)+", "+p+": "+(h.passed?"allowed":"denied at "+h.stoppedAt)+". "+parts.join("; ")+". Shown in the 3D view.";
+}
+function paintPathTest(){
+  var out=$("#pt-out");if(!out)return;
+  var sName=$("#pt-src").value,dName=$("#pt-dst").value,port=Number($("#pt-proto").value);
+  var s=byName[sName],d=byName[dName],from=NM.zoneOf(s.level),to=NM.zoneOf(d.level);
+  var approved=!!NM.approvedFlow(sName,dName,port);
+  var line=sName+" ("+zoneTitle(from)+") to "+dName+" ("+zoneTitle(to)+") on "+protoName(port)+" port "+port;
+  out.textContent="";
+  if(SEGV.mode==="flat"){
+    out.appendChild(el("p","vd","ALLOWED \u00b7 FLAT NETWORK"));
+    out.appendChild(el("p",null,line+". One flat network: no zone boundary and no firewall on the way."));
+    SEGV.hostTrace={srcA:s,dstA:d,cvar:"--live",stopAt:null};
+    return;
+  }
+  var h=NM.hops(from,to,port,approved,SEG);
+  out.appendChild(el("p","vd",h.passed?(approved?"ALLOWED \u00b7 APPROVED FLOW":"ALLOWED"):"STOPPED AT "+h.stoppedAt));
+  out.appendChild(el("p",null,line+"."+(approved?" An approved flow has its own fixed rule: no switch touches it.":"")));
+  if(from===to){
+    out.appendChild(el("p",null,"Same zone: the path crosses no conduit and meets no firewall."));
+  }else{
+    var ol=el("ol");
+    h.hops.forEach(function(x){
+      var head=x.conduit+" \u00b7 "+x.from+" to "+x.to+" \u00b7 ",txt;
+      if(x.verdict==="gap")txt=head+"no firewall: an unfiltered gap, nothing to set";
+      else if(x.verdict==="approved")txt=head+x.firewall+" passes it: approved flow, fixed rule";
+      else if(x.verdict==="pass")txt=head+x.firewall+" allows it (switch set to ALLOW)";
+      else if(x.verdict==="deny")txt=head+x.firewall+" DENIES it: the path stops here";
+      else txt=head+"not reached: the path already stopped";
+      ol.appendChild(el("li",x.verdict,txt));
+    });
+    out.appendChild(ol);
+  }
+  SEGV.hostTrace={srcA:s,dstA:d,cvar:h.passed?"--live":"--mute",stopAt:h.stoppedAt};
+}
+function buildWindows(){
+  var ul=$("#windows");ul.textContent="";
+  KIND_ORDER.forEach(function(k){
+    var K=KINDS[k],li=el("li"),b=el("button","win "+K.sev);b.type="button";b.setAttribute("data-kind",k);
+    b.appendChild(el("span","w-tag",K.tag));b.appendChild(el("span","w-txt",K.txt));b.appendChild(el("span","w-st","NORMAL"));b.appendChild(el("span","w-fo","FIRST OUT"));
+    b.addEventListener("click",function(){
+      if(k==="seg"){if(segEvent){active=null;refresh()}return}
+      var a=alarmOf(k);if(a)selectAlarm(a);
+    });
+    li.appendChild(b);ul.appendChild(li);K.el=b;
+  });
+}
+function paintWindows(){
+  KIND_ORDER.forEach(function(k){
+    var K=KINDS[k],a=alarmOf(k),b=K.el;
+    if(k==="seg"){
+      b.className="win info"+(segEvent?" on":"")+(segEvent&&!active?" sel":"");
+      b.querySelector(".w-tag").textContent=segEvent?segEvent.fw:"FW-30x";
+      b.querySelector(".w-st").textContent=segEvent?"INFO \u00b7 NOT AN ALARM":"NORMAL";
+      b.setAttribute("aria-label","Segmentation: "+(segEvent?segEvent.fw+" blocked an attempt. Informational, not an alarm.":"nothing blocked"));
+      return;
+    }
+    b.className="win "+K.sev+(a?(a.cleared?" ret":" on"+(a.ack?"":" unack")):"")+(a&&a===firstOut?" fo":"")+(a&&a===active?" sel":"");
+    b.querySelector(".w-st").textContent=a?"#"+a.seq+" "+stateWord(a):"NORMAL";
+    b.setAttribute("aria-label",K.tag+" "+K.txt+": "+(a?"seq "+a.seq+", "+stateWord(a)+(a===firstOut?", first out":""):"normal"));
+  });
+  /* the informational window is deliberately left out of this count: it is not an alarm */
+  var n=alarms.length,un=alarms.filter(function(a){return !a.ack}).length,st=$("#an-st");
+  st.textContent=n?n+" ACTIVE · "+un+" UNACK"+(firstOut?" · FIRST OUT: "+KINDS[firstOut.kind].tag+" "+KINDS[firstOut.kind].txt.toUpperCase():""):"NO ALARM";
+  $("#an-ack").disabled=!un;$("#an-reset").disabled=!n;
+}
+/* every view of the alarms in one place */
+function refresh(){
+  paintRules();paintSeg();paintAlarm();paintWindows();setButtons();paintEq();paintRecs();paintTraceBtn();
+  if(scene3d)scene3d.update();
+}
+function setButtons(){
+  var off=queue.length>0;
+  document.querySelectorAll(".atk").forEach(function(b){b.disabled=off||!!alarmOf(b.getAttribute("data-atk"))});
+  document.querySelectorAll("#recs button").forEach(function(b){b.disabled=off||alarms.length>0});
+}
+/* the process alarm that follows from the setpoint attack: TT-101 over its high limit */
+function procAlarms(){
+  var t=alarmOf("temp");
+  if(st.pv>HI_SEAL&&!t){
+    var T=byName["SENSOR-GW-1"];
+    raise({sev:"warn",kind:"temp",label:"Warning",title:"TT-101 high: sealer above its 190 °C limit",
+      rule:"Process value over the high limit (190 °C)",src:{ip:"",name:"TT-101 via GW-101"},target:"SL-101 sealer, read by PLC-101",frames:[],
+      trace:{srcA:T,dstA:byName["PLC-Line1"],cvar:"--warn"}});
+  }else if(t&&!t.cleared&&st.pv<=HI_SEAL-10){t.cleared=true;refresh()}
+}
+function tile(id,val,bad,state){var t=$(id);t.classList.toggle("bad",!!bad);t.querySelector(".v").textContent=val;t.querySelector(".state").textContent=state||""}
+function coil(id,txt,bad){var c=$(id);c.classList.toggle("bad",!!bad);c.querySelector("b").textContent=txt}
+function ty(v){var lo=130,hi=260;return (90-((v-lo)/(hi-lo))*86-2).toFixed(1)}
+function paint(){
+  /* the process panel shows the live plant, or the sandbox while the What-if tab is open */
+  var sim=curTab==="sim",bl=sim?Math.round(SB.st.backlog):0;
+  var p=sim?{sp:SB.inp.sp,pv:SB.st.pv,rpm:SB.inp.rpm,ppm:SB.st.picked,heater:1,conv:SB.inp.rpm>0?1:0,robot:1,hist:SB.hist}
+           :{sp:st.sp,pv:st.pv,rpm:st.rpm,ppm:st.ppm,heater:st.heater,conv:st.conv,robot:st.robot,hist:hist};
+  $("#proc-h").textContent=sim?"Line 1 process (What-if, simulated)":"Line 1 process";
+  $("#log-h").textContent=sim?"Modbus/TCP traffic (paused while What-if is open)":"Modbus/TCP traffic";
+  tile("#t-sp",f1(p.sp),p.sp!==SP_NORMAL,p.sp!==SP_NORMAL?"Changed":"");
+  tile("#t-pv",f1(p.pv),p.pv>HI_SEAL,p.pv>HI_SEAL?"High":"");
+  tile("#t-rpm",String(Math.round(p.rpm)),sim&&(p.rpm>=1500||p.rpm<=900),sim?(p.rpm>=1500?"High":p.rpm<=0?"Stopped":p.rpm<=900?"Low":""):"");
+  tile("#t-ppm",String(Math.round(p.ppm)),!p.robot||bl>0,!p.robot?"Stopped":(bl>0?"Backlog "+bl:""));
+  coil("#c-heat",p.heater?"on":"off",false);
+  coil("#c-conv",p.conv?"running":"stopped",sim&&!p.conv);
+  coil("#c-robot",p.robot?"running":"stopped",!p.robot);
+  $("#l-pv").setAttribute("points",p.hist.map(function(v,i){return ((i/69)*300).toFixed(1)+","+ty(v)}).join(" "));
+  $("#l-sp").setAttribute("y1",ty(p.sp));$("#l-sp").setAttribute("y2",ty(p.sp));
+  $("#l-hi").setAttribute("y1",ty(HI_SEAL));$("#l-hi").setAttribute("y2",ty(HI_SEAL));
+  var log=$("#log"),frag=document.createDocumentFragment();
+  rows.forEach(function(f){
+    var r=el("div","row"+(f.flag?" flag":"")+(f.deny?" deny":"")),m=el("div","meta");
+    m.appendChild(el("span",null,f.time));
+    if(f.note){m.appendChild(el("span","fc",f.text))}
+    else{
+      m.appendChild(el("span",null,f.src.ip+" to "+f.dst.ip));
+      m.appendChild(el("span","fc","FC"+("0"+f.fc).slice(-2)+(f.pdu[0]&0x80?" error":"")));
+      m.appendChild(el("span",null,f.text));
+      if(f.deny)m.appendChild(el("span","fc","DENY at "+f.deny+" \u00b7 did not reach PLC-101"));
+    }
+    r.appendChild(m);if(f.hex)r.appendChild(el("div","hex",f.hex));frag.appendChild(r);
+  });
+  log.textContent="";log.appendChild(frag);
+}
+function tick(){
+  /* What-if open: step the sandbox only. The live plant, its queue and any active alarm are left untouched. */
+  if(curTab==="sim"){sbTick();return}
+  simulate();
+  var robotBefore=st.robot,qBefore=queue.length;
+  emit(queue.length?queue.shift():nextPoll());
+  procAlarms();
+  if(qBefore>0&&queue.length===0)paintAlarm();
+  if(st.robot!==robotBefore&&scene3d)scene3d.update();
+  setButtons();paint();
+}
+document.querySelectorAll(".atk").forEach(function(b){
+  b.addEventListener("click",function(){
+    var kind=b.getAttribute("data-atk");if(queue.length||alarmOf(kind))return;
+    clearSeg();
+    selRec=null;paintRecs();if(scene3d)scene3d.update();
+    ATTACKS[b.getAttribute("data-atk")]();setButtons();
+    if(window.matchMedia("(max-width:860px)").matches)$("#stage").scrollIntoView({block:"start",behavior:"smooth"});
+  });
+});
+
+/* ================= tabs + recorded alerts ================= */
+function showTab(which){
+  $("#tab-live").setAttribute("aria-pressed",which==="live"?"true":"false");
+  $("#tab-rec").setAttribute("aria-pressed",which==="rec"?"true":"false");
+  $("#tab-lim").setAttribute("aria-pressed",which==="lim"?"true":"false");
+  $("#tab-sim").setAttribute("aria-pressed",which==="sim"?"true":"false");
+  $("#tab-seg").setAttribute("aria-pressed",which==="seg"?"true":"false");
+  $("#pane-live").hidden=which!=="live";$("#pane-rec").hidden=which!=="rec";$("#pane-lim").hidden=which!=="lim";$("#pane-sim").hidden=which!=="sim";
+  $("#pane-seg").hidden=which!=="seg";
+  curTab=which;paintEq();
+  if(which==="seg")paintSeg();
+  if(which==="sim"){if(!SB.hist.length)SB.hist.push(SB.st.pv);SB.sig="";sbPaint()}
+  paint();paintTraceBtn();if(scene3d)scene3d.update();
+}
+$("#tab-sim").addEventListener("click",function(){showTab("sim")});
+$("#tab-seg").addEventListener("click",function(){showTab("seg")});
+$("#tab-lim").addEventListener("click",function(){showTab("lim")});
+$("#tab-live").addEventListener("click",function(){showTab("live")});
+$("#tab-rec").addEventListener("click",function(){showTab("rec")});
+function hostName(ip,a){return byIp[ip]?byIp[ip].name+" ("+ip+")":(a.unk?a.unk.label:"Unknown host")+" ("+ip+")"}
+RECS.forEach(function(a){
+  var b=el("button");b.type="button";b.setAttribute("aria-pressed","false");
+  b.appendChild(el("i","dot v-"+a.v));b.appendChild(el("span",null,a.title));
+  b.addEventListener("click",function(){if(alarms.length)return;selRec=(selRec===a?null:a);paintRecs();if(scene3d)scene3d.update()});
+  a.btn=b;a.trace={src:a.src,dst:a.dst,cvar:VVAR[a.v],unk:a.unk||null};
+  Object.defineProperty(a.trace,"stopAt",{get:function(){return segOf(recPath(a)).stoppedAt}});
+  $("#recs").appendChild(b);
+});
+function paintRecs(){
+  RECS.forEach(function(x){x.btn.setAttribute("aria-pressed",x===selRec?"true":"false")});
+  var d=$("#detail");d.textContent="";
+  if(!selRec){d.appendChild(el("p","empty","Pick an alert to trace it through the plant."));return}
+  var a=selRec;
+  d.appendChild(el("span","badge v-"+a.v,VLABEL[a.v]+", priority "+a.p));
+  d.appendChild(el("h3",null,a.title));
+  d.appendChild(el("p",null,a.d));
+  var r=segOf(recPath(a));
+  d.appendChild(factsEl([["From",hostName(a.src,a)],["To",hostName(a.dst,a)],
+    ["Protocol",a.proto+" \u00b7 port "+a.port],
+    ["ATT&CK for ICS",a.t||"No technique mapped"],["Crossed",fwNames(a.trace)],
+    ["Under these rules",r.passed
+      ?(recPath(a).approved?"Passes: an approved flow, which no switch touches":"Passes: no rule set to DENY on its route")
+      :"Stopped at "+r.stoppedAt+" (rule "+r.stoppedBy+")"]]));
+}
+function showCard(s){
+  var c=$("#card");c.textContent="";
+  if(!s){c.hidden=true;return}
+  var x=el("button","x","×");x.type="button";x.setAttribute("aria-label","Close");x.addEventListener("click",function(){showCard(null)});
+  c.appendChild(x);c.appendChild(el("h3",null,(s.tag?s.tag+" · ":"")+s.name));c.appendChild(el("p",null,s.fn+"."));
+  c.appendChild(factsEl([["Type",s.type],["Address",s.ip||"None, wired to "+(WIRED[s.name]||"the drive")],["Zone",s.zone],["Origin",s.demo?"Demo only, not in the project asset file":"Project asset file"],["Criticality",s.crit.charAt(0).toUpperCase()+s.crit.slice(1)]]));
+  c.hidden=false;
+}
+
+/* ================= alarm limits (AlarmOps) ================= */
+/* Saved copies of GET /api/alarmops/baseline and of the sealer preset check, shown when the page is opened
+   without the platform server. Written by plant/save_page_copy.py; do not edit by hand. */
+var LIM_RECORDED={"baseline":{"simulated":true,"dataset":{"samples":6000,"faults":35,"source":"plant"},"gate":{"min_detection_rate":0.9,"max_detection_rate_drop":0.05,"max_false_alarms":3.0,"max_false_alarm_increase":2.0},"baseline":{"detection_rate":1.0,"faults_detected":35,"faults_total":35,"false_alarm_count":0},"tags":{"tank_level":{"unit":"percent","low_low":10.0,"low":20.0,"high":80.0,"high_high":90.0,"deadband":2.0,"delay_samples":3,"faults_total":7,"faults_detected":7,"false_alarms":0,"assets":["TANK-Utility-1","DCS-CTRL-01"]},"pump_pressure":{"unit":"bar","low_low":2.0,"low":3.0,"high":7.0,"high_high":8.0,"deadband":0.2,"delay_samples":2,"faults_total":7,"faults_detected":7,"false_alarms":0,"assets":["PUMP-Utility-1","PLC-Line2"]},"flow_rate":{"unit":"m3/h","low_low":60.0,"low":80.0,"high":160.0,"high_high":180.0,"deadband":3.0,"delay_samples":3,"faults_total":7,"faults_detected":7,"false_alarms":0,"assets":["FLOW-Meter-1","PLC-Line2"]},"sealer_temperature":{"unit":"°C","low_low":100.0,"low":120.0,"high":190.0,"high_high":205.0,"deadband":2.0,"delay_samples":3,"faults_total":7,"faults_detected":7,"false_alarms":0,"assets":["SENSOR-GW-1","PLC-Line1"]},"conveyor_speed":{"unit":"rpm","low_low":600.0,"low":900.0,"high":1500.0,"high_high":1650.0,"deadband":20.0,"delay_samples":3,"faults_total":7,"faults_detected":7,"false_alarms":0,"assets":["VFD-Conveyor-1","PLC-Line1"]}}},"preset":{"simulated":true,"dataset":{"samples":6000,"faults":35,"source":"plant"},"tag":"sealer_temperature","assets":["SENSOR-GW-1","PLC-Line1"],"unit":"°C","limits":{"low_low":100.0,"low":120.0,"high":250.0,"high_high":265.0},"current":{"low_low":100.0,"low":120.0,"high":190.0,"high_high":205.0},"base":{"detection_rate":1.0,"faults_detected":35,"faults_total":35,"false_alarm_count":0},"head":{"detection_rate":0.8571,"faults_detected":30,"faults_total":35,"false_alarm_count":0},"passed":false,"violations":["detection rate 85.7% is below the minimum 90.0%","detection rate fell by 14.3%, more than the allowed 5.0%"],"newly_missed":[{"fault_id":"F22","tag":"sealer_temperature","type":"spike","start":896,"end":901},{"fault_id":"F24","tag":"sealer_temperature","type":"drift","start":2453,"end":2562},{"fault_id":"F25","tag":"sealer_temperature","type":"spike","start":3308,"end":3313},{"fault_id":"F26","tag":"sealer_temperature","type":"spike","start":4115,"end":4120},{"fault_id":"F28","tag":"sealer_temperature","type":"stuck","start":5656,"end":5695}],"newly_detected":[]}};
+var LIM_KEYS=["low_low","low","high","high_high"],LIM_API="/api/alarmops/";
+/* proposed: limits typed into the four boxes, kept per tag, so the What-if tab can compare them with the current ones */
+var LIM={data:null,live:false,trace:null,run:0,proposed:{},blocked:null};
+function pct(x){return (x*100).toFixed(1)+"%"}
+function limTag(){return $("#lim-tag").value}
+function limFill(){
+  var t=LIM.proposed[limTag()]||LIM.data.tags[limTag()];
+  LIM_KEYS.forEach(function(k){$("#lim-"+k).value=isFinite(t[k])?t[k]:""});
+}
+/* remember what is in the boxes as the proposed limits for this tag (forgotten again when equal to the current ones) */
+function limStore(){
+  var tag=limTag(),cur=LIM.data.tags[tag],o={},same=true;
+  LIM_KEYS.forEach(function(k){var raw=$("#lim-"+k).value.trim();o[k]=raw===""?NaN:Number(raw);if(o[k]!==cur[k])same=false});
+  if(same)delete LIM.proposed[tag];else LIM.proposed[tag]=o;
+}
+function limSetTrace(tag,on){
+  /* a tag's equipment comes from plant/tag_assets.json: [measured at, read by] */
+  var t=LIM.data.tags[tag],m=t&&t.assets;
+  LIM.trace=(on&&m&&byName[m[0]]&&byName[m[1]])?{srcA:byName[m[0]],dstA:byName[m[1]],cvar:"--warn"}:null;
+  if(scene3d)scene3d.update();
+}
+function limDataset(d){return "Simulated dataset: "+d.samples+" samples, "+d.faults+" labelled faults."}
+function limShowBaseline(){
+  var o=$("#lim-out"),d=LIM.data,b=d.baseline,t=d.tags[limTag()];o.textContent="";LIM.blocked=null;paintEq();
+  o.appendChild(el("span","badge g-rec",LIM.live?"Current limits":"Recorded"));
+  o.appendChild(el("h3",null,"Baseline replay"));
+  o.appendChild(factsEl([["Detection",pct(b.detection_rate)+" ("+b.faults_detected+" of "+b.faults_total+" faults)"],
+    ["False alarms",String(b.false_alarm_count)],
+    [limTag(),t.faults_detected+" of "+t.faults_total+" faults, "+t.false_alarms+" false alarms"]]));
+  o.appendChild(el("p",null,LIM.live?limDataset(d.dataset)+" Edit the limits and press Check change."
+    :"Recorded result, saved from the baseline replay. "+limDataset(d.dataset)+" You can still edit the limits and compare them on the What-if tab. Check change needs the platform server, which isn’t running in this view."));
+}
+function limShowResult(r,recorded){
+  var o=$("#lim-out"),u=r.unit?" "+r.unit:"";o.textContent="";LIM.blocked=r.passed?null:r.tag;paintEq();
+  o.appendChild(el("span","badge "+(r.passed?"g-pass":"g-block"),(r.passed?"Passes the gate":"Blocked")+(recorded?" (recorded)":"")));
+  o.appendChild(el("h3",null,r.tag+": "+LIM_KEYS.map(function(k){return r.limits[k]}).join(" / ")+u));
+  var rows=[["Detection",pct(r.base.detection_rate)+" to "+pct(r.head.detection_rate)+" ("+r.head.faults_detected+" of "+r.head.faults_total+" faults)"],
+    ["False alarms",r.base.false_alarm_count+" to "+r.head.false_alarm_count]];
+  if(r.violations.length)rows.push(["Why",r.violations.join("; ")]);
+  if(r.newly_missed.length)rows.push(["Would miss",r.newly_missed.map(function(f){return f.fault_id+" ("+f.type+")"}).join(", ")]);
+  if(r.newly_detected.length)rows.push(["Newly detected",r.newly_detected.map(function(f){return f.fault_id}).join(", ")]);
+  o.appendChild(factsEl(rows));
+  o.appendChild(el("p",null,(r.passed?"In the AlarmOps pipeline this change would go on to staging and wait for a person to approve it. "
+    :"In the AlarmOps pipeline this change would stop at review. ")+limDataset(r.dataset)
+    +(recorded?" Recorded result, saved from the platform server, which isn’t running in this view.":"")));
+}
+/* the one change this page ties to the live attack: sealer high 190 to 250 °C (high high moves to 265 so the order stays valid) */
+var LIM_PRESET={tag:"sealer_temperature",high:250,high_high:265};
+function limPreset(){
+  if(!LIM.data.tags[LIM_PRESET.tag])return;
+  LIM.run++;$("#lim-tag").value=LIM_PRESET.tag;limFill();
+  $("#lim-high").value=LIM_PRESET.high;$("#lim-high_high").value=LIM_PRESET.high_high;limStore();
+  if(LIM.live){limCheck();return}
+  limShowResult(LIM_RECORDED.preset,true);limSetTrace(LIM_PRESET.tag,true);
+}
+function limError(msg){var o=$("#lim-out");o.textContent="";o.appendChild(el("p","empty",msg))}
+function limCheck(){
+  if(!LIM.live)return;
+  var q="tag="+encodeURIComponent(limTag()),my=++LIM.run;
+  for(var i=0;i<LIM_KEYS.length;i++){
+    var v=$("#lim-"+LIM_KEYS[i]).value.trim();
+    if(v===""||!isFinite(Number(v))){limError("Enter a number for every limit.");return}
+    q+="&"+LIM_KEYS[i]+"="+encodeURIComponent(v);
+  }
+  $("#lim-check").disabled=true;limError("Replaying the dataset…");
+  fetch(LIM_API+"compare?"+q).then(function(res){return apiJson(res).then(function(j){return {ok:res.ok,j:j}})})
+    .then(function(x){
+      if(my!==LIM.run)return;
+      if(!x.ok){limSetTrace(limTag(),false);limError(typeof x.j.detail==="string"?"Not checked: "+x.j.detail+".":"The check failed.");return}
+      limShowResult(x.j);limSetTrace(x.j.tag,!x.j.passed);
+    }).catch(function(){
+      /* a 404 page, any HTML, text that is not JSON, or no answer at all: the platform server is
+         missing, so the tab goes back to its recorded copy and Check change stays off */
+      if(my!==LIM.run)return;
+      LIM.live=false;limSetTrace(limTag(),false);limShowBaseline();
+    })
+    .then(function(){$("#lim-check").disabled=!LIM.live});
+}
+/* a real JSON answer from the platform server, or a throw. Anything else, such as a static host's
+   404 page, counts as the server being missing. A non-OK answer that is JSON with a detail is the
+   server speaking (a bad limit, say), so it is passed on and shown as its own message. */
+function apiJson(res){
+  var ct=res.headers.get("content-type")||"";
+  if(ct.indexOf("json")<0)throw new Error("not JSON");
+  return res.json();
+}
+/* is the platform server here? One HEAD request for this page itself: the server marks every
+   response, a static host never does, so a static host sees no /api/... request at all */
+function apiHere(){
+  if(location.protocol==="file:"||!window.fetch)return Promise.resolve(false);
+  return fetch(location.pathname,{method:"HEAD",cache:"no-store"})
+    .then(function(r){return r.ok&&r.headers.get("X-SentinelOT-API")==="1"})
+    .catch(function(){return false});
+}
+function limReset(){LIM.run++;delete LIM.proposed[limTag()];limFill();limSetTrace(limTag(),false);limShowBaseline()}
+function limSelect(){LIM.run++;limFill();limSetTrace(limTag(),false);limShowBaseline()}
+function limInit(d,live){
+  LIM.data=d;LIM.live=live;
+  var sel=$("#lim-tag");sel.textContent="";
+  Object.keys(d.tags).forEach(function(t){var o=el("option",null,t+(d.tags[t].unit?" ("+d.tags[t].unit+")":""));o.value=t;sel.appendChild(o)});
+  $("#lim-check").disabled=!live;
+  limSelect();
+}
+$("#lim-tag").addEventListener("change",limSelect);
+LIM_KEYS.forEach(function(k){$("#lim-"+k).addEventListener("input",limStore)});
+$("#lim-check").addEventListener("click",limCheck);
+$("#lim-reset").addEventListener("click",limReset);
+$("#lim-preset").addEventListener("click",limPreset);
+apiHere().then(function(here){
+    if(!here)throw 0;
+    return fetch(LIM_API+"baseline").then(function(r){if(!r.ok)throw 0;return apiJson(r)});
+  })
+  .then(function(d){if(!d||!d.tags)throw 0;limInit(d,true)})
+  .catch(function(){limInit(LIM_RECORDED.baseline,false)});
+
+/* ================= What-if sandbox ================= */
+/* The sandbox keeps its own inputs and state and never writes to the live values (st, queue, active).
+   While its tab is open the live tick is skipped, so leaving the tab finds the live plant and any active
+   alarm exactly as they were. The rules live in ProcessModel (pure functions, simplified demo model). */
+var PM=window.ProcessModel;
+var SB={inp:{sp:PM.NORMAL.sp,rpm:PM.NORMAL.rpm,level:PM.NORMAL.level,pump:PM.NORMAL.pump},st:PM.initial(),hist:[],view:null,sig:""};
+var SB_CTL=[["sp","sim-sp"],["rpm","sim-rpm"],["level","sim-level"]];
+function sbCurLimits(){
+  var o={};
+  PM.TAGS.forEach(function(t){var d=LIM.data&&LIM.data.tags[t];if(d){o[t]={};LIM_KEYS.forEach(function(k){o[t][k]=d[k]})}});
+  return o;
+}
+function sbPropLimits(){var cur=sbCurLimits(),o={};PM.TAGS.forEach(function(t){o[t]=LIM.proposed[t]||cur[t]});return o}
+function sbSync(){
+  SB_CTL.forEach(function(c){$("#"+c[1]).value=SB.inp[c[0]];$("#"+c[1]+"-n").value=SB.inp[c[0]]});
+  $("#sim-pump").checked=SB.inp.pump;
+}
+function sbSet(key,raw){
+  var r=PM.RANGE[key],v=Number(raw);if(raw===""||!isFinite(v))return;
+  SB.inp[key]=Math.min(r[1],Math.max(r[0],v));sbSync();sbPaint();
+}
+function sbReset(){
+  SB.inp={sp:PM.NORMAL.sp,rpm:PM.NORMAL.rpm,level:PM.NORMAL.level,pump:PM.NORMAL.pump};SB.st=PM.initial();SB.hist=[];
+  sbSync();sbPaint();paint();
+}
+function sbTick(){
+  SB.st=PM.step(SB.st,SB.inp);SB.hist.push(SB.st.pv);if(SB.hist.length>70)SB.hist.shift();
+  sbPaint();paint();
+}
+function pill(a){var e=el("span","pill"+(a?(a==="high_high"||a==="low_low"?" alarm":" warn"):""),a?PM.ALARM_LABEL[a]:"none");return e}
+function sbPaint(){
+  var cur=sbCurLimits(),prop=sbPropLimits(),v=PM.values(SB.inp,SB.st),ac=PM.evaluate(v,cur),ap=PM.evaluate(v,prop);
+  SB.view=PM.effects(SB.inp,SB.st,cur);
+  var miss=PM.allMissed(v,cur,prop);SB.missed=miss;
+  /* rebuild the DOM only when something a reader would notice has changed */
+  var sig=JSON.stringify([PM.TAGS.map(function(t){return PM.fmt(t,v[t])}),ac,ap,prop,Math.round(SB.st.picked),Math.round(SB.st.backlog),SB.view]);
+  if(sig!==SB.sig){
+    SB.sig=sig;
+    var fx=$("#sim-fx");fx.textContent="";
+    var li=el("li",null,"Packs per minute: "+Math.round(SB.st.picked)+" picked of "+Math.round(PM.arriving(SB.inp))+" arriving. Backlog: "+Math.round(SB.st.backlog)+" packs.");
+    fx.appendChild(li);
+    var any=false;
+    Object.keys(SB.view).forEach(function(dev){
+      var d=SB.view[dev];if(d.level==="ok")return;any=true;
+      var x=el("li",d.level,(d.level==="alarm"?"Alarm: ":"Warning: ")+d.text+".");
+      x.appendChild(el("span",null,dev+", "+d.value));fx.appendChild(x);
+    });
+    if(!any)fx.appendChild(el("li",null,"Everything is running normally."));
+    var tb=$("#sim-cmp");tb.textContent="";
+    PM.TAGS.forEach(function(t){
+      if(!cur[t])return;
+      var tr=el("tr"),c1=el("td",null,PM.NAME[t]),c2=el("td",null,PM.fmt(t,v[t])+" "+PM.UNIT[t]),c3=el("td"),c4=el("td");
+      c3.appendChild(pill(ac[t]));c4.appendChild(pill(ap[t]));
+      c3.appendChild(el("small",null,LIM_KEYS.map(function(k){return cur[t][k]}).join(" / ")));
+      var changed=LIM.proposed[t],ok=PM.validLimits(prop[t]);
+      c4.appendChild(el("small",null,!changed?"same as current":(ok?LIM_KEYS.map(function(k){return prop[t][k]}).join(" / "):"not valid, raises nothing")));
+      tr.appendChild(c1);tr.appendChild(c2);tr.appendChild(c3);tr.appendChild(c4);tb.appendChild(tr);
+    });
+    var m=$("#sim-missed");m.textContent="";
+    miss.forEach(function(x){var d=el("div","miss");d.appendChild(el("b",null,"Missed alarm"));d.appendChild(el("span",null,x.text));m.appendChild(d)});
+  }
+  paintEq();
+  if(scene3d&&curTab==="sim")scene3d.update();
+}
+SB_CTL.forEach(function(c){
+  $("#"+c[1]).addEventListener("input",function(e){sbSet(c[0],e.target.value)});
+  $("#"+c[1]+"-n").addEventListener("change",function(e){sbSet(c[0],e.target.value)});
+});
+$("#sim-pump").addEventListener("change",function(e){SB.inp.pump=e.target.checked;sbPaint()});
+$("#sim-reset").addEventListener("click",sbReset);
+$("#sim-edit").addEventListener("click",function(){showTab("lim")});
+$("#sim-preset").addEventListener("click",function(){
+  if(!LIM.data.tags[LIM_PRESET.tag])return;
+  var d=LIM.data.tags[LIM_PRESET.tag];
+  LIM.proposed[LIM_PRESET.tag]={low_low:d.low_low,low:d.low,high:LIM_PRESET.high,high_high:LIM_PRESET.high_high};
+  if(limTag()===LIM_PRESET.tag)limFill();
+  sbPaint();
+});
+sbSync();
+
+/* ================= 3D ================= */
+function build(){
+  var stage=$("#stage"),canvas=$("#gl"),labels=$("#labels");
+  var renderer=new THREE.WebGLRenderer({canvas:canvas,antialias:true,alpha:true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+  var scene=new THREE.Scene(),pcam=new THREE.PerspectiveCamera(35,1,0.1,200),ocam=new THREE.OrthographicCamera(-1,1,1,-1,0.1,200),camera=pcam,iso=false;
+  var FLAT=function(){return new THREE.MeshLambertMaterial({flatShading:true})};
+  scene.add(new THREE.AmbientLight(0xffffff,0.78));
+  var sun=new THREE.DirectionalLight(0xffffff,0.55);sun.position.set(6,14,9);scene.add(sun);
+
+  var SLAB_W=9,SLAB_D=4.6,TARGET=new THREE.Vector3(0,GAP*3,0);
+  var scrMat=FLAT(),pipeMat=FLAT(),ghostMat=new THREE.LineBasicMaterial(),levelMats={},focusLvl=null;
+  var shellMat=new THREE.MeshBasicMaterial({colorWrite:false,depthWrite:false});
+  var labs=[],pick=[];
+  function addLabel(text,pos,cls){var e=el("div","lab"+(cls?" "+cls:""),text);labels.appendChild(e);var o={el:e,pos:pos,cls:cls||""};labs.push(o);return o}
+
+  LEVELS.forEach(function(l){
+    /* a floor is drawn as an outline and 45-degree hatching, not a filled plate, so the levels below stay visible */
+    /* the hatch is deliberately open: close spacing turns into moire in the orthographic view */
+    var y=levelY[l.id],hw=SLAB_W/2,hd=SLAB_D/2,P=[],STEP=0.62;
+    for(var c=-(hw+hd);c<=hw+hd;c+=STEP){
+      var z0=Math.max(-hd,-hw-c),z1=Math.min(hd,hw-c);
+      if(z1>z0)P.push(z0+c,y-0.02,z0,z1+c,y-0.02,z1);
+    }
+    var hg=new THREE.BufferGeometry();hg.setAttribute("position",new THREE.Float32BufferAttribute(P,3));
+    var hm=new THREE.LineBasicMaterial(),em=new THREE.LineBasicMaterial();
+    scene.add(new THREE.LineSegments(hg,hm));
+    var oe=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(SLAB_W,0.1,SLAB_D)),em);oe.position.y=y-0.05;scene.add(oe);
+    levelMats[l.id]={hatch:hm,edge:em};
+    addLabel(l.name,new THREE.Vector3(-SLAB_W/2+0.1,y+0.02,SLAB_D/2+0.25),"level");
+  });
+
+  var robot={},motor={};
+  /* parts the What-if tab drives: the liquid inside the tank and the sealer's two bars */
+  var tankLiq=null,liqMat=FLAT(),sealMat=FLAT(),TANK_H=0.9;
+  function part(geo,mat,a){var m=new THREE.Mesh(geo,mat);m.userData.asset=a;pick.push(m);
+    if(a.edgeMat&&mat!==scrMat&&mat!==liqMat&&mat!==sealMat){
+      var th=geo.type==="CylinderGeometry"?(geo.parameters.radialSegments>=18?40:12):(geo.type==="SphereGeometry"?60:25);
+      m.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo,th),a.edgeMat));
+    }
+    return m}
+  function makeRobot(a,x,y,z){z=z||0;
+    a.edgeMat=new THREE.LineBasicMaterial();var mat=FLAT(),g=new THREE.Group();g.position.set(x,y,z);
+    g.add(part(new THREE.CylinderGeometry(0.34,0.4,0.18,20),mat,a)).position.y=0.09;
+    var turret=new THREE.Group();turret.position.y=0.18;g.add(turret);
+    turret.add(part(new THREE.CylinderGeometry(0.2,0.2,0.2,16),mat,a)).position.y=0.1;
+    var shoulder=new THREE.Group();shoulder.position.y=0.2;turret.add(shoulder);
+    shoulder.add(part(new THREE.BoxGeometry(0.17,0.72,0.17),mat,a)).position.y=0.36;
+    var elbow=new THREE.Group();elbow.position.y=0.72;shoulder.add(elbow);
+    elbow.add(part(new THREE.BoxGeometry(0.14,0.6,0.14),mat,a)).position.y=0.3;
+    var grip=part(new THREE.BoxGeometry(0.3,0.08,0.12),mat,a);grip.position.y=0.62;elbow.add(grip);
+    scene.add(g);robot={mat:mat,turret:turret,shoulder:shoulder,elbow:elbow,t:0};
+    a.mat=mat;a.center=new THREE.Vector3(x,y+0.6,z);a.top=new THREE.Vector3(x,y+1.55,z);
+  }
+  function makeMotor(a,x,y,z){z=z||0;
+    a.edgeMat=new THREE.LineBasicMaterial();var mat=FLAT(),g=new THREE.Group();g.position.set(x,y,z);
+    var body=part(new THREE.CylinderGeometry(0.3,0.3,0.7,20),mat,a);body.rotation.x=Math.PI/2;body.position.y=0.36;g.add(body);
+    g.add(part(new THREE.BoxGeometry(0.7,0.08,0.6),mat,a)).position.y=0.04;
+    var shaft=new THREE.Group();shaft.position.set(0,0.36,0.42);g.add(shaft);
+    var axle=part(new THREE.CylinderGeometry(0.05,0.05,0.2,10),mat,a);axle.rotation.x=Math.PI/2;shaft.add(axle);
+    var hub=new THREE.Group();hub.position.z=0.12;shaft.add(hub);
+    hub.add(part(new THREE.BoxGeometry(0.56,0.1,0.05),mat,a));
+    hub.add(part(new THREE.BoxGeometry(0.1,0.56,0.05),mat,a));
+    scene.add(g);motor={mat:mat,hub:hub};
+    a.mat=mat;a.center=new THREE.Vector3(x,y+0.36,z);a.top=new THREE.Vector3(x,y+0.72,z);
+  }
+  var B=function(w,h,d){return new THREE.BoxGeometry(w,h,d)},C=function(r,h,n){return new THREE.CylinderGeometry(r,r,h,n||14)};
+  function put(g,a,geo,x,y,z,mat){var m=part(geo,mat||a.mat,a);m.position.set(x,y,z);g.add(m);return m}
+  function monitor(g,a,x){
+    put(g,a,B(0.82,0.52,0.06),x,0.56,0);put(g,a,B(0.7,0.4,0.02),x,0.56,0.04,scrMat);
+    put(g,a,B(0.08,0.28,0.08),x,0.16,0);put(g,a,B(0.42,0.04,0.26),x,0.02,0);
+  }
+  function rail(g,a,n,hs){
+    put(g,a,B(n*0.24+0.1,0.06,0.3),0,0.03,0);
+    for(var i=0;i<n;i++)put(g,a,B(0.2,hs[i],0.4),(i-(n-1)/2)*0.24,0.06+hs[i]/2,0);
+  }
+  var SHAPES={
+    pc:function(g,a){monitor(g,a,0);return 0.82},
+    ws:function(g,a){monitor(g,a,-0.2);put(g,a,B(0.26,0.6,0.5),0.5,0.3,0);put(g,a,B(0.14,0.04,0.02),0.5,0.5,0.26,scrMat);return 0.82},
+    hmi:function(g,a){
+      put(g,a,B(0.16,0.4,0.16),0,0.2,0);var t=new THREE.Group();t.position.y=0.62;t.rotation.x=-0.3;g.add(t);
+      put(t,a,B(0.92,0.62,0.12),0,0,0);put(t,a,B(0.74,0.44,0.02),0,0.02,0.07,scrMat);return 0.95},
+    server:function(g,a){
+      put(g,a,B(0.6,1.1,0.7),0,0.55,0);
+      [0.25,0.45,0.65,0.85].forEach(function(y){put(g,a,B(0.5,0.05,0.02),0,y,0.36,scrMat)});return 1.1},
+    db:function(g,a){[0.13,0.43,0.73].forEach(function(y){put(g,a,C(0.38,0.26,22),0,y,0)});return 0.86},
+    plc:function(g,a){rail(g,a,4,[0.62,0.5,0.5,0.5]);put(g,a,B(0.12,0.14,0.02),-0.36,0.5,0.21,scrMat);return 0.68},
+    io:function(g,a){rail(g,a,3,[0.34,0.34,0.34]);return 0.4},
+    tank:function(g,a){
+      /* the shell is drawn as lines only, with the liquid inside it, so the fill is visible as it rises and falls */
+      put(g,a,C(0.4,0.95,12),0,0.55,0,shellMat);put(g,a,C(0.44,0.08,24),0,0.04,0);put(g,a,C(0.3,0.08,24),0,1.06,0);
+      tankLiq=put(g,a,C(0.35,TANK_H,24),0,0.1+TANK_H/2,0,liqMat);tankLiq.renderOrder=-1;return 1.1},
+    sealer:function(g,a){
+      put(g,a,B(0.95,0.12,0.6),0,0.06,0);
+      put(g,a,B(0.1,0.72,0.1),-0.4,0.48,0);put(g,a,B(0.1,0.72,0.1),0.4,0.48,0);
+      put(g,a,B(0.72,0.1,0.24),0,0.42,0,sealMat);put(g,a,B(0.72,0.1,0.24),0,0.62,0,sealMat);
+      put(g,a,B(0.95,0.1,0.34),0,0.89,0);return 0.94},
+    pump:function(g,a){
+      put(g,a,B(0.9,0.08,0.5),0,0.04,0);
+      var m=put(g,a,C(0.2,0.5,18),-0.18,0.32,0);m.rotation.z=Math.PI/2;
+      var v=put(g,a,C(0.27,0.2,20),0.24,0.32,0);v.rotation.z=Math.PI/2;
+      put(g,a,C(0.07,0.3,10),0.24,0.66,0);return 0.82},
+    flow:function(g,a){
+      var p=put(g,a,C(0.11,0.9,14),0,0.3,0);p.rotation.z=Math.PI/2;
+      [-0.4,0.4].forEach(function(x){var f=put(g,a,C(0.18,0.05,16),x,0.3,0);f.rotation.z=Math.PI/2});
+      put(g,a,B(0.08,0.2,0.08),0,0.5,0);put(g,a,B(0.3,0.24,0.2),0,0.7,0);put(g,a,B(0.2,0.12,0.02),0,0.7,0.11,scrMat);
+      put(g,a,B(0.1,0.19,0.1),-0.35,0.095,0);put(g,a,B(0.1,0.19,0.1),0.35,0.095,0);return 0.82},
+    dcs:function(g,a){
+      put(g,a,B(0.9,1.2,0.5),0,0.6,0);
+      [-0.2,0.2].forEach(function(x){put(g,a,B(0.3,0.42,0.02),x,0.82,0.26,scrMat)});
+      put(g,a,B(0.7,0.05,0.02),0,0.42,0.26,scrMat);put(g,a,B(0.7,0.05,0.02),0,0.28,0.26,scrMat);return 1.2},
+    rtu:function(g,a){put(g,a,B(0.7,0.8,0.4),0,0.4,0);put(g,a,B(0.5,0.3,0.02),0,0.5,0.21,scrMat);put(g,a,C(0.02,0.5,8),0.25,1.05,0);return 1.3},
+    vfd:function(g,a){put(g,a,B(0.45,0.85,0.4),0,0.425,0);put(g,a,B(0.26,0.2,0.02),0,0.6,0.21,scrMat);put(g,a,B(0.35,0.08,0.3),0,0.89,0);return 0.93},
+    gw:function(g,a){put(g,a,B(0.6,0.2,0.4),0,0.1,0);put(g,a,C(0.02,0.4,8),-0.22,0.4,0);put(g,a,C(0.02,0.4,8),0.22,0.4,0);return 0.6},
+    router:function(g,a){put(g,a,B(0.85,0.2,0.45),0,0.1,0);put(g,a,B(0.6,0.04,0.02),0,0.1,0.23,scrMat);
+      [-0.3,0,0.3].forEach(function(x){put(g,a,C(0.02,0.42,8),x,0.41,-0.1)});return 0.62},
+    cloud:function(g,a){
+      /* drawn flat, as a cloud would be on a sheet: one outline, no shading, no spheres */
+      var sh=new THREE.Shape();
+      sh.absarc(-0.52,0.46,0.3,Math.PI*0.5,Math.PI*1.5,false);
+      sh.absarc(-0.16,0.62,0.36,Math.PI*0.95,Math.PI*1.75,false);
+      sh.absarc(0.26,0.6,0.32,Math.PI*1.2,Math.PI*1.95,false);
+      sh.absarc(0.58,0.42,0.26,Math.PI*1.5,Math.PI*2.5,false);
+      sh.lineTo(-0.52,0.16);
+      var geo=new THREE.ShapeGeometry(sh,18);
+      var face=part(geo,a.mat,a);face.position.set(0,0,0);g.add(face);
+      var back=part(geo,a.mat,a);back.position.set(0,0,-0.02);back.rotation.y=Math.PI;g.add(back);
+      return 0.95}
+  };
+  function makeShape(a,x,y,z){z=z||0;
+    a.mat=FLAT();a.edgeMat=new THREE.LineBasicMaterial();var g=new THREE.Group();g.position.set(x,y,z);
+    var top=SHAPES[a.kind](g,a);scene.add(g);
+    a.center=new THREE.Vector3(x,y+top/2,z);a.top=new THREE.Vector3(x,y+top,z);
+  }
+  /* Level 0 has two rows: process equipment (tank, pump, flow meter, sealer) at the back, control-side devices in front */
+  var BACK={tank:1,pump:1,flow:1,sealer:1};
+  function place(group,y,z,span){
+    var gap=Math.min(2.3,span/Math.max(1,group.length-1));
+    group.forEach(function(a,i){
+      var x=(i-(group.length-1)/2)*gap;
+      if(a.kind==="robot")makeRobot(a,x,y,z);else if(a.kind==="motor")makeMotor(a,x,y,z);else makeShape(a,x,y,z);
+      a.lab=addLabel(a.tag||a.name,a.top,"plate");a.lab.asset=a;a.lab.always=!!a.tag;
+    });
+  }
+  LEVELS.forEach(function(l){
+    var group=ASSETS.filter(function(a){return a.level===l.id}),y=levelY[l.id];
+    if(l.id!=="0"){place(group,y,0,7.8);return}
+    place(group.filter(function(a){return BACK[a.kind]}),y,-1.25,6.9);
+    place(group.filter(function(a){return !BACK[a.kind]}),y,0.75,7.2);
+  });
+  /* signal cables from the field devices up to the controller that reads them */
+  Object.keys(WIRED).forEach(function(n){
+    var a=byName[n].top,b=byName[WIRED[n]].center.clone();b.y=levelY[byName[WIRED[n]].level];
+    var len=a.distanceTo(b),wire=new THREE.Mesh(C(0.03,len,8),pipeMat);
+    wire.position.copy(a).add(b).multiplyScalar(0.5);
+    wire.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),b.clone().sub(a).normalize());scene.add(wire);
+  });
+  /* firewalls sit between levels, on the conduit that joins them */
+  FWS.forEach(function(f){
+    var x=-3.3,z=-1.5;f.mat=FLAT();f.edgeMat=new THREE.LineBasicMaterial();
+    var pipe=new THREE.Mesh(C(0.035,Math.abs(f.ya-f.yb),8),pipeMat);pipe.position.set(x,f.fy,z);scene.add(pipe);
+    var g=new THREE.Group();g.position.set(x,f.fy,z);
+    [-0.19,0,0.19].forEach(function(y,r){
+      if(r%2===0)[-0.4,0,0.4].forEach(function(bx){put(g,f,B(0.37,0.16,0.16),bx,y,0)});
+      else{[-0.2,0.2].forEach(function(bx){put(g,f,B(0.37,0.16,0.16),bx,y,0)});[-0.5,0.5].forEach(function(bx){put(g,f,B(0.17,0.16,0.16),bx,y,0)})}
+    });
+    scene.add(g);f.center=new THREE.Vector3(x,f.fy,z);f.top=new THREE.Vector3(x,f.fy+0.3,z);
+    f.lab=addLabel(f.tag,f.top,"plate");f.lab.asset=f;f.lab.always=true;
+  });
+  /* Zone boxes for the Segmentation tab: an outline per level and a plate with subnet and demo
+     VLAN. One stripe pattern, drawn once, marks only the picked or focused zone; the plate text,
+     not the pattern, carries the meaning. Hidden until the reader asks for zones. */
+  var stripeCv=document.createElement("canvas");stripeCv.width=stripeCv.height=32;
+  var sctx=stripeCv.getContext("2d");sctx.strokeStyle="#fff";sctx.lineWidth=5;sctx.beginPath();
+  for(var sdi=-1;sdi<4;sdi++){sctx.moveTo(sdi*16-8,40);sctx.lineTo(sdi*16+40,-8)}
+  sctx.stroke();
+  var stripeTex=new THREE.CanvasTexture(stripeCv);
+  stripeTex.wrapS=stripeTex.wrapT=THREE.RepeatWrapping;stripeTex.repeat.set(6,2);
+  var zoneObjs=[];
+  NM.ZONES.forEach(function(zz){
+    var zy=levelY[zz.level],lm=new THREE.LineBasicMaterial();
+    var zbox=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(SLAB_W+0.6,1.18,SLAB_D+0.6)),lm);
+    zbox.position.set(0,zy+0.52,0);zbox.visible=false;scene.add(zbox);
+    var wm=new THREE.MeshBasicMaterial({map:stripeTex,transparent:true,opacity:0.3,side:THREE.DoubleSide,depthWrite:false});
+    var wall=new THREE.Mesh(new THREE.BoxGeometry(SLAB_W+0.6,1.18,SLAB_D+0.6),wm);
+    wall.position.copy(zbox.position);wall.visible=false;scene.add(wall);
+    /* the level gutter already names each level, so the zone plate stays narrow: id, subnet, VLAN */
+    var ztext=zz.id+" · "+zoneNetText(zz.id);
+    var zlab=addLabel(ztext,new THREE.Vector3(SLAB_W/2+0.3,zy+1.52,0),"plate zone");
+    zlab.asset={level:zz.level,kind:"zone",name:ztext,tag:ztext};zlab.always=false;
+    zoneObjs.push({z:zz,box:zbox,wall:wall,lab:zlab,lm:lm,wm:wm});
+  });
+  var flatLm=new THREE.LineBasicMaterial();
+  var flatBox=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(SLAB_W+1.0,levelY["5"]+1.7,SLAB_D+1.0)),flatLm);
+  flatBox.position.set(0,(levelY["5"]+1.7)/2-0.25,0);flatBox.visible=false;scene.add(flatBox);
+  var flatText="One flat network · no VLANs · nothing between the levels";
+  var flatLab=addLabel(flatText,new THREE.Vector3(SLAB_W/2+0.5,levelY["5"]+1.55,0),"plate zone");
+  flatLab.asset={level:"5",kind:"zone",name:flatText,tag:flatText};flatLab.always=false;
+  var ALL=ASSETS.concat(FWS);
+  /* signal-tag plates: shown when their tag is lit, or when their device is selected */
+  SIGS.forEach(function(s){s.lab=addLabel(s.tag,s.asset.top.clone().add(new THREE.Vector3(0,0.42,0)),"sig")});
+  function isDim(a){if(focusLvl===null)return false;if(a.kind==="fw")return a.level!==focusLvl&&a.lo!==focusLvl;return a.level!==focusLvl}
+
+  var temp=new THREE.Group();scene.add(temp);
+  var pulses=[],ghostLabs=[],selAsset=null;
+  var reduce=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var auto=!reduce;
+
+  function clearTemp(){
+    while(temp.children.length){var c=temp.children.pop();if(c.geometry)c.geometry.dispose();if(c.material&&c.material!==ghostMat)c.material.dispose()}
+    pulses=[];
+    ghostLabs.forEach(function(g){labels.removeChild(g.el);labs.splice(labs.indexOf(g),1)});ghostLabs=[];
+  }
+  function update(){
+    var bgc=new THREE.Color(css("--bg")),edgeC=new THREE.Color(css("--edge")),hatchC=new THREE.Color(css("--slab"));
+    function dimC(c,d){return d?c.clone().lerp(bgc,0.74):c}
+    ghostMat.color.set(css("--edge"));scrMat.color.set(css("--edge"));pipeMat.color.set(css("--edge"));
+    LEVELS.forEach(function(l){var d=focusLvl!==null&&focusLvl!==l.id;levelMats[l.id].hatch.color.copy(dimC(hatchC,d));levelMats[l.id].edge.color.copy(dimC(edgeC,d))});
+    clearTemp();
+    var base=css("--box"),ink=css("--ink"),alarmCol=css("--alarm"),lit=litSet();
+    var simOn=curTab==="sim";
+    ALL.forEach(function(a){
+      var d=isDim(a),fill=new THREE.Color(a===selAsset?css("--live"):(a.kind==="fw"?css("--fwfill"):base));
+      a.mat.color.copy(dimC(fill,d));a.edgeMat.color.copy(dimC(edgeC,d));
+      a.lab.over=null;a.lab.el.classList.toggle("hot",a===selAsset);a.lab.el.classList.toggle("dim",d);
+    });
+    sealMat.color.copy(dimC(new THREE.Color(css("--mute")),isDim(byName["SEALER-Line1"])));liqMat.color.copy(dimC(new THREE.Color(css("--live")),isDim(byName["TANK-Utility-1"])));
+    if(!simOn&&!st.robot){byName["ROBOT-Pick-1"].mat.color.set(alarmCol);byName["ROBOT-Pick-1"].lab.el.classList.add("hot")}
+    if(simOn&&SB.view){
+      /* What-if: every device that is not normal lights in the warning or alarm colour and shows its name and live value */
+      Object.keys(SB.view).forEach(function(dev){
+        var d=SB.view[dev],a=byName[dev];if(!a||d.level==="ok")return;
+        var col=css(d.level==="alarm"?"--alarm":"--warn");
+        a.mat.color.set(col);a.lab.el.classList.add("hot");
+        a.lab.over=(a.tag?a.tag+" · ":"")+dev+": "+d.value;
+        if(dev==="TANK-Utility-1")liqMat.color.set(col);
+        if(dev==="MOTOR-Conveyor-1"){var vf=byName["VFD-Conveyor-1"];vf.mat.color.set(col)}
+      });
+    }
+    /* the Segmentation tab's zone boxes: visible only while asked for, stripes on one zone only */
+    var zonesOn=curTab==="seg"&&SEGV.zones,zFlat=SEGV.mode==="flat";
+    var selZone=(SEGV.sel&&SEGV.cellPath)?SEGV.sel.from:(focusLvl!==null?NM.zoneOf(focusLvl):null);
+    zoneObjs.forEach(function(o){
+      var on=zonesOn&&!zFlat;
+      o.box.visible=on;o.lm.color.copy(dimC(new THREE.Color(ink),isDim(o.lab.asset)));
+      o.wall.visible=on&&o.z.id===selZone;o.wm.color.set(ink);
+      o.lab.always=on;
+      if(!on)o.lab.el.style.display="none";
+    });
+    flatBox.visible=zonesOn&&zFlat;flatLm.color.set(ink);
+    flatLab.always=flatBox.visible;
+    if(!flatBox.visible)flatLab.el.style.display="none";
+    /* the Limits tab shows its own path; What-if shows no path; the Segmentation tab shows its
+       path test or its picked matrix cell; the other tabs show the alarm or the picked alert */
+    var traces=simOn?[]
+      :(curTab==="seg"?((!SEGV.cellPath&&SEGV.touched&&SEGV.hostTrace)?[SEGV.hostTrace]:[])
+      :((curTab==="lim"&&LIM.trace)?[LIM.trace]
+      :(alarms.length?alarms.map(function(a){return a.trace})
+      :(segEvent?[segEvent.trace]:(selRec?[selRec.trace]:[])))));
+    traces.forEach(function(tr,ti){
+      /* a denied path ends at the firewall that stopped it: the destination is never reached, so it
+         is not lit, and neither is any firewall further down the route */
+      var stop=tr.stopAt?byTag[tr.stopAt]:null;
+      var col=css(stop?"--alarm":tr.cvar),dst=traceEnd(tr,"dst"),src=traceEnd(tr,"src"),from,
+          to=(stop?stop.center:dst.center).clone();
+      if(stop){stop.mat.color.set(col);stop.lab.el.classList.add("hot");stop.lab.over=stop.tag+" \u00b7 DENY"}
+      else{
+        dst.mat.color.set(col);dst.lab.el.classList.add("hot");
+        crossed(tr).forEach(function(f){f.mat.color.set(col);f.lab.el.classList.add("hot")});
+      }
+      if(src){src.mat.color.set(col);src.lab.el.classList.add("hot");from=src.center.clone()}
+      else{
+        var y=levelY[tr.unk.level],gp=new THREE.Vector3(SLAB_W/2-0.8,y+0.31,SLAB_D/2-0.75);
+        var ghost=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(0.95,0.62,0.95)),ghostMat);
+        ghost.position.copy(gp);temp.add(ghost);from=gp.clone();
+        ghostLabs.push(addLabel(tr.unk.label,new THREE.Vector3(gp.x,y+0.62,gp.z),"asset hot"));
+      }
+      var mid=from.clone().add(to).multiplyScalar(0.5);mid.z+=3.4+ti*1.1;
+      var curve=new THREE.QuadraticBezierCurve3(from,mid,to);
+      temp.add(new THREE.Mesh(new THREE.TubeGeometry(curve,48,0.05,8,false),new THREE.MeshBasicMaterial({color:col})));
+      var pulse=new THREE.Mesh(new THREE.SphereGeometry(0.17,16,12),new THREE.MeshBasicMaterial({color:col}));
+      pulse.position.copy(reduce?to:from);temp.add(pulse);pulses.push({mesh:pulse,curve:curve});
+    });
+    /* the matrix's picked cell: the path drawn along the conduit spine, a visible break where a
+       conduit has no firewall, and a stop at the first DENY */
+    if(curTab==="seg"&&SEGV.cellPath&&SEGV.sel&&SEGV.sel.from!==SEGV.sel.to){
+      var zp=SEGV.sel,zpFlat=SEGV.mode==="flat";
+      var zhh=zpFlat
+        ?{hops:NM.route(zp.from,zp.to).map(function(c){return {conduit:c.id,verdict:"pass",firewall:null}}),passed:true,stoppedAt:null}
+        :NM.hops(zp.from,zp.to,SEGV.mxPort,false,SEG);
+      var zCol=css(zhh.passed?"--live":"--alarm"),zMat=new THREE.MeshBasicMaterial({color:zCol});
+      var ZX=-3.3,ZZ=-0.55;
+      var zY=function(zid){return levelY[NM.ZONES[NM.zoneIndex(zid)].level]+0.35};
+      var zSeg=function(y1,y2){var hgt=Math.abs(y2-y1);if(hgt<0.05)return;
+        var m=new THREE.Mesh(C(0.055,hgt,8),zMat);m.position.set(ZX,(y1+y2)/2,ZZ);temp.add(m)};
+      var zDot=function(y){var m=new THREE.Mesh(new THREE.SphereGeometry(0.14,14,10),zMat);
+        m.position.set(ZX,y,ZZ);temp.add(m)};
+      var iz=NM.zoneIndex(zp.from),jz=NM.zoneIndex(zp.to),stp=jz>iz?1:-1,atz=zp.from;
+      zDot(zY(zp.from));
+      for(var hz=0;hz<zhh.hops.length;hz++){
+        var hp=zhh.hops[hz],nz=NM.ZONES[NM.zoneIndex(atz)+stp].id,ya=zY(atz),yb=zY(nz),ym=(ya+yb)/2;
+        if(hp.verdict==="unreached")break;
+        if(hp.verdict==="gap"){zSeg(ya,ym-0.22);zSeg(ym+0.22,yb)}
+        else if(hp.verdict==="deny"){
+          var zf=byTag[hp.firewall];
+          zSeg(ya,zf?zf.fy:ym);
+          if(zf){zf.mat.color.set(css("--alarm"));zf.lab.el.classList.add("hot");zf.lab.over=zf.tag+" · DENY"}
+          break;
+        }else{
+          zSeg(ya,yb);
+          if(hp.firewall){var zf2=byTag[hp.firewall];if(zf2){zf2.mat.color.set(zCol);zf2.lab.el.classList.add("hot")}}
+        }
+        atz=nz;
+      }
+      if(zhh.passed)zDot(zY(zp.to));
+    }
+    /* a tag in alarm, or whose limit change is blocked or would miss an alarm, is lit on the plant and in the equipment list */
+    ALL.forEach(function(a){
+      var on=!!(a.tag&&lit[a.tag]);a.lab.el.classList.toggle("lit",on);
+      if(on){a.mat.color.set(alarmCol);a.lab.el.classList.add("hot")}
+    });
+    SIGS.forEach(function(s){var on=!!lit[s.tag];s.lab.el.classList.toggle("lit",on);s.lab.el.classList.toggle("hot",on||selAsset===s.asset)});
+    showLabels();
+  }
+  var narrowQ=window.matchMedia?window.matchMedia("(max-width:767px)"):null;
+  function narrow(){return !!(narrowQ&&narrowQ.matches)}
+  /* Where every label goes. Level names sit in a fixed gutter down the left with a leader line out
+     to their floor, so equipment can never cover or clip them. Tag plates follow their equipment and
+     are then separated: a plate that would land on a higher-priority one is nudged up, and hidden if
+     that is not enough. Lit plates outrank selected ones, which outrank the rest. */
+  function placeLabels(w,h){
+    var gutter=8,lv=$("#levels").getBoundingClientRect();
+    if(lv.height>lv.width)gutter=Math.min(w*0.22,lv.width+16);     /* the level keys are a left column */
+    var leads=[],placed=[],list=[];
+    for(var i=0;i<labs.length;i++){
+      var l=labs[i];if(l.el.style.display==="none")continue;
+      v.copy(l.pos).project(camera);
+      var lw=l.el.offsetWidth,lh=l.el.offsetHeight;
+      if(lw){l.w=lw;l.h=lh}
+      var px=(v.x*0.5+0.5)*w,py=(-v.y*0.5+0.5)*h;
+      if(l.cls==="level"){
+        var ly=Math.min(h-8,Math.max(8,py));
+        l.el.style.transform="translate("+gutter.toFixed(1)+"px,"+ly.toFixed(1)+"px) translate(0,-50%)";
+        /* every floor gets a leader. Where its left corner projects behind the gutter the line is
+           a short stub, which is enough to tie the name to the floor beside it. */
+        var x0=gutter+(l.w||70)+4;
+        leads.push([x0,ly,Math.max(px,x0+16),py]);
+        placed.push({x:gutter,y:ly-(l.h||14)/2,w:(l.w||70),h:(l.h||14),prio:4});
+        continue;
+      }
+      list.push({l:l,x:px,y:py});
+    }
+    list.sort(function(a,b){return (b.l.prio||1)-(a.l.prio||1)});
+    for(var n=0;n<list.length;n++){
+      var o=list[n],L=o.l,ww=L.w||60,hh=L.h||16;
+      var cx=Math.min(w-ww/2-4,Math.max(gutter+ww/2+6,o.x)),cy=o.y-hh*1.4;
+      var box=null;
+      for(var t=0;t<7;t++){
+        box={x:cx-ww/2,y:cy,w:ww,h:hh,prio:L.prio||1};
+        var hit=overlap(box,placed);
+        if(!hit)break;
+        /* strictly upward: the first overlap found may sit below the current try, and jumping
+           back down to it would burn the tries oscillating between two boxes */
+        cy=Math.min(cy-1,hit.y-hh-2);box=null;
+      }
+      if(!box){L.el.style.display="none";continue}
+      placed.push(box);
+      L.el.style.transform="translate("+cx.toFixed(1)+"px,"+(cy+hh).toFixed(1)+"px) translate(-50%,-100%)";
+    }
+    var sv=$("#leaders"),want=leads.map(function(p){return p.join(",")}).join(";");
+    if(sv&&sv.dataset.k!==want){
+      sv.dataset.k=want;sv.textContent="";
+      leads.forEach(function(p){
+        var ln=document.createElementNS("http://www.w3.org/2000/svg","line");
+        ln.setAttribute("x1",p[0].toFixed(1));ln.setAttribute("y1",p[1].toFixed(1));
+        ln.setAttribute("x2",p[2].toFixed(1));ln.setAttribute("y2",p[3].toFixed(1));
+        sv.appendChild(ln);
+      });
+    }
+  }
+  function overlap(b,list){
+    for(var i=0;i<list.length;i++){
+      var o=list[i];
+      if(b.x<o.x+o.w+2&&b.x+b.w+2>o.x&&b.y<o.y+o.h+1&&b.y+b.h+1>o.y)return o;
+    }
+    return null;
+  }
+  function showLabels(){
+    /* Level names always show, in the gutter. A tag plate always shows on a wide screen; on a phone
+       there is no room for thirty of them, so only the focused level, the selected item and anything
+       lit keep their plate. The asset name joins the tag when the item is clicked or is in a trace. */
+    var nr=narrow();
+    labs.forEach(function(l){
+      if(l.cls.indexOf("level")>=0)return;
+      var hot=l.el.classList.contains("hot"),lit=l.el.classList.contains("lit");
+      /* on a phone the four firewalls and PLC-101 keep their plates whatever else is hidden:
+         they are what the traces are about */
+      var always4=l.asset&&(l.asset.kind==="fw"||l.asset.tag==="PLC-101");
+      var keep=l.always&&(!nr||lit||hot||always4||(focusLvl!==null&&l.asset&&
+               (l.asset.level===focusLvl||l.asset.lo===focusLvl)));
+      l.el.style.display=(hot||lit||keep)?"":"none";
+      /* who wins when two plates collide: lit, then selected, then the four firewalls and
+         PLC-101 (what the traces are about), then everything else. A plate on a dimmed level
+         gives way to the level in focus whatever it is, or jumping to a level would not
+         reliably reveal it. */
+      var key=l.asset&&(l.asset.kind==="fw"||l.asset.tag==="PLC-101");
+      /* a zone plate names the whole level, so when shown it is placed before equipment and
+         firewall plates: it is wide, and nudging it last would hide it at busy angles */
+      var zone=l.asset&&l.asset.kind==="zone";
+      l.prio=lit?3:(hot?2:(l.el.classList.contains("dim")?0.5:(zone?1.6:(key?1.5:1))));
+      if(l.asset&&l.el.style.display===""){
+        var t=l.over||(hot?(l.asset.tag?l.asset.tag+" · "+l.asset.name:l.asset.name):l.asset.tag);
+        if(l.shown!==t){l.shown=t;l.el.textContent=t}
+      }
+    });
+  }
+
+  var th0=0.62,theta=th0,phi=1.18,zoom=1,dist=20,holdUntil=0;
+  /* the orthographic (isometric) camera: its frustum half-height is the zoom */
+  var ISO_T=Math.PI/4,ISO_P=Math.acos(1/Math.sqrt(3)),sv={t:0.62,p:1.18};
+  function oAspect(){return Math.max(0.2,stage.clientWidth/Math.max(1,stage.clientHeight))}
+  function oHalf(){return Math.max(8.2,6.4/oAspect())/zoom}
+  function applyOrtho(){var as=oAspect(),s=oHalf();ocam.left=-s*as;ocam.right=s*as;ocam.top=s;ocam.bottom=-s;ocam.updateProjectionMatrix()}
+  function resize(){
+    var w=stage.clientWidth,h=stage.clientHeight;if(!w||!h)return;
+    renderer.setSize(w,h,false);pcam.aspect=w/h;pcam.updateProjectionMatrix();
+    dist=Math.max(25,19/pcam.aspect);applyOrtho();showLabels();
+  }
+  /* ---- movable camera target: the camera orbits TARGET, and TARGET can be panned ---- */
+  var T0=TARGET.clone(),Y_MIN=levelY["0"],Y_MAX=levelY["5"],goalY=null,PAN_STEP=GAP/2;
+  function clampTarget(){
+    TARGET.y=Math.min(Y_MAX,Math.max(Y_MIN,TARGET.y));
+    TARGET.x=Math.min(SLAB_W/2,Math.max(-SLAB_W/2,TARGET.x));
+    TARGET.z=Math.min(SLAB_D/2,Math.max(-SLAB_D/2,TARGET.z));
+  }
+  /* drag the scene by (dx,dy) screen pixels: the target moves the other way, in the camera's own right/up plane */
+  function panBy(dx,dy){
+    var upp=iso?2*oHalf()/Math.max(1,stage.clientHeight):2*(dist/zoom)*Math.tan(pcam.fov*Math.PI/360)/Math.max(1,stage.clientHeight);
+    TARGET.x-=dx*upp*Math.cos(theta);TARGET.z+=dx*upp*Math.sin(theta);TARGET.y+=dy*upp;
+    goalY=null;clampTarget();holdUntil=performance.now()+2500;
+  }
+  /* glide (or, with reduced motion, jump) the target to a height; zoom and angle are kept */
+  function moveTo(y){
+    y=Math.min(Y_MAX,Math.max(Y_MIN,y));holdUntil=performance.now()+2500;
+    if(reduce){TARGET.y=y;goalY=null}else goalY=y;
+  }
+  function resetTarget(){TARGET.copy(T0);goalY=null}
+
+  var ptrs={},moved=0,pinch=0,pinchC=null;
+  canvas.addEventListener("contextmenu",function(e){e.preventDefault()});
+  canvas.addEventListener("pointerdown",function(e){
+    ptrs[e.pointerId]={x:e.clientX,y:e.clientY,pan:e.button===2||e.shiftKey};moved=0;pinch=0;pinchC=null;
+    try{canvas.setPointerCapture(e.pointerId)}catch(_){}
+  });
+  canvas.addEventListener("pointermove",function(e){
+    var p=ptrs[e.pointerId];if(!p)return;
+    var ids=Object.keys(ptrs);holdUntil=performance.now()+2500;
+    if(ids.length===2){
+      /* two fingers: spread to zoom, drag together to pan */
+      p.x=e.clientX;p.y=e.clientY;
+      var a=ptrs[ids[0]],b=ptrs[ids[1]],dd=Math.hypot(a.x-b.x,a.y-b.y),cx=(a.x+b.x)/2,cy=(a.y+b.y)/2;
+      if(pinch)zoom=Math.min(2.4,Math.max(0.6,zoom*dd/pinch));pinch=dd;
+      if(pinchC)panBy(cx-pinchC.x,cy-pinchC.y);pinchC={x:cx,y:cy};moved=99;return;
+    }
+    var dx=e.clientX-p.x,dy=e.clientY-p.y;moved+=Math.abs(dx)+Math.abs(dy);
+    if(p.pan)panBy(dx,dy);
+    else if(!iso){theta-=dx*0.008;if(e.pointerType==="mouse")phi=Math.min(1.5,Math.max(0.35,phi-dy*0.006))}
+    p.x=e.clientX;p.y=e.clientY;
+  });
+  /* one finger keeps scrolling the page (touch-action: pan-y). Two fingers belong to the 3D view. */
+  ["touchstart","touchmove"].forEach(function(t){
+    canvas.addEventListener(t,function(e){if(e.touches.length>1&&e.cancelable)e.preventDefault()},{passive:false});
+  });
+  var ray=new THREE.Raycaster(),ndc=new THREE.Vector2();
+  function up(e){
+    var had=ptrs[e.pointerId];delete ptrs[e.pointerId];pinch=0;pinchC=null;
+    if(!had||had.pan||moved>=7||e.type!=="pointerup")return;
+    var r=canvas.getBoundingClientRect();
+    ndc.set(((e.clientX-r.left)/r.width)*2-1,-((e.clientY-r.top)/r.height)*2+1);
+    ray.setFromCamera(ndc,camera);
+    var hit=ray.intersectObjects(pick)[0];
+    selAsset=hit?hit.object.userData.asset:null;showCard(selAsset);update();
+  }
+  canvas.addEventListener("pointerup",up);canvas.addEventListener("pointercancel",up);
+  canvas.addEventListener("keydown",function(e){
+    var k=e.key,used=true;holdUntil=performance.now()+2500;
+    if(iso&&k.indexOf("Arrow")===0){used=true}else if(k==="ArrowLeft")theta-=0.12;else if(k==="ArrowRight")theta+=0.12;
+    else if(k==="ArrowUp")phi=Math.max(0.35,phi-0.08);else if(k==="ArrowDown")phi=Math.min(1.5,phi+0.08);
+    else if(k==="+"||k==="=")zoom=Math.min(2.4,zoom*1.15);else if(k==="-")zoom=Math.max(0.6,zoom/1.15);
+    else if(k==="PageUp")moveTo((goalY===null?TARGET.y:goalY)+PAN_STEP);
+    else if(k==="PageDown")moveTo((goalY===null?TARGET.y:goalY)-PAN_STEP);
+    else used=false;
+    if(used)e.preventDefault();
+  });
+  $("#zin").addEventListener("click",function(){zoom=Math.min(2.4,zoom*1.2)});
+  $("#zout").addEventListener("click",function(){zoom=Math.max(0.6,zoom/1.2)});
+  var spinBtn=$("#spin");
+  function spinLabel(){
+    spinBtn.querySelector(".lg").textContent=auto?"Pause rotation":"Rotate plant";
+    spinBtn.querySelector(".sm").textContent=auto?"Pause":"Rotate";
+    spinBtn.setAttribute("aria-label",auto?"Pause rotation":"Rotate plant");
+  }
+  spinBtn.addEventListener("click",function(){auto=!auto;spinLabel()});spinLabel();
+  $("#front").addEventListener("click",function(){if(!iso){theta=0;phi=1.18}zoom=1;resetTarget();auto=false;spinLabel();focusLvl=null;levelKeys();update()});
+  $("#up").addEventListener("click",function(){moveTo((goalY===null?TARGET.y:goalY)+PAN_STEP)});
+  $("#down").addEventListener("click",function(){moveTo((goalY===null?TARGET.y:goalY)-PAN_STEP)});
+  function setIso(on){
+    if(on===iso)return;
+    if(on){sv.t=theta;sv.p=phi;iso=true;camera=ocam;auto=false;spinLabel()}else{iso=false;camera=pcam;theta=sv.t;phi=sv.p}
+    $("#persp").setAttribute("aria-pressed",on?"false":"true");$("#isob").setAttribute("aria-pressed",on?"true":"false");
+    resize();update();
+  }
+  $("#persp").addEventListener("click",function(){setIso(false)});
+  $("#isob").addEventListener("click",function(){setIso(true)});
+  /* level keys L0 to L5 (with 3.5): jump to the level and dim every other level's hatching and equipment; the same key again undims */
+  var lvBtns=[];
+  function levelKeys(){lvBtns.forEach(function(x){x.b.setAttribute("aria-pressed",focusLvl===x.id?"true":"false")})}
+  LEVELS.slice().reverse().forEach(function(l){
+    var b=el("button",null,"L"+l.id);b.type="button";b.setAttribute("aria-label","Go to "+l.name);b.setAttribute("aria-pressed","false");
+    b.addEventListener("click",function(){focusLvl=(focusLvl===l.id)?null:l.id;moveTo(levelY[l.id]+0.45);levelKeys();update()});
+    b.setAttribute("data-level",l.id);
+    $("#levels").appendChild(b);lvBtns.push({b:b,id:l.id});
+  });
+  $("#card").addEventListener("click",function(){if($("#card").hidden){selAsset=null;update()}});
+
+  var v=new THREE.Vector3(),last=performance.now(),t0=last;
+  function frame(now){
+    var dt=Math.min(0.05,(now-last)/1000);last=now;
+    if(auto&&!iso&&now>holdUntil&&!Object.keys(ptrs).length)theta+=dt*0.14;
+    if(goalY!==null){TARGET.y+=(goalY-TARGET.y)*Math.min(1,dt*7);if(Math.abs(goalY-TARGET.y)<0.01){TARGET.y=goalY;goalY=null}}
+    if(iso){theta=ISO_T;phi=ISO_P;applyOrtho()}
+    var d=iso?30:dist/zoom;
+    camera.position.set(TARGET.x+d*Math.sin(phi)*Math.sin(theta),TARGET.y+d*Math.cos(phi),TARGET.z+d*Math.sin(phi)*Math.cos(theta));
+    camera.lookAt(TARGET);
+    /* state shown by the models themselves: tank fill and sealer glow. Colour and level only, nothing flashes. */
+    var simOn=curTab==="sim",lvl=(simOn?SB.inp.level:PM.NORMAL.level)/100,pvNow=simOn?SB.st.pv:st.pv;
+    if(tankLiq){tankLiq.scale.y=Math.max(0.02,lvl);tankLiq.position.y=0.1+TANK_H*Math.max(0.02,lvl)/2}
+    var sl=LIM.data&&LIM.data.tags.sealer_temperature,sh=sl?sl.high:HI_SEAL,shh=sl?sl.high_high:HI_SEAL+15;
+    sealMat.emissive.setHex(pvNow>=shh?0xe02010:(pvNow>=sh?0xd06a00:0x000000));
+    if(!reduce){
+      motor.hub.rotation.z-=dt*((simOn?SB.inp.rpm:st.rpm)/1200)*9;
+      if(simOn||st.robot){robot.t+=dt;
+        robot.turret.rotation.y=Math.sin(robot.t*1.3)*1.1;
+        robot.shoulder.rotation.z=0.35+Math.sin(robot.t*2.6)*0.25;
+        robot.elbow.rotation.z=-1.25+Math.sin(robot.t*2.6+0.8)*0.35;}
+      pulses.forEach(function(p){p.mesh.position.copy(p.curve.getPoint(((now-t0)%1800)/1800))});
+    }else{robot.shoulder.rotation.z=0.35;robot.elbow.rotation.z=-1.25}
+    renderer.render(scene,camera);
+    var w=stage.clientWidth,h=stage.clientHeight;
+    placeLabels(w,h);
+    requestAnimationFrame(frame);
+  }
+  if(window.ResizeObserver)new ResizeObserver(resize).observe(stage);else window.addEventListener("resize",resize);
+  if(narrowQ&&narrowQ.addEventListener)narrowQ.addEventListener("change",function(){update()});
+  if(window.matchMedia)window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change",function(){update()});
+  new MutationObserver(function(){update()}).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+  resize();update();requestAnimationFrame(frame);
+  return {update:update,
+    /* read-only, for the page tests: what the equipment is actually built from */
+    geometry:function(){
+      var o={spheres:0,shapes:0,total:pick.length};
+      pick.forEach(function(m){
+        var t=m.geometry&&m.geometry.type;
+        if(t==="SphereGeometry")o.spheres++;else if(t==="ShapeGeometry")o.shapes++;
+      });
+      return o;
+    },
+    anchor:function(name){var a=byName[name];return a?{x:a.top.x,y:a.top.y,z:a.top.z}:null},
+    view:function(){return {x:TARGET.x,y:TARGET.y,z:TARGET.z,zoom:zoom,theta:theta,phi:phi,yMin:Y_MIN,yMax:Y_MAX,auto:auto,
+      iso:iso,half:iso?oHalf():null,aspect:oAspect(),w:stage.clientWidth,h:stage.clientHeight,focus:focusLvl}}};
+}
+
+/* ================= start ================= */
+/* read-only hook for the automated page tests: copies of the camera, the live plant and the sandbox */
+window.__sentinelot={
+  view:function(){return scene3d?scene3d.view():null},
+  geometry:function(){return scene3d?scene3d.geometry():null},anchor:function(n){return scene3d?scene3d.anchor(n):null},
+  live:function(){return JSON.parse(JSON.stringify({st:st,queue:queue.length,rows:rows.length,tab:curTab,
+    active:active?{title:active.title,time:active.time,kind:active.kind,sev:active.sev,note:active.note}:null,
+    alarms:alarms.map(function(a){return {kind:a.kind,seq:a.seq,ack:a.ack,cleared:a.cleared,count:a.count,firstOut:a===firstOut}}),
+    firstOut:firstOut?firstOut.kind:null,
+    seg:JSON.parse(JSON.stringify(SEG)),
+    blocked:segEvent?{fw:segEvent.fw,rule:segEvent.rule,kind:segEvent.kind,reached:segEvent.reached}:null}))},
+  rules:function(){return JSON.parse(JSON.stringify(SEG))},
+  setRule:function(fw,v){SEG[fw]=v;refresh()},
+  segv:function(){
+    var f=segReach("flat"),a=segReach("found"),d=segReach("deny"),n=segReach("now");
+    return {mode:SEGV.mode,zones:SEGV.zones,port:SEGV.mxPort,
+            sel:SEGV.sel?{from:SEGV.sel.from,to:SEGV.sel.to}:null,cellPath:SEGV.cellPath,
+            reach:{flat:f.count,found:a.count,deny:d.count,now:n.count,total:f.total}}},
+  sim:function(){return JSON.parse(JSON.stringify({inp:SB.inp,st:SB.st,view:SB.view,proposed:LIM.proposed}))}
+};
+(function(){
+  var b=$("#theme"),root=document.documentElement,mq=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)");
+  function dark(){var t=root.getAttribute("data-theme");return t?t==="dark":!!(mq&&mq.matches)}
+  function lab(){b.textContent=dark()?"Light":"Dark"}
+  try{var s=localStorage.getItem("sot-theme");if(s==="light"||s==="dark")root.setAttribute("data-theme",s)}catch(e){}
+  b.addEventListener("click",function(){var n=dark()?"light":"dark";root.setAttribute("data-theme",n);try{localStorage.setItem("sot-theme",n)}catch(e){}lab()});
+  lab();if(mq)mq.addEventListener("change",lab);
+})();
+/* keep --hdr equal to the sticky title strip's height, through resizes and the phone layout */
+(function(){
+  var h=document.querySelector(".strip"),r=document.documentElement;
+  function s(){r.style.setProperty("--hdr",h.offsetHeight+"px")}
+  s();if(window.ResizeObserver)new ResizeObserver(s).observe(h);else window.addEventListener("resize",s);
+})();
+buildRules();buildSeg();paintSeg();buildWindows();buildEq();
+/* on a phone the firewall switches start folded, so the attack buttons and the annunciator
+   stay within one screen of each other. On a wider screen they are open. */
+if(window.matchMedia&&window.matchMedia("(max-width:767px)").matches){$("#segbox").open=false;$("#segbox2").open=false}
+$("#an-ack").addEventListener("click",ackAll);$("#an-reset").addEventListener("click",resetAlarms);
+$("#showtrace").addEventListener("click",showTrace);
+/* the button follows the plant in and out of view. No scroll handler, no sticky plant, nothing
+   that could stop the reader scrolling wherever they like. */
+if(window.IntersectionObserver){
+  new IntersectionObserver(function(es){
+    stageSeen=es[0].isIntersecting;paintTraceBtn();
+  },{threshold:0}).observe($("#stage"));
+}else stageSeen=true;
+if(window.matchMedia)window.matchMedia("(max-width:1000px)").addEventListener("change",paintTraceBtn);
+for(var i=0;i<40;i++)simulate();
+for(var j=0;j<8;j++)emit(nextPoll());
+paint();paintRecs();paintRules();paintAlarm();paintWindows();setButtons();paintEq();paintTraceBtn();
+try{
+  if(!window.THREE)throw new Error("no three");
+  scene3d=build();
+}catch(err){
+  var s=$("#stage");s.textContent="";
+  s.appendChild(el("div","nogl","The 3D view needs WebGL, which isn’t available in this browser. The alarms, traffic and verdicts on this page still work."));
+}
+setInterval(tick,700);
+})();
+</script>
+</body>
+</html>

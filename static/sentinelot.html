@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SentinelOT: OT security demo, simulated plant</title>
+<meta name="description" content="A simulated packaging plant in 3D. Send a simulated Modbus attack, switch firewall rules on and off, see network segmentation, and try an alarm-limit change. Everything on the page is invented and runs in your browser.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="SentinelOT">
+<meta property="og:title" content="SentinelOT: OT security demo, simulated plant">
+<meta property="og:description" content="A simulated packaging plant in 3D. Send a simulated Modbus attack, switch firewall rules on and off, see network segmentation, and try an alarm-limit change. Everything on the page is invented and runs in your browser.">
+<meta name="twitter:card" content="summary">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23F4F1E8'/%3E%3Cg fill='none' stroke='%2314171A' stroke-width='2'%3E%3Crect x='3' y='3' width='26' height='26'/%3E%3Cpath d='M3 21h26M16 3v18'/%3E%3C/g%3E%3Crect x='5' y='23' width='10' height='4' fill='%23B3261E'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1976,13 +1982,34 @@ function limCheck(){
     q+="&"+LIM_KEYS[i]+"="+encodeURIComponent(v);
   }
   $("#lim-check").disabled=true;limError("Replaying the dataset…");
-  fetch(LIM_API+"compare?"+q).then(function(res){return res.json().then(function(j){return {ok:res.ok,j:j}})})
+  fetch(LIM_API+"compare?"+q).then(function(res){return apiJson(res).then(function(j){return {ok:res.ok,j:j}})})
     .then(function(x){
       if(my!==LIM.run)return;
       if(!x.ok){limSetTrace(limTag(),false);limError(typeof x.j.detail==="string"?"Not checked: "+x.j.detail+".":"The check failed.");return}
       limShowResult(x.j);limSetTrace(x.j.tag,!x.j.passed);
-    }).catch(function(){if(my===LIM.run)limError("The platform server didn’t answer. Try again.")})
+    }).catch(function(){
+      /* a 404 page, any HTML, text that is not JSON, or no answer at all: the platform server is
+         missing, so the tab goes back to its recorded copy and Check change stays off */
+      if(my!==LIM.run)return;
+      LIM.live=false;limSetTrace(limTag(),false);limShowBaseline();
+    })
     .then(function(){$("#lim-check").disabled=!LIM.live});
+}
+/* a real JSON answer from the platform server, or a throw. Anything else, such as a static host's
+   404 page, counts as the server being missing. A non-OK answer that is JSON with a detail is the
+   server speaking (a bad limit, say), so it is passed on and shown as its own message. */
+function apiJson(res){
+  var ct=res.headers.get("content-type")||"";
+  if(ct.indexOf("json")<0)throw new Error("not JSON");
+  return res.json();
+}
+/* is the platform server here? One HEAD request for this page itself: the server marks every
+   response, a static host never does, so a static host sees no /api/... request at all */
+function apiHere(){
+  if(location.protocol==="file:"||!window.fetch)return Promise.resolve(false);
+  return fetch(location.pathname,{method:"HEAD",cache:"no-store"})
+    .then(function(r){return r.ok&&r.headers.get("X-SentinelOT-API")==="1"})
+    .catch(function(){return false});
 }
 function limReset(){LIM.run++;delete LIM.proposed[limTag()];limFill();limSetTrace(limTag(),false);limShowBaseline()}
 function limSelect(){LIM.run++;limFill();limSetTrace(limTag(),false);limShowBaseline()}
@@ -1998,7 +2025,10 @@ LIM_KEYS.forEach(function(k){$("#lim-"+k).addEventListener("input",limStore)});
 $("#lim-check").addEventListener("click",limCheck);
 $("#lim-reset").addEventListener("click",limReset);
 $("#lim-preset").addEventListener("click",limPreset);
-(location.protocol==="file:"?Promise.reject():fetch(LIM_API+"baseline").then(function(r){if(!r.ok)throw 0;return r.json()}))
+apiHere().then(function(here){
+    if(!here)throw 0;
+    return fetch(LIM_API+"baseline").then(function(r){if(!r.ok)throw 0;return apiJson(r)});
+  })
   .then(function(d){if(!d||!d.tags)throw 0;limInit(d,true)})
   .catch(function(){limInit(LIM_RECORDED.baseline,false)});
 

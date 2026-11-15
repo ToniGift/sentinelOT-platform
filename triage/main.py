@@ -20,6 +20,16 @@ from schemas import Alert
 app = FastAPI(title="SentinelOT")
 app.include_router(alarm_limits_router)
 
+
+@app.middleware("http")
+async def mark_api_present(request: Request, call_next):
+    """Every response says the platform server is here. The showcase page makes one HEAD request
+    for itself and reads this header, so on a static host (which never sends it) the page does
+    not call /api/... at all and the browser logs no failed request."""
+    response = await call_next(request)
+    response.headers["X-SentinelOT-API"] = "1"
+    return response
+
 ALL = {**{k: ("development", v) for k, v in DEV.items()},
        **{k: ("held-out", v) for k, v in HELD.items()},
        **{k: ("held-out-2", v) for k, v in HELD2.items()}}
