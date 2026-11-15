@@ -111,6 +111,20 @@ The tab shows four things, and the four firewall switches drive them all togethe
 
 One naming honesty note, on the page itself: FW-304 (FW-Cell-1) is the cell firewall on the level 2 to level 1 boundary, and this model has a single conduit between those levels, so it stands in front of every level 1 controller, PLC-Line2 and the DCS controller included. It was named the line 1 cell firewall as found. A real plant would give each line its own cell firewall; the page shows the model it has rather than inventing a second one. `tests/test_reach.py` checks `reachableFrom` and `hops` for every host and every switch combination against a second implementation written independently in Python from the proposal's tables, and `tests/test_page_segmentation.py` drives the tab itself in a browser.
 
+### The Quiet attack
+
+The Live tab has a control, **Alarm limit: AS PROTECTED (190 / 205) or WIDENED (250 / 265)**, that answers one question: what happens if someone loosens the alarm limit first, and then attacks? It is simulated, like everything else on the page.
+
+**What WIDENED means.** It stands for a limit change that was *not* blocked. AlarmOps blocks that change in the Limits tab, and the page says so beside the control. The control shows the world where the block did not happen. The attack does not feed AlarmOps and AlarmOps does not watch the attack, and the page does not suggest otherwise.
+
+**What you see.** Send the sealer setpoint attack (240 °C) with the limit as protected and TT-101 fires as the sealer climbs past 190 °C, exactly as before. Send it with the limit widened and the security alarm is still raised, but TT-101 stays silent, because 240 is below 250. The TT-101 window says **SILENT · LIMIT WIDENED** in words, and a line under the annunciator reads, for example, "TT-101: no process alarm at 240.0 °C commanded. Limit is 250 °C." After the write a small table compares both limit states side by side, labelled **at the commanded 240 °C**. It is what the model gives for that value, not a measurement of the sealer. On a phone the box folds, and a one-line outcome stays outside the fold.
+
+**Why the security alarm is raised.** In this live demo's detector it exists only because the write came from a host that is not an approved master. The rule looks at who is writing, not at the value. A button sends **the same write from HMI-Line1**, an approved master: the demo's detector raises no security alarm, TT-101 fires only under the protected limit, and under the widened limit nothing fires at all. That is a limit of this demo's detector, not of SentinelOT as a whole. Recorded alert 3 is a setpoint written from the HMI, and the full pipeline escalated it because the value was outside its normal range.
+
+**How it relates to the other tabs.** It is independent of the Limits and What-if tabs and read-only towards them. The control changes only what the Live tab judges TT-101 against. It never changes the Limits tab's current limits, the proposed limits that What-if shares, the AlarmOps results or the recorded copy. A separate button in the box opens the Limits tab with the 250 / 265 sealer preset loaded. That button, not the control, puts 250 / 265 into the proposed limits that What-if shares. Sharing the state would have made the Limits tab show 250 as the *current* limit, which is not what the gate compares against.
+
+**Under the hood.** The decision "does this limit raise an alarm at this value" is a pure function, `ProcessModel.alarmRaised`, built on the existing `alarmState`, and `ProcessModel.quietOutcome` adds the detector's rule for who is writing. The live TT-101 alarm now uses the same function as the What-if tab, so it fires at or above the limit rather than strictly above it. Changing the limit mid-attack re-judges TT-101 at once: switching to protected while the sealer is at 240 °C raises it, and widening while it is active returns it to normal. An earlier security alarm stays first out throughout. `tests/test_quiet_attack.py` checks both functions against a second implementation written independently in Python from the limit table. It checks the code against the demo's model, not the model against a real plant. One test hook, `forceSetpoint`, exists only so a test can reach the 260 °C case without waiting half a minute for the sealer.
+
 ### Tags
 
 Every item on the plant carries a short tag as well as its name, and the page lists them all in an equipment table. The tags are ISA-style: loosely modelled on the instrument naming used on plant drawings, assigned for this demo, not an official scheme. IT equipment uses plain asset-class prefixes (`SRV`, `WS`, `DB`, `PC`). The first digit of the number is the area: 1 line 1, 2 line 2, 3 network security, 4 enterprise and DMZ, 5 utilities, 6 operations and supervisory servers and workstations. So `PLC-101` is PLC-Line1 and `FW-304` is FW-Cell-1.
@@ -240,7 +254,19 @@ The shared plant dataset, 5 tags and 35 labelled faults:
 
 The two tables disagree on percentages because they count the same missed faults out of different totals. **The 14 extra faults were generated for this demo by the same seeded generator. They are not independent evidence of anything.** They exist so the sealer and the conveyor have something to be measured against.
 
-Test suites, run now: 439 tests for the platform, 86 for the AlarmOps copy. The platform's 439 are 47 for the server and the data, 77 that drive the plant page in a browser, 49 that check the page's colours, and 266 that check the firewall rules and the reachability model.
+Test suites, measured on 2026-11-16 (`python -m pytest`, then `python -m pytest alarmops`): **482 passed, 0 skipped** for the platform and **86 passed, 0 skipped** for the AlarmOps copy. The platform's 482 add up like this:
+
+| Group | Tests |
+|---|---|
+| The server and the data (API, rate limits, guards, orchestrator, scenarios, lab feeds, alarm-limit routes, models stubbed out) | 47 |
+| The plant page driven in a browser (`test_page_model.py` 61, `test_page_segmentation.py` 17) | 78 |
+| The Quiet attack (`test_quiet_attack.py`) | 28 |
+| Colour contrast of the page (`test_palette_contrast.py`) | 49 |
+| Firewall rules and reachability against an independent Python version (`test_segmentation.py` 223, `test_reach.py` 42) | 265 |
+| The static site and the page with no API (`test_site.py`) | 15 |
+| **Total** | **482** |
+
+These are measured counts for that date, not promises: they will change as tests are added, so run the suite to see today's.
 
 ## Running it yourself
 
@@ -366,7 +392,7 @@ python -m pytest
 python -m pytest alarmops
 ```
 
-The platform suite covers the API and its rate limits, the code checks, the orchestrator with the models stubbed out, the scenario labels, the lab feeds, the alarm-limit routes and every figure in the results tables, that the shared plant leaves the original dataset untouched, that the saved answers in the page still match the routes, that every colour pair on the plant page keeps a readable contrast in light and dark (`python tests/test_palette_contrast.py` prints the table), and that the firewall rules and the reachability model answer correctly for every path, every host and every combination of the four switches. Seventy-seven of those tests drive the page itself in a browser, and 266 more drive the segmentation and reachability model in one. All of them need Playwright and an installed Microsoft Edge (or Chrome), which they launch directly, so no browser download is needed. Playwright is in `requirements-dev.txt` and deliberately not in `requirements.txt`. Without them they are skipped, and `pytest.ini` turns on the summary that lists every skip with its reason, so a skipped test is never mistaken for a passing one. No test calls a model or reaches the network.
+The platform suite covers the API and its rate limits, the code checks, the orchestrator with the models stubbed out, the scenario labels, the lab feeds, the alarm-limit routes and every figure in the results tables, that the shared plant leaves the original dataset untouched, that the saved answers in the page still match the routes, that every colour pair on the plant page keeps a readable contrast in light and dark (`python tests/test_palette_contrast.py` prints the table), that the firewall rules and the reachability model answer correctly for every path, every host and every combination of the four switches, that the Quiet attack's alarm decisions match a second implementation written independently in Python, and that `site/index.html` is an exact copy of the page and the page works on a plain static server. The tests that drive the page need Playwright and an installed Microsoft Edge (or Chrome), which they launch directly, so no browser download is needed. Playwright is in `requirements-dev.txt` and deliberately not in `requirements.txt`. Without them those tests are skipped, and `pytest.ini` turns on the summary that lists every skip with its reason, so a skipped test is never mistaken for a passing one. No test calls a model or reaches the network beyond a local test server.
 
 ## Repository map
 

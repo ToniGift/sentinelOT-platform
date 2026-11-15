@@ -390,6 +390,15 @@ button,input,select{font-family:inherit}
 footer{margin:0 4px;border-top:1px solid var(--rule);padding:12px 14px 16px;font-size:13px;color:var(--mute)}
 footer p{margin:0;max-width:110ch}
 
+/* ---- Quiet attack: the Live tab's alarm-limit control and its outcome lines. Existing tokens only. ---- */
+.quiet .segmode button{flex:1 1 150px}
+.quiet #quiet-link,.quiet .limbtns .btn{margin:0 6px 8px 0}
+.quiet-line{border:1px solid var(--rule);padding:8px 11px;margin:0 0 12px;font-size:13.5px}
+.quiet-line:empty{display:none}
+.an-quiet{margin:8px 0 0;font-family:var(--mono);font-size:12.5px;border-left:3px solid var(--rule);padding-left:9px}
+.win .w-st{overflow-wrap:anywhere}
+#quiet-table th,#quiet-table td{vertical-align:top}
+
 /* ---- 05 Segmentation: mode, reach counter, flow matrix, path test. Existing tokens only. ---- */
 .lab.zone{border-style:dashed;font-size:10.5px}
 .segmode{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
@@ -563,6 +572,26 @@ footer p{margin:0;max-width:110ch}
           <button class="btn atk" data-atk="robot">Stop the packing robot<span>OFFICE-PC-14 writes coil 00003 (RB-101 enable) to off</span></button>
           <button class="btn atk" data-atk="scan">Scan the register map<span>A new host reads address ranges on PLC-101 until something answers</span></button>
         </div>
+        <details class="seg quiet" id="quietbox" open>
+          <summary class="hd"><span class="sgh" id="quiet-sum">Alarm limit</span><span class="simtag">SIMULATED</span></summary>
+          <p class="note">The sealer high limit the live TT-101 alarm is judged against. <b>WIDENED</b> stands for a limit change that was <b>not</b> blocked. AlarmOps does block that change in the Limits tab; this control shows the world where it did not. The attack does not feed AlarmOps, and AlarmOps does not watch the attack.</p>
+          <div class="segmode" role="group" aria-label="Sealer alarm limit for the live TT-101 alarm">
+            <button type="button" class="btn" id="quiet-protected" aria-pressed="true"></button>
+            <button type="button" class="btn" id="quiet-widened" aria-pressed="false"></button>
+          </div>
+          <p class="note">This control changes only the Live tab. It does not change the Limits tab’s current limits, the AlarmOps results or the recorded copy. The link below, not this control, loads the 250 / 265 preset into the proposed limits that the What-if tab shares.</p>
+          <button type="button" class="btn ghost" id="quiet-link"></button>
+          <h3 class="sub">After the write</h3>
+          <div id="quiet-result"></div>
+          <p class="note"><b>Why the security alarm is raised.</b> In this live demo’s detector it exists only because the write came from a host that is not an approved master. The rule looks at who is writing, not at the value. Recorded alert 3 (Recorded tab) is a setpoint written from the HMI, an approved master, and the full SentinelOT pipeline escalated it because the value was outside its normal range.</p>
+          <h3 class="sub">Same write from HMI-Line1</h3>
+          <p class="note">The same 240 °C write, sent from HMI-Line1, an approved master. In this live demo’s detector it raises no security alarm, because that rule only looks at who is writing. With the limit as protected, TT-101 still fires once the sealer passes 190 °C. With it widened, nothing fires while the sealer climbs to 240 °C. That is a limit of this demo’s detector, not of SentinelOT as a whole: recorded alert 3 shows the full pipeline catching an HMI write by its value.</p>
+          <div class="limbtns">
+            <button type="button" class="btn" id="hmi-write"></button>
+            <button type="button" class="btn ghost" id="hmi-restore"></button>
+          </div>
+        </details>
+        <p class="quiet-line" id="quiet-line" role="status"></p>
         <details class="seg" id="segbox" open>
           <summary class="hd"><span class="sgh">Firewall rules</span><span class="simtag">SIMULATED</span></summary>
           <p class="note">Demo rules, not a recommendation for a real plant. As found. Each switch removes one over-broad rule. The approved flows &mdash; HMI-Line1 and the historian to the controllers, the engineering workstation to both, the configured outstation to SCADA &mdash; have their own fixed rules that no switch touches, so the polling in the log keeps running whatever you set here.</p>
@@ -671,6 +700,7 @@ footer p{margin:0;max-width:110ch}
         </div>
       </div>
       <ul class="windows" id="windows"></ul>
+      <p class="an-quiet" id="an-quiet" role="status"></p>
       <p class="note" style="margin:8px 0 0">First out marks the alarm that came first and stays on it until Reset. Acknowledge stops the flashing and nothing else. Reset clears acknowledged alarms whose condition has returned to normal.</p>
     </section>
 
@@ -714,7 +744,7 @@ footer p{margin:0;max-width:110ch}
           <line id="l-sp" x1="0" x2="300" y1="0" y2="0" stroke="var(--mute)" stroke-width="1.2" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>
           <polyline id="l-pv" fill="none" stroke="var(--live)" stroke-width="2" vector-effect="non-scaling-stroke" points=""/>
         </svg>
-        <div class="key"><span><i></i>TT-101 sealer temperature</span><span><i class="sp"></i>TIC-101 setpoint</span><span><i class="hi"></i>High limit 190 °C</span></div>
+        <div class="key"><span><i></i>TT-101 sealer temperature</span><span><i class="sp"></i>TIC-101 setpoint</span><span><i class="hi"></i><b id="key-hi">High limit</b></span></div>
       </div>
     </section>
 
@@ -850,6 +880,20 @@ function alarmState(v,lim){
   return null;
 }
 function evaluate(vals,limits){var o={};TAGS.forEach(function(t){o[t]=alarmState(vals[t],limits[t])});return o}
+/* Does this limit set raise a process alarm at this value? Pure. A high or high-high state counts as
+   a high alarm; the Quiet attack control asks about a sealer temperature, so only the high side. */
+function alarmRaised(v,lim){var s=alarmState(v,lim);return s==="high"||s==="high_high"}
+/* The Quiet attack's two answers for one setpoint write. Pure, and SIMULATED.
+     write   {approved: bool, value: number}  who wrote it, and the temperature it commands
+     limits  {low_low, low, high, high_high}  the sealer limits in force
+   security: the live demo's detector raises its security alarm only for a write from a host that is
+             not an approved master. It does not look at the value. (The full SentinelOT pipeline
+             also judges the value, which is why recorded alert 3 was escalated; this function
+             models the live demo's detector only.)
+   process:  whether the limits raise a high alarm at the commanded value. */
+function quietOutcome(write,limits){
+  return {security:!write.approved,process:alarmRaised(write.value,limits),state:alarmState(write.value,limits)};
+}
 /* the sentence shown when the proposed limits stay silent where the current limits raise an alarm */
 function missed(tag,value,cur,prop){
   if(!cur||prop)return null;
@@ -887,7 +931,7 @@ function effects(inp,state,lim){
 }
 root.ProcessModel={LIMIT_KEYS:LIMIT_KEYS,ALARM_LABEL:ALARM_LABEL,TAGS:TAGS,NAME:NAME,UNIT:UNIT,DEVICE:DEVICE,NORMAL:NORMAL,RANGE:RANGE,C:C,
   fmt:fmt,arriving:arriving,pressureTarget:pressureTarget,initial:initial,step:step,run:run,values:values,validLimits:validLimits,
-  alarmState:alarmState,evaluate:evaluate,missed:missed,allMissed:allMissed,effects:effects};
+  alarmState:alarmState,alarmRaised:alarmRaised,quietOutcome:quietOutcome,evaluate:evaluate,missed:missed,allMissed:allMissed,effects:effects};
 })(window);
 </script>
 <script id="network-model">
@@ -1222,7 +1266,21 @@ var HMI={ip:"10.10.30.5",name:"HMI-Line1"},HIST={ip:"10.10.40.20",name:"HIST-01"
     NEWHOST={ip:"10.10.50.99",name:"New host"};
 var APPROVED={};APPROVED[HMI.ip]=1;APPROVED[HIST.ip]=1;
 var WRITE_FC={5:1,6:1,15:1,16:1};
-var HI_SEAL=190,SP_NORMAL=160;
+var SP_NORMAL=160,ATK_SP=240;   /* ATK_SP: the temperature the setpoint attack commands */
+/* ---- Quiet attack: which sealer limit the LIVE tab judges TT-101 against. SIMULATED. ----
+   "protected" is the sealer limit AlarmOps keeps: its baseline, the numbers the Limits tab shows.
+   "widened" is the world where the 190 to 250 change was NOT blocked (AlarmOps does block it in the
+   Limits tab). The value is read only by the Live tab. Nothing here writes LIM, the proposed limits
+   that What-if shares, the AlarmOps results or the recorded copy. */
+var QUIET={mode:"protected",last:null};
+function sealLimits(mode){
+  var b=LIM_RECORDED.baseline.tags.sealer_temperature,w=mode==="widened";
+  return {low_low:b.low_low,low:b.low,high:w?LIM_PRESET.high:b.high,high_high:w?LIM_PRESET.high_high:b.high_high};
+}
+function liveLim(){return sealLimits(QUIET.mode)}
+/* a setpoint write got through: remember it for the comparison table and redraw it now. An approved
+   write raises no alarm, so nothing else would repaint the table. */
+function noteWrite(w){QUIET.last=w;paintQuiet();paintWindows()}
 var st={sp:SP_NORMAL,pv:159.7,rpm:1200,ppm:42,heater:1,conv:1,robot:1};
 var hist=[],queue=[],rows=[],tid=0x1A00,lastTid=0,step=0,ticks=0;
 var NM=window.NetworkModel;
@@ -1268,8 +1326,16 @@ function nextPoll(){
 }
 var ATTACKS={
   setpoint:function(){
-    queue.push(mk(OFFICE,PLC,6,[6,0,0].concat(w(2400)),"Write register 40001 = 2400 (240.0 °C)",false,{addr:"40001",kind:"setpoint",effect:function(){st.sp=240}}));
-    queue.push(mk(PLC,OFFICE,6,[6,0,0].concat(w(2400)),"Echo: write accepted",true));
+    queue.push(mk(OFFICE,PLC,6,[6,0,0].concat(w(ATK_SP*10)),"Write register 40001 = "+ATK_SP*10+" ("+f1(ATK_SP)+" °C)",false,{addr:"40001",kind:"setpoint",
+      effect:function(){st.sp=ATK_SP;noteWrite({approved:false,value:ATK_SP,src:"OFFICE-PC-14"})}}));
+    queue.push(mk(PLC,OFFICE,6,[6,0,0].concat(w(ATK_SP*10)),"Echo: write accepted",true));
+  },
+  /* the same write, from an approved master. Its own kind, so the live detector's rule, which
+     ignores approved sources, is what decides that no security alarm is raised */
+  hmi:function(){
+    queue.push(mk(HMI,PLC,6,[6,0,0].concat(w(ATK_SP*10)),"Write register 40001 = "+ATK_SP*10+" ("+f1(ATK_SP)+" °C)",false,{addr:"40001",kind:"hmiwrite",
+      effect:function(){st.sp=ATK_SP;noteWrite({approved:true,value:ATK_SP,src:"HMI-Line1"})}}));
+    queue.push(mk(PLC,HMI,6,[6,0,0].concat(w(ATK_SP*10)),"Echo: write accepted",true));
   },
   robot:function(){
     queue.push(mk(OFFICE,PLC,5,[5,0,2,0,0],"Write coil 00003 = OFF (packing robot)",false,{addr:"00003",kind:"robot",effect:function(){st.robot=0}}));
@@ -1363,7 +1429,7 @@ function buildPrompt(a){
   var lines=a.frames.map(function(f){return f.time+" "+f.src.ip+" -> "+f.dst.ip+" FC"+("0"+f.fc).slice(-2)+" "+f.text+" ["+f.hex+"]"}).join("\n");
   return "You are an OT security analyst. Write a short note for a plant operator about an alarm from a passive Modbus/TCP monitor. The data is simulated for a demo.\n\n"+
     "Plant: packaging line 1, controlled by PLC-Line1 "+PLC.ip+". Approved masters: HMI-Line1 "+HMI.ip+" (read and write), historian HIST-01 "+HIST.ip+" (read only). OFFICE-PC-14 10.10.50.7 is an office workstation on the enterprise level and is not an engineering station. Three firewalls (FW-IT-DMZ, FW-DMZ-OT, FW-Cell-1) sit between the office network and PLC-Line1 and should have blocked office hosts. 10.10.50.99 is not in the asset inventory.\n"+
-    "Register map: 40001 sealer setpoint (x10 °C, normal 160.0), 40002 sealer temperature (high limit 190 °C), 40003 conveyor motor speed (rpm), 40004 packs per minute. Coils: 00001 sealer heater, 00002 conveyor run, 00003 packing robot enable.\n\n"+
+    "Register map: 40001 sealer setpoint (x10 °C, normal 160.0), 40002 sealer temperature (high limit "+liveLim().high+" °C), 40003 conveyor motor speed (rpm), 40004 packs per minute. Coils: 00001 sealer heater, 00002 conveyor run, 00003 packing robot enable.\n\n"+
     "Alarm: "+a.title+"\nRule that fired: "+a.rule+"\nSource: "+a.src.ip+" ("+a.src.name+")\nFrames:\n"+lines+"\n\n"+
     "Write exactly three short paragraphs in plain text, no headings, no markdown, no lists, 80 words at most in total: first what happened, then what it could do to the process, then what the operator should do first. Use plain words. Do not invent facts beyond what is given.";
 }
@@ -1405,7 +1471,17 @@ function raise(a){
   }).catch(function(){if(alive(a))fallback(a)});
   return a;
 }
-function fallback(a){a.who="Analyst note (pre-written, live AI isn’t available in this view)";a.note=SCRIPTED[a.kind];paintNote(a)}
+/* the pre-written note for an alarm kind, true to the sealer limit in force: the SCRIPTED texts
+   describe the protected limit, so under the widened limit the two that mention it are reworded */
+function scriptedNote(kind){
+  var lim=liveLim(),P=sealLimits("protected"),wide=QUIET.mode==="widened";
+  if(!wide||(kind!=="temp"&&kind!=="setpoint"))return SCRIPTED[kind];
+  if(kind==="temp")
+    return "TT-101, the sealer temperature, is over the widened "+lim.high+" °C high limit, which this view shows in place of the protected "+P.high+" °C. The sealer was hot well before this alarm fired.\n\nThe film can scorch on the bars. This alarm is a consequence: look at the first-out alarm, if there is one, to find the cause.\n\nRestore the setpoint from HMI-Line1 and let the sealer cool.";
+  return SCRIPTED.setpoint.replace("The sealer will climb past its "+P.high+" °C high limit.",
+    "The sealer will climb towards "+ATK_SP+" °C. This view has the high limit widened to "+lim.high+" °C, so TT-101 raises no process alarm at that temperature.");
+}
+function fallback(a){a.who="Analyst note (pre-written, live AI isn’t available in this view)";a.note=scriptedNote(a.kind);paintNote(a)}
 function paintNote(a){
   var who=$("#ai-who"),t=$("#ai-text");
   if(a!==active)return;
@@ -1494,7 +1570,9 @@ function paintAlarm(){
   if(a.kind==="setpoint"){
     /* the link to AlarmOps: one sentence and a jump to the blocked change. The attack itself is not sent to AlarmOps. */
     var lk=el("div","ai");
-    lk.appendChild(el("p","text","The 190 °C high limit still fires because AlarmOps blocked the change that would have widened it."));
+    lk.appendChild(el("p","text",QUIET.mode==="widened"
+      ?"The Alarm limit control on the Live tab is set to WIDENED: this is the world where the change to "+LIM_PRESET.high+" °C was not blocked. In the Limits tab AlarmOps does block it."
+      :"The "+liveLim().high+" °C high limit still fires because AlarmOps blocked the change that would have widened it."));
     var jb=el("button","btn ghost ack","See the blocked change");jb.type="button";
     jb.addEventListener("click",function(){showTab("lim");limPreset()});lk.appendChild(jb);
     lk.classList.add("extra");note.insertBefore(lk,note.lastChild);
@@ -1753,6 +1831,65 @@ function paintPathTest(){
   }
   SEGV.hostTrace={srcA:s,dstA:d,cvar:h.passed?"--live":"--mute",stopAt:h.stoppedAt};
 }
+/* ================= Quiet attack ================= */
+/* SIMULATED. The Live tab's alarm-limit control. The decisions come from ProcessModel.quietOutcome and
+   alarmRaised (pure); this code only draws them. Text only changes when it differs, so the status
+   regions announce a change of state and nothing else. */
+function limTxt(l){return l.high+" / "+l.high_high}
+function raisedWord(b){return b?"raised":"not raised"}
+function setText(node,txt){if(node&&node.textContent!==txt)node.textContent=txt}
+function paintQuietLive(){
+  var P=sealLimits("protected"),wide=QUIET.mode==="widened",lim=liveLim(),L=QUIET.last;
+  var t=alarmOf("temp"),on=!!(t&&!t.cleared),hot=st.sp!==SP_NORMAL,txt;
+  if(on)txt="TT-101: process alarm raised, the sealer is over the "+(wide?"widened":"protected")+" "+lim.high+" °C limit.";
+  else if(wide&&hot)txt="TT-101: no process alarm at "+f1(st.sp)+" °C commanded. Limit is "+lim.high+" °C, widened from "+P.high+" °C."
+    +(st.sp>=lim.high?" The commanded value is at or above the limit, so the alarm fires once the sealer gets there.":"")
+    +(PM.alarmRaised(st.pv,P)?" The protected "+P.high+" °C limit would already have raised one.":"");
+  else if(!wide&&hot)txt="TT-101: no process alarm yet. It fires when the sealer passes the "+lim.high+" °C limit.";
+  else txt="TT-101: high limit "+lim.high+" °C, "+(wide?"widened from "+P.high+" °C":"as protected")+". No process alarm.";
+  setText($("#an-quiet"),txt);
+  var ql=$("#quiet-line"),line="";
+  if(L){var o=PM.quietOutcome(L,lim);
+    line="Security alarm: "+raisedWord(o.security)+" · Process alarm (TT-101): "+raisedWord(o.process)+" at the commanded "+L.value+" °C, limit "+lim.high+" °C ("+(wide?"widened":"as protected")+"). Simulated."}
+  setText(ql,line);
+}
+function paintQuiet(){
+  if(!$("#quietbox"))return;
+  var P=sealLimits("protected"),W=sealLimits("widened"),wide=QUIET.mode==="widened",lim=wide?W:P;
+  setText($("#quiet-sum"),"Alarm limit: "+(wide?"WIDENED":"AS PROTECTED")+" ("+limTxt(lim)+")");
+  [["#quiet-protected","AS PROTECTED",P,!wide],["#quiet-widened","WIDENED",W,wide]].forEach(function(c){
+    var b=$(c[0]);setText(b,c[1]+" ("+limTxt(c[2])+")");b.setAttribute("aria-pressed",c[3]?"true":"false");
+  });
+  setText($("#quiet-link"),"Open the Limits tab with the "+limTxt(W)+" sealer preset loaded");
+  setText($("#hmi-write"),"Write "+ATK_SP+" °C from HMI-Line1");
+  setText($("#hmi-restore"),"Put the setpoint back to "+SP_NORMAL+" °C");
+  var res=$("#quiet-result"),L=QUIET.last;res.textContent="";
+  if(!L){
+    res.appendChild(el("p","note","No write yet. Send the sealer setpoint attack, or the same write from HMI-Line1, and both limit states are compared here."));
+  }else{
+    var o1=PM.quietOutcome(L,P),o2=PM.quietOutcome(L,W);
+    res.appendChild(el("p","note","Last write: "+L.value+" °C to the sealer setpoint, from "+L.src+(L.approved?", an approved master":", which is not an approved master")
+      +". The table is what the model gives at the commanded "+L.value+" °C. It is not a measurement of the sealer."));
+    var t=el("table","cmp"),hd=el("tr");t.id="quiet-table";
+    ["At the commanded "+L.value+" °C","As protected ("+limTxt(P)+")"+(wide?"":" · in force"),"Widened ("+limTxt(W)+")"+(wide?" · in force":"")]
+      .forEach(function(h){var th=el("th",null,h);th.setAttribute("scope","col");hd.appendChild(th)});
+    var th0=el("thead");th0.appendChild(hd);t.appendChild(th0);
+    var tb=el("tbody");
+    [["Security alarm",raisedWord(o1.security),raisedWord(o2.security)],
+     ["Process alarm (TT-101)",o1.process?"raised ("+(o1.state==="high_high"?"high high":"high")+")":"not raised",
+                               o2.process?"raised ("+(o2.state==="high_high"?"high high":"high")+")":"not raised"]]
+      .forEach(function(r){var tr=el("tr"),h=el("th",null,r[0]);h.setAttribute("scope","row");tr.appendChild(h);
+        tr.appendChild(el("td",null,r[1]));tr.appendChild(el("td",null,r[2]));tb.appendChild(tr)});
+    t.appendChild(tb);res.appendChild(t);
+  }
+  paintQuietLive();
+}
+function setQuietMode(m){
+  if(QUIET.mode===m)return;
+  QUIET.mode=m;
+  procAlarms();      /* the sealer may already be over the new limit, or under it */
+  refresh();paint();
+}
 function buildWindows(){
   var ul=$("#windows");ul.textContent="";
   KIND_ORDER.forEach(function(k){
@@ -1766,8 +1903,10 @@ function buildWindows(){
   });
 }
 function paintWindows(){
+  KINDS.temp.txt="High "+liveLim().high+" °C";
   KIND_ORDER.forEach(function(k){
     var K=KINDS[k],a=alarmOf(k),b=K.el;
+    if(k==="temp")setText(b.querySelector(".w-txt"),K.txt);
     if(k==="seg"){
       b.className="win info"+(segEvent?" on":"")+(segEvent&&!active?" sel":"");
       b.querySelector(".w-tag").textContent=segEvent?segEvent.fw:"FW-30x";
@@ -1776,33 +1915,51 @@ function paintWindows(){
       return;
     }
     b.className="win "+K.sev+(a?(a.cleared?" ret":" on"+(a.ack?"":" unack")):"")+(a&&a===firstOut?" fo":"")+(a&&a===active?" sel":"");
-    b.querySelector(".w-st").textContent=a?"#"+a.seq+" "+stateWord(a):"NORMAL";
-    b.setAttribute("aria-label",K.tag+" "+K.txt+": "+(a?"seq "+a.seq+", "+stateWord(a)+(a===firstOut?", first out":""):"normal"));
+    /* TT-101 with the limit widened and the setpoint raised: no alarm, and the window says why in words */
+    var silent=k==="temp"&&!a&&QUIET.mode==="widened"&&st.sp!==SP_NORMAL;
+    b.querySelector(".w-st").textContent=a?"#"+a.seq+" "+stateWord(a):(silent?"SILENT · LIMIT WIDENED":"NORMAL");
+    b.setAttribute("aria-label",K.tag+" "+K.txt+": "+(a?"seq "+a.seq+", "+stateWord(a)+(a===firstOut?", first out":""):(silent?"silent, no process alarm, limit widened":"normal")));
   });
   /* the informational window is deliberately left out of this count: it is not an alarm */
-  var n=alarms.length,un=alarms.filter(function(a){return !a.ack}).length,st=$("#an-st");
-  st.textContent=n?n+" ACTIVE · "+un+" UNACK"+(firstOut?" · FIRST OUT: "+KINDS[firstOut.kind].tag+" "+KINDS[firstOut.kind].txt.toUpperCase():""):"NO ALARM";
+  var n=alarms.length,un=alarms.filter(function(a){return !a.ack}).length,anSt=$("#an-st");
+  anSt.textContent=n?n+" ACTIVE · "+un+" UNACK"+(firstOut?" · FIRST OUT: "+KINDS[firstOut.kind].tag+" "+KINDS[firstOut.kind].txt.toUpperCase():""):"NO ALARM";
   $("#an-ack").disabled=!un;$("#an-reset").disabled=!n;
 }
 /* every view of the alarms in one place */
 function refresh(){
-  paintRules();paintSeg();paintAlarm();paintWindows();setButtons();paintEq();paintRecs();paintTraceBtn();
+  paintRules();paintSeg();paintAlarm();paintWindows();paintQuiet();setButtons();paintEq();paintRecs();paintTraceBtn();
   if(scene3d)scene3d.update();
 }
 function setButtons(){
   var off=queue.length>0;
   document.querySelectorAll(".atk").forEach(function(b){b.disabled=off||!!alarmOf(b.getAttribute("data-atk"))});
   document.querySelectorAll("#recs button").forEach(function(b){b.disabled=off||alarms.length>0});
+  /* the HMI write needs the setpoint at normal; its restore needs it raised and no setpoint alarm
+     (that alarm has its own Restore button) */
+  var hw=$("#hmi-write"),hr=$("#hmi-restore");
+  if(hw){hw.disabled=off||st.sp!==SP_NORMAL;hr.disabled=off||st.sp===SP_NORMAL||!!alarmOf("setpoint")}
 }
 /* the process alarm that follows from the setpoint attack: TT-101 over its high limit */
 function procAlarms(){
-  var t=alarmOf("temp");
-  if(st.pv>HI_SEAL&&!t){
+  var t=alarmOf("temp"),lim=liveLim(),over=PM.alarmRaised(st.pv,lim);
+  if(over&&!t){
     var T=byName["SENSOR-GW-1"];
-    raise({sev:"warn",kind:"temp",label:"Warning",title:"TT-101 high: sealer above its 190 °C limit",
-      rule:"Process value over the high limit (190 °C)",src:{ip:"",name:"TT-101 via GW-101"},target:"SL-101 sealer, read by PLC-101",frames:[],
+    raise({sev:"warn",kind:"temp",label:"Warning",title:"TT-101 high: sealer above its "+lim.high+" °C limit",
+      rule:"Process value over the high limit ("+lim.high+" °C)",limitHigh:lim.high,src:{ip:"",name:"TT-101 via GW-101"},target:"SL-101 sealer, read by PLC-101",frames:[],
       trace:{srcA:T,dstA:byName["PLC-Line1"],cvar:"--warn"}});
-  }else if(t&&!t.cleared&&st.pv<=HI_SEAL-10){t.cleared=true;refresh()}
+  }else if(t&&!t.cleared&&(st.pv<=lim.high-10||(t.limitHigh!==lim.high&&!over))){
+    /* back to normal: the sealer cooled 10 °C below the limit, or the limit moved above the reading.
+       The alarm remembers the limit it was cleared under, so changing the limit back can bring it back */
+    t.cleared=true;t.limitHigh=lim.high;refresh();
+  }else if(t&&!t.cleared&&over&&t.limitHigh!==lim.high){
+    /* still over a limit that has moved: same alarm, now naming the limit in force */
+    t.limitHigh=lim.high;t.title="TT-101 high: sealer above its "+lim.high+" °C limit";
+    t.rule="Process value over the high limit ("+lim.high+" °C)";t.note=scriptedNote("temp");refresh();
+  }else if(t&&t.cleared&&over&&t.limitHigh!==lim.high){
+    /* the limit was changed back while the sealer is still too hot: the alarm comes back, unacknowledged */
+    t.cleared=false;t.ack=false;t.limitHigh=lim.high;t.title="TT-101 high: sealer above its "+lim.high+" °C limit";
+    t.rule="Process value over the high limit ("+lim.high+" °C)";t.note=scriptedNote("temp");refresh();
+  }
 }
 function tile(id,val,bad,state){var t=$(id);t.classList.toggle("bad",!!bad);t.querySelector(".v").textContent=val;t.querySelector(".state").textContent=state||""}
 function coil(id,txt,bad){var c=$(id);c.classList.toggle("bad",!!bad);c.querySelector("b").textContent=txt}
@@ -1815,7 +1972,10 @@ function paint(){
   $("#proc-h").textContent=sim?"Line 1 process (What-if, simulated)":"Line 1 process";
   $("#log-h").textContent=sim?"Modbus/TCP traffic (paused while What-if is open)":"Modbus/TCP traffic";
   tile("#t-sp",f1(p.sp),p.sp!==SP_NORMAL,p.sp!==SP_NORMAL?"Changed":"");
-  tile("#t-pv",f1(p.pv),p.pv>HI_SEAL,p.pv>HI_SEAL?"High":"");
+  /* the live plant is judged against the limit in force on the Live tab; the sandbox keeps the protected one */
+  var hiLim=sim?sealLimits("protected"):liveLim(),hiNow=PM.alarmRaised(p.pv,hiLim);
+  tile("#t-pv",f1(p.pv),hiNow,hiNow?"High":"");
+  $("#key-hi").textContent="High limit "+hiLim.high+" °C"+(!sim&&QUIET.mode==="widened"?" (widened)":"");
   tile("#t-rpm",String(Math.round(p.rpm)),sim&&(p.rpm>=1500||p.rpm<=900),sim?(p.rpm>=1500?"High":p.rpm<=0?"Stopped":p.rpm<=900?"Low":""):"");
   tile("#t-ppm",String(Math.round(p.ppm)),!p.robot||bl>0,!p.robot?"Stopped":(bl>0?"Backlog "+bl:""));
   coil("#c-heat",p.heater?"on":"off",false);
@@ -1823,7 +1983,7 @@ function paint(){
   coil("#c-robot",p.robot?"running":"stopped",!p.robot);
   $("#l-pv").setAttribute("points",p.hist.map(function(v,i){return ((i/69)*300).toFixed(1)+","+ty(v)}).join(" "));
   $("#l-sp").setAttribute("y1",ty(p.sp));$("#l-sp").setAttribute("y2",ty(p.sp));
-  $("#l-hi").setAttribute("y1",ty(HI_SEAL));$("#l-hi").setAttribute("y2",ty(HI_SEAL));
+  $("#l-hi").setAttribute("y1",ty(hiLim.high));$("#l-hi").setAttribute("y2",ty(hiLim.high));
   var log=$("#log"),frag=document.createDocumentFragment();
   rows.forEach(function(f){
     var r=el("div","row"+(f.flag?" flag":"")+(f.deny?" deny":"")),m=el("div","meta");
@@ -1848,7 +2008,11 @@ function tick(){
   procAlarms();
   if(qBefore>0&&queue.length===0)paintAlarm();
   if(st.robot!==robotBefore&&scene3d)scene3d.update();
-  setButtons();paint();
+  setButtons();paint();paintQuietLive();
+  /* an approved write raises no alarm, so nothing else repaints the TT-101 window: do it when the
+     setpoint or the limit in force changes */
+  var wsig=st.sp+"|"+QUIET.mode;
+  if(wsig!==QUIET.sig){QUIET.sig=wsig;paintWindows()}
 }
 document.querySelectorAll(".atk").forEach(function(b){
   b.addEventListener("click",function(){
@@ -1858,6 +2022,22 @@ document.querySelectorAll(".atk").forEach(function(b){
     ATTACKS[b.getAttribute("data-atk")]();setButtons();
     if(window.matchMedia("(max-width:860px)").matches)$("#stage").scrollIntoView({block:"start",behavior:"smooth"});
   });
+});
+
+$("#quiet-protected").addEventListener("click",function(){setQuietMode("protected")});
+$("#quiet-widened").addEventListener("click",function(){setQuietMode("widened")});
+/* the link, not the control, loads the 250 / 265 preset into the proposed limits What-if shares */
+$("#quiet-link").addEventListener("click",function(){showTab("lim");limPreset()});
+$("#hmi-write").addEventListener("click",function(){
+  if(queue.length||st.sp!==SP_NORMAL)return;
+  clearSeg();selRec=null;paintRecs();if(scene3d)scene3d.update();
+  ATTACKS.hmi();setButtons();
+  if(window.matchMedia("(max-width:860px)").matches)$("#stage").scrollIntoView({block:"start",behavior:"smooth"});
+});
+$("#hmi-restore").addEventListener("click",function(){
+  if(queue.length||st.sp===SP_NORMAL||alarmOf("setpoint"))return;
+  st.sp=SP_NORMAL;rows.unshift({time:clock(),text:"Setpoint put back to "+SP_NORMAL+" °C (demo control, as from HMI-Line1).",hex:"",note:true});
+  refresh();paint();
 });
 
 /* ================= tabs + recorded alerts ================= */
@@ -1966,7 +2146,7 @@ function limShowResult(r,recorded){
 /* the one change this page ties to the live attack: sealer high 190 to 250 °C (high high moves to 265 so the order stays valid) */
 var LIM_PRESET={tag:"sealer_temperature",high:250,high_high:265};
 function limPreset(){
-  if(!LIM.data.tags[LIM_PRESET.tag])return;
+  if(!LIM.data||!LIM.data.tags[LIM_PRESET.tag])return;
   LIM.run++;$("#lim-tag").value=LIM_PRESET.tag;limFill();
   $("#lim-high").value=LIM_PRESET.high;$("#lim-high_high").value=LIM_PRESET.high_high;limStore();
   if(LIM.live){limCheck();return}
@@ -2649,7 +2829,7 @@ function build(){
     /* state shown by the models themselves: tank fill and sealer glow. Colour and level only, nothing flashes. */
     var simOn=curTab==="sim",lvl=(simOn?SB.inp.level:PM.NORMAL.level)/100,pvNow=simOn?SB.st.pv:st.pv;
     if(tankLiq){tankLiq.scale.y=Math.max(0.02,lvl);tankLiq.position.y=0.1+TANK_H*Math.max(0.02,lvl)/2}
-    var sl=LIM.data&&LIM.data.tags.sealer_temperature,sh=sl?sl.high:HI_SEAL,shh=sl?sl.high_high:HI_SEAL+15;
+    var sl=LIM.data&&LIM.data.tags.sealer_temperature,sh=sl?sl.high:sealLimits("protected").high,shh=sl?sl.high_high:sealLimits("protected").high_high;
     sealMat.emissive.setHex(pvNow>=shh?0xe02010:(pvNow>=sh?0xd06a00:0x000000));
     if(!reduce){
       motor.hub.rotation.z-=dt*((simOn?SB.inp.rpm:st.rpm)/1200)*9;
@@ -2697,6 +2877,8 @@ window.__sentinelot={
     blocked:segEvent?{fw:segEvent.fw,rule:segEvent.rule,kind:segEvent.kind,reached:segEvent.reached}:null}))},
   rules:function(){return JSON.parse(JSON.stringify(SEG))},
   setRule:function(fw,v){SEG[fw]=v;refresh()},
+  /* test-only, for the Quiet attack's 260 case: the sealer takes about half a minute to get there on its own */
+  forceSetpoint:function(sp,pv){st.sp=sp;if(pv!=null)st.pv=pv;paint();paintQuietLive();procAlarms()},
   segv:function(){
     var f=segReach("flat"),a=segReach("found"),d=segReach("deny"),n=segReach("now");
     return {mode:SEGV.mode,zones:SEGV.zones,port:SEGV.mxPort,
@@ -2721,7 +2903,7 @@ window.__sentinelot={
 buildRules();buildSeg();paintSeg();buildWindows();buildEq();
 /* on a phone the firewall switches start folded, so the attack buttons and the annunciator
    stay within one screen of each other. On a wider screen they are open. */
-if(window.matchMedia&&window.matchMedia("(max-width:767px)").matches){$("#segbox").open=false;$("#segbox2").open=false}
+if(window.matchMedia&&window.matchMedia("(max-width:767px)").matches){$("#segbox").open=false;$("#segbox2").open=false;$("#quietbox").open=false}
 $("#an-ack").addEventListener("click",ackAll);$("#an-reset").addEventListener("click",resetAlarms);
 $("#showtrace").addEventListener("click",showTrace);
 /* the button follows the plant in and out of view. No scroll handler, no sticky plant, nothing
@@ -2734,7 +2916,7 @@ if(window.IntersectionObserver){
 if(window.matchMedia)window.matchMedia("(max-width:1000px)").addEventListener("change",paintTraceBtn);
 for(var i=0;i<40;i++)simulate();
 for(var j=0;j<8;j++)emit(nextPoll());
-paint();paintRecs();paintRules();paintAlarm();paintWindows();setButtons();paintEq();paintTraceBtn();
+paint();paintRecs();paintRules();paintAlarm();paintWindows();paintQuiet();setButtons();paintEq();paintTraceBtn();
 try{
   if(!window.THREE)throw new Error("no three");
   scene3d=build();
