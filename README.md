@@ -74,7 +74,7 @@ Each firewall has one switch on the **Live** tab, and each switch controls one r
 | FW-301 | SEG-301 | Non-approved remote hosts into the plant, any port | Anything arriving from the internet or the VPN pool may reach the plant networks (L5 &rarr; L4, any port) |
 | FW-302 | SEG-302 | Non-approved office hosts past the DMZ, any port | Any office workstation may carry on past the DMZ servers it is meant to stop at (L4 &rarr; L3.5, any port) |
 | FW-303 | SEG-303 | Non-approved DMZ hosts into operations, any port | Anything that reached the DMZ may carry on down into operations (L3.5 &rarr; L3, any port) |
-| FW-304 | SEG-304 | Non-approved hosts across the line 1 cell boundary, Modbus 502 and DNP3 20000 | Any host at all may speak Modbus 502 or DNP3 20000 across the line 1 cell boundary, in either direction (L2 &harr; L1) |
+| FW-304 | SEG-304 | Non-approved hosts across the level 2 to level 1 cell boundary, Modbus 502 and DNP3 20000 | Any host at all may speak Modbus 502 or DNP3 20000 across the level 2 to level 1 cell boundary, in either direction (L2 &harr; L1) |
 
 Each row on the page carries the rule's label and, under it, the zones, protocol and ports it covers. The longer sentence in the last column is here rather than on the page, so every switch row is one fixed height and the panel's scroll can never cut one in half.
 
@@ -97,6 +97,19 @@ Alerts 2, 3 and 8 are the interesting ones. A program download outside the chang
 When a rule stops an attack, nothing happens in the plant, so the page raises no alarm. It shows an informational window instead, and says in as many words that SentinelOT did not see the attempt: the passive sensor sits between the masters and the controller, and frames stopped further up never reach it. The entry comes from a simulated firewall log.
 
 The model behind all of this is zones, conduits and flows, in `window.NetworkModel` on the page, with `canPass(path, rules)` as a pure function. The two conduits that have **no** firewall, level 2 to level 3 and level 0 to level 1, are in the model rather than left out: an unfiltered boundary is a fact about the plant. `tests/test_segmentation.py` checks every path against every combination of the four switches, against a second implementation of the table written independently in Python.
+
+### The Segmentation tab
+
+A fifth tab, **05 Segmentation**, reads the same model and adds reachability on top of it, through two more pure functions: `reachableFrom(asset, rules, mode, port)` and `hops(from, to, port, approved, rules)`. Each level is a zone with one demo subnet and one demo VLAN, derived from the third octet of the demo addresses (level 1 is 10.10.20.0/24, VLAN 20, and so on). All of it is labelled simulated on the page: demo numbering, not a recommendation for a real plant.
+
+The tab shows four things, and the four firewall switches drive them all together, in both their copies (the Live tab's and this one's, one shared state, no duplicated element ids):
+
+- **A reach counter** for a compromised OFFICE-PC-14, with three measured states: one flat network (21 of the other 21 addressed hosts), segmented as found with all four switches on ALLOW (still 21 of 21, which is the point of the demo), and all four on DENY (1 of 21: only ERP-SRV-01 in its own zone). A fourth row follows the switches as they stand. Every figure is computed from the model at paint time, and a fold lists exactly which hosts are counted, which addresses are demo-only, and which items are left out because they have no address. Counted on Modbus/TCP 502, the live attacks' protocol.
+- **A zone-to-zone flow matrix**, source rows by destination columns, under a protocol picker (Modbus/TCP 502, DNP3 20000, OPC UA 4840, RDP 3389). Diagonal cells say "same zone, no conduit"; the two unfiltered boundaries show as "no firewall". Picking a cell lights that path in the 3D view, with a visible break where a conduit has no firewall and a stop at the first DENY. On a phone the matrix scrolls sideways inside its own labelled, keyboard-reachable region.
+- **A path test**: pick a source host, a target host and a protocol, and read the hop-by-hop story: each conduit in order, the firewall that allows or denies, the unfiltered gaps, and approved flows called out as fixed rules no switch touches.
+- **A zones toggle** that outlines each level in 3D with a plate carrying its subnet and VLAN; in flat mode one outline wraps the whole plant, labelled as one flat network. The zone plates obey the same collision rules as every other plate, and the angle-sweep test covers them.
+
+One naming honesty note, on the page itself: FW-304 (FW-Cell-1) is the cell firewall on the level 2 to level 1 boundary, and this model has a single conduit between those levels, so it stands in front of every level 1 controller, PLC-Line2 and the DCS controller included. It was named the line 1 cell firewall as found. A real plant would give each line its own cell firewall; the page shows the model it has rather than inventing a second one. `tests/test_reach.py` checks `reachableFrom` and `hops` for every host and every switch combination against a second implementation written independently in Python from the proposal's tables, and `tests/test_page_segmentation.py` drives the tab itself in a browser.
 
 ### Tags
 
@@ -227,7 +240,7 @@ The shared plant dataset, 5 tags and 35 labelled faults:
 
 The two tables disagree on percentages because they count the same missed faults out of different totals. **The 14 extra faults were generated for this demo by the same seeded generator. They are not independent evidence of anything.** They exist so the sealer and the conveyor have something to be measured against.
 
-Test suites, run now: 379 tests for the platform, 86 for the AlarmOps copy. The platform's 379 are 47 for the server and the data, 60 that drive the plant page in a browser, 49 that check the page's colours, and 223 that check the firewall rules.
+Test suites, run now: 438 tests for the platform, 86 for the AlarmOps copy. The platform's 438 are 47 for the server and the data, 76 that drive the plant page in a browser, 49 that check the page's colours, and 266 that check the firewall rules and the reachability model.
 
 ## Running it yourself
 
@@ -320,7 +333,7 @@ python -m pytest
 python -m pytest alarmops
 ```
 
-The platform suite covers the API and its rate limits, the code checks, the orchestrator with the models stubbed out, the scenario labels, the lab feeds, the alarm-limit routes and every figure in the results tables, that the shared plant leaves the original dataset untouched, that the saved answers in the page still match the routes, that every colour pair on the plant page keeps a readable contrast in light and dark (`python tests/test_palette_contrast.py` prints the table), and that the firewall rules answer correctly for every path against every combination of the four switches. Sixty of those tests drive the page itself in a browser, and 223 more drive the segmentation model in one. All of them need Playwright and an installed Microsoft Edge (or Chrome), which they launch directly, so no browser download is needed. Playwright is in `requirements-dev.txt` and deliberately not in `requirements.txt`. Without them they are skipped, and `pytest.ini` turns on the summary that lists every skip with its reason, so a skipped test is never mistaken for a passing one. No test calls a model or reaches the network.
+The platform suite covers the API and its rate limits, the code checks, the orchestrator with the models stubbed out, the scenario labels, the lab feeds, the alarm-limit routes and every figure in the results tables, that the shared plant leaves the original dataset untouched, that the saved answers in the page still match the routes, that every colour pair on the plant page keeps a readable contrast in light and dark (`python tests/test_palette_contrast.py` prints the table), and that the firewall rules and the reachability model answer correctly for every path, every host and every combination of the four switches. Seventy-six of those tests drive the page itself in a browser, and 266 more drive the segmentation and reachability model in one. All of them need Playwright and an installed Microsoft Edge (or Chrome), which they launch directly, so no browser download is needed. Playwright is in `requirements-dev.txt` and deliberately not in `requirements.txt`. Without them they are skipped, and `pytest.ini` turns on the summary that lists every skip with its reason, so a skipped test is never mistaken for a passing one. No test calls a model or reaches the network.
 
 ## Repository map
 

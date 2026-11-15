@@ -484,8 +484,8 @@ def test_tag_plates_stay_on_their_equipment_in_the_orthographic_view(browser):
     page.close()
 
 
-def test_phone_width_shows_all_four_tabs_and_the_short_labels(browser):
-    for width, first in ((390, "live"), (768, "live attack")):
+def test_phone_width_shows_all_five_tabs_and_the_short_labels(browser):
+    for width, first, seg in ((390, "live", "seg"), (768, "live attack", "segmentation")):
         page = browser.new_page(viewport={"width": width, "height": 844})
         page.goto(PAGE, wait_until="domcontentloaded")
         page.wait_for_function("() => window.ProcessModel && window.__sentinelot")
@@ -498,7 +498,7 @@ def test_phone_width_shows_all_four_tabs_and_the_short_labels(browser):
         assert t["fits"] and t["page"]
         assert all(0 <= b["left"] and b["right"] <= width and b["w"] > 40 for b in t["tabs"])
         words = [b["text"].lstrip("0123456789 ") for b in t["tabs"]]
-        assert words == [first, "recorded", "limits", "what-if"]
+        assert words == [first, "recorded", "limits", "what-if", seg]
         page.close()
 
 
@@ -524,7 +524,7 @@ def test_the_four_switches_start_as_found_and_are_labelled_by_their_rule(page):
     assert [r["fw"] for r in rows] == ["FW-301", "FW-302", "FW-303", "FW-304"]
     assert all(r["state"] == "ALLOW" and r["pressed"] == "true" for r in rows)
     assert rows[3]["label"].endswith(
-        "Non-approved hosts across the line 1 cell boundary, Modbus 502 and DNP3 20000")
+        "Non-approved hosts across the level 2 to level 1 cell boundary, Modbus 502 and DNP3 20000")
     for r in rows[:3]:                                   # each names its own rule, not the same one
         assert "Non-approved" in r["label"] and "any port" in r["label"]
     assert len({r["label"] for r in rows}) == 4
@@ -1197,7 +1197,7 @@ def test_the_tablet_layout_at_820px(browser):
                     .filter(e => !e.classList.contains('level') && e.style.display !== 'none').length} }""")
     assert m["stage"] < m["tabs"] < m["attacks"] < m["anun"]      # one column, plant first
     assert m["noSideScroll"] and m["tabsFit"]
-    assert [l.lstrip("0123456789 ") for l in m["labels"]] == ["live attack", "recorded", "limits", "what-if"]
+    assert [l.lstrip("0123456789 ") for l in m["labels"]] == ["live attack", "recorded", "limits", "what-if", "segmentation"]
     assert m["seg"] is True                                       # folded only on a phone
     assert m["panelScrolls"] == "visible"                         # no nested scroll area here
     assert m["plates"] >= 24                                      # all plates, not the phone set
@@ -1323,7 +1323,9 @@ def test_every_plate_can_be_brought_back_at_any_angle(browser):
     """Collision handling does hide plates at some camera angles. This walks the plant round in
     eight steps of 45 degrees, in both cameras, and at every angle jumps to each level in turn:
     every tagged plate on that level must show, after a zoom at most. A firewall belongs to both
-    levels it joins. Reduced motion, so the level jump is immediate rather than a glide."""
+    levels it joins. The Segmentation tab's zone plates are turned on first, so they join the
+    collision rules and must be recoverable like any other plate. Reduced motion, so the level
+    jump is immediate rather than a glide."""
     page = browser.new_page(viewport={"width": 1280, "height": 900}, reduced_motion="reduce")
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
@@ -1331,6 +1333,14 @@ def test_every_plate_can_be_brought_back_at_any_angle(browser):
     page.wait_for_function("() => window.ProcessModel && window.__sentinelot")
     by_level = page.evaluate(ANGLE_SWEEP)
     assert sum(len(v) for v in by_level.values()) == 31 + 4      # firewalls counted twice
+    page.click("#tab-seg")                                       # zone plates join the sweep
+    page.click("#zones-btn")
+    page.wait_for_timeout(250)
+    for lvl, prefix in {"0": "L0 ·", "1": "L1 ·", "2": "L2 ·",
+                        "3": "L3 ·", "3.5": "L3.5 ·", "4": "L4 ·",
+                        "5": "L5 ·"}.items():
+        by_level.setdefault(lvl, []).append(prefix)
+    assert sum(len(v) for v in by_level.values()) == 31 + 4 + 7  # plus one zone plate per level
     hidden_somewhere, stuck = set(), []
     for camera in ("#persp", "#isob"):
         page.click(camera)

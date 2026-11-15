@@ -381,6 +381,41 @@ button,input,select{font-family:inherit}
 footer{margin:0 4px;border-top:1px solid var(--rule);padding:12px 14px 16px;font-size:13px;color:var(--mute)}
 footer p{margin:0;max-width:110ch}
 
+/* ---- 05 Segmentation: mode, reach counter, flow matrix, path test. Existing tokens only. ---- */
+.lab.zone{border-style:dashed;font-size:10.5px}
+.segmode{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
+.segmode button{font-family:var(--head);font-weight:800;letter-spacing:.06em;font-size:14px;min-height:40px;padding:6px 11px;border:1px solid var(--rule);background:var(--panel);color:var(--ink);cursor:pointer}
+.segmode button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.reach{border:1px solid var(--rule);padding:9px 11px;margin-bottom:10px;font-size:13.5px}
+.reach table{border-collapse:collapse;margin:6px 0 4px;width:100%}
+.reach th{text-align:left;font-weight:400;padding:2px 10px 2px 0;font-size:13.5px}
+.reach td{font-family:var(--mono);font-size:13px;white-space:nowrap;padding:2px 0;vertical-align:top}
+.reach .foot{color:var(--mute);margin:4px 0 0;font-size:12.5px}
+.seglists{font-size:13px;margin:6px 0 2px}
+.seglists p{margin:0 0 6px;color:var(--mute)}
+.seglists ul{margin:0 0 8px;padding-left:18px}
+.seglists li{margin:1px 0}
+.seglists .dm{font-family:var(--mono);font-size:11px;color:var(--mute);border:1px solid var(--rule);padding:0 4px;margin-left:5px;white-space:nowrap}
+.segsel{min-height:40px;border:1px solid var(--rule);background:var(--panel);color:var(--ink);font-size:13.5px;font-family:inherit;max-width:100%}
+.mxbar{display:flex;gap:8px;align-items:center;margin:0 0 8px;font-size:13px;color:var(--mute)}
+.mxwrap{overflow-x:auto;border:1px solid var(--rule);margin:0 0 8px;-webkit-overflow-scrolling:touch}
+.mxwrap:focus-visible{outline:2px solid var(--live);outline-offset:-2px}
+.mx{border-collapse:separate;border-spacing:0}
+.mx th,.mx td{border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:0}
+.mx thead th,.mx tbody th{font-family:var(--mono);font-weight:500;font-size:11.5px;padding:6px 7px;background:var(--well);text-align:left;white-space:nowrap}
+.mx tbody th{position:sticky;left:0;z-index:1}
+.mx td button{display:block;width:100%;min-width:64px;min-height:40px;border:0;background:transparent;color:var(--ink);cursor:pointer;padding:4px 6px;text-align:center}
+.mx td.no button{background:var(--well)}
+.mx td button b{display:block;font-family:var(--head);font-weight:800;letter-spacing:.04em;font-size:12px}
+.mx td button .fw{display:block;font-family:var(--mono);font-size:10.5px;color:var(--mute)}
+.mx td button[aria-pressed="true"]{outline:2px solid var(--live);outline-offset:-3px}
+.ptest{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 8px}
+.ptest label{display:flex;flex-direction:column;gap:3px;font-size:12.5px;color:var(--mute);min-width:0;flex:1 1 130px}
+.ptout{border:1px solid var(--rule);padding:9px 11px;font-size:13.5px;margin-bottom:12px}
+.ptout .vd{font-family:var(--head);font-weight:800;letter-spacing:.05em;margin:0 0 4px}
+.ptout ol{margin:4px 0 0;padding-left:20px}
+.ptout li{margin:2px 0;font-size:13px}
+
 @media (max-width:1180px){
   .st-meta{grid-template-columns:repeat(3,auto)}
   .st-meta .x2{display:none}
@@ -443,6 +478,8 @@ footer p{margin:0;max-width:110ch}
   .lab{font-size:11px;padding:0 3px}
   .rules .dt{font-size:11px}
   .levels button{min-width:42px;height:42px;font-size:13px;padding:0 4px}
+  .mx td button{min-width:52px;min-height:44px}
+  .segmode button,.segsel{min-height:44px}
   .card{left:56px;max-width:calc(100% - 66px)}
   .sheet{margin:6px}
   .lims{grid-template-columns:1fr 1fr}
@@ -484,6 +521,7 @@ footer p{margin:0;max-width:110ch}
         <button type="button" id="tab-rec" aria-pressed="false" aria-label="Recorded alerts"><span class="n">02</span>Recorded</button>
         <button type="button" id="tab-lim" aria-pressed="false" aria-label="Alarm limits"><span class="n">03</span>Limits</button>
         <button type="button" id="tab-sim" aria-pressed="false" aria-label="What-if process sandbox"><span class="n">04</span>What-if</button>
+        <button type="button" id="tab-seg" aria-pressed="false" aria-label="Network segmentation"><span class="n">05</span><span class="lg">Segmentation</span><span class="sm">Seg</span></button>
       </div>
       <p class="railnote">Tag plates are ISA-style on the plant; names show when you select equipment. Simulated.</p>
     </nav>
@@ -578,6 +616,40 @@ footer p{margin:0;max-width:110ch}
           <button type="button" class="btn ghost" id="sim-preset">Propose sealer high 250 °C</button>
         </div>
       </div>
+
+      <div class="pane" id="pane-seg" hidden>
+        <p class="note"><b>SIMULATED.</b> Demo rules, demo subnets and demo VLAN numbers, not a recommendation for a real plant. One /24 subnet and one VLAN per level, read from the demo addresses. Nothing is sent to a network.</p>
+        <div class="segmode" role="group" aria-label="Network mode and zone display">
+          <button type="button" id="mode-seg" aria-pressed="true">Segmented</button>
+          <button type="button" id="mode-flat" aria-pressed="false">Flat network</button>
+          <button type="button" id="zones-btn" aria-pressed="false">Show zones in 3D</button>
+        </div>
+        <div class="reach" id="reach" role="status"></div>
+        <details class="fold">
+          <summary class="foldhd">Who the counter counts</summary>
+          <div class="seglists" id="reach-list"></div>
+        </details>
+        <h3 class="sub">Zone-to-zone flows</h3>
+        <p class="note">Source zone by row, destination zone by column, under the switches below. A diagonal cell is traffic inside one zone: it crosses no conduit, so no firewall ever sees it. Pick a cell to light that path in the 3D view.</p>
+        <div class="mxbar"><label for="mx-proto">Protocol</label><select id="mx-proto" class="segsel"></select></div>
+        <div class="mxwrap" id="mxwrap" role="region" tabindex="0" aria-label="Zone-to-zone flow matrix. On a narrow screen this table scrolls sideways.">
+          <table class="mx" id="mx"></table>
+        </div>
+        <p class="note mxsel" id="mx-sel" role="status">No cell picked yet.</p>
+        <h3 class="sub">Test a path</h3>
+        <div class="ptest">
+          <label>From<select id="pt-src" class="segsel"></select></label>
+          <label>To<select id="pt-dst" class="segsel"></select></label>
+          <label>Protocol<select id="pt-proto" class="segsel"></select></label>
+        </div>
+        <div class="ptout" id="pt-out" role="status"></div>
+        <details class="seg" id="segbox2" open>
+          <summary class="hd"><span class="sgh">Firewall rules</span><span class="simtag">SIMULATED</span></summary>
+          <p class="note">The same four switches as the Live attack tab: one state, two places. Set them here or there and the matrix, the path test and the reach counter follow together.</p>
+          <ul class="rules" id="rules-seg"></ul>
+        </details>
+        <p class="note model" id="fw304-note">FW-304 (FW-Cell-1) is the cell firewall on the level 2 to level 1 boundary. This model has a single conduit between those levels, so FW-304 stands in front of every level 1 controller: PLC-Line1, PLC-Line2, DCS-CTRL-01 and RTU-Outstation-3. As found it was named the line 1 cell firewall. A real plant would give each line its own cell firewall; this page shows the model it has.</p>
+      </div>
     </div>
 
     <section class="anun" aria-label="Annunciator">
@@ -647,7 +719,7 @@ footer p{margin:0;max-width:110ch}
 </section>
 
 <section class="sec" id="equipment">
-  <h2><span class="n">05</span>Equipment list</h2>
+  <h2><span class="n">06</span>Equipment list</h2>
   <div class="body">
     <p class="tagline">Tags are ISA-style. IT equipment uses plain asset-class prefixes. The first digit of a number is the area: 1 line 1, 2 line 2, 3 network security, 4 enterprise and DMZ, 5 utilities, 6 operations and supervisory servers and workstations.</p>
     <div class="eqwrap">
@@ -661,7 +733,7 @@ footer p{margin:0;max-width:110ch}
 </section>
 
 <section class="sec" id="method">
-  <h2><span class="n">06</span>How it works</h2>
+  <h2><span class="n">07</span>How it works</h2>
   <div class="body">
     <ol class="notes">
       <li><span class="n">N1</span><div><h3>Listen</h3><p>A sensor on a mirror port reads every frame between the masters and the PLC. It never writes to the control network.</p></div></li>
@@ -673,7 +745,7 @@ footer p{margin:0;max-width:110ch}
 </section>
 
 <section class="sec" id="about">
-  <h2><span class="n">07</span>Built by Anthony Afonughe</h2>
+  <h2><span class="n">08</span>Built by Anthony Afonughe</h2>
   <div class="body about">
 
     <div>
@@ -691,7 +763,7 @@ footer p{margin:0;max-width:110ch}
 </section>
 
 <section class="sec" id="contact">
-  <h2><span class="n">08</span>Contact</h2>
+  <h2><span class="n">09</span>Contact</h2>
   <div class="body">
     <p class="tagline">Hiring for OT security, or running a plant?</p>
     <div class="contact">
@@ -701,7 +773,7 @@ footer p{margin:0;max-width:110ch}
   </div>
 </section>
 
-<footer><p>The plant, hosts and traffic on this page are invented and simulated in your browser. No real control system is connected. The recorded verdicts are the ones SentinelOT returned in its evaluation run on 6 October 2026. Demo only, not in the project’s asset file: the internet and VPN-GW-01 (level 5), the four firewalls FW-Edge, FW-IT-DMZ, FW-DMZ-OT and FW-Cell-1, ERP-SRV-01, MES-SRV-01, AD-OT-01, DCS-OPS-01, DCS-SRV-01 and DCS-CTRL-01 (the DCS and its server and operator station), TANK-Utility-1, PUMP-Utility-1, FLOW-Meter-1, SEALER-Line1, ROBOT-Pick-1 and MOTOR-Conveyor-1. The signal tags TT-101, ST-101, LT-501, PT-501 and TIC-101 are drawn for the demo too. The other 14 assets come from the project’s asset file. The Alarm limits results come from replaying a generated dataset with labelled faults. They are not measurements from a plant. The What-if tab runs a simplified demo model in your browser, not plant physics: the tank fill, the pump and flow response, the sealer lag and the conveyor backlog are invented for the demo, and nothing is sent anywhere. Tags are ISA-style, assigned for this demo.</p></footer>
+<footer><p>The plant, hosts and traffic on this page are invented and simulated in your browser. No real control system is connected. The recorded verdicts are the ones SentinelOT returned in its evaluation run on 6 October 2026. Demo only, not in the project’s asset file: the internet and VPN-GW-01 (level 5), the four firewalls FW-Edge, FW-IT-DMZ, FW-DMZ-OT and FW-Cell-1, ERP-SRV-01, MES-SRV-01, AD-OT-01, DCS-OPS-01, DCS-SRV-01 and DCS-CTRL-01 (the DCS and its server and operator station), TANK-Utility-1, PUMP-Utility-1, FLOW-Meter-1, SEALER-Line1, ROBOT-Pick-1 and MOTOR-Conveyor-1. The signal tags TT-101, ST-101, LT-501, PT-501 and TIC-101 are drawn for the demo too. The other 14 assets come from the project’s asset file. The Alarm limits results come from replaying a generated dataset with labelled faults. They are not measurements from a plant. The What-if tab runs a simplified demo model in your browser, not plant physics: the tank fill, the pump and flow response, the sealer lag and the conveyor backlog are invented for the demo, and nothing is sent anywhere. Tags are ISA-style, assigned for this demo. The Segmentation tab's subnets and VLAN numbers are derived from the demo addresses, one per level, and are demo-only, as are its firewall rules, its flow matrix and its reach counter: none of it is a recommendation for a real plant.</p></footer>
 </div>
 
 <script id="process-model">
@@ -874,7 +946,7 @@ var FLOWS=[
    detail:"L3.5 → L3 · any protocol · any port"},
   {id:"SEG-304", kind:"conduit", conduit:"C-1-2", firewall:"FW-304", from:"L2", to:"L1",
    protocol:"Modbus/TCP, DNP3", port:[502,20000], approved:false,
-   label:"Non-approved hosts across the line 1 cell boundary, Modbus 502 and DNP3 20000",
+   label:"Non-approved hosts across the level 2 to level 1 cell boundary, Modbus 502 and DNP3 20000",
    detail:"L2 ⇄ L1 · Modbus/TCP, DNP3 · ports 502, 20000"}
 ];
 
@@ -928,9 +1000,72 @@ function canPass(path,rules){
   return {passed:true,stoppedAt:null,stoppedBy:null,conduit:null,
           crossed:crossed,unfiltered:unfiltered,reached:path.to};
 }
+/* ---- the segmentation view's additions: subnets, demo VLANs and reachability ---- */
+/* One subnet and one demo VLAN per zone, derived from the addresses of the hosts standing in
+   it: the third octet of 10.10.x.y. SIMULATED: demo numbering for the segmentation view, not
+   a recommendation for a real plant. Pure: a fresh object from the given host list. */
+function zoneNets(hosts){
+  var nets={};
+  hosts.forEach(function(h){
+    if(!h.ip)return;
+    var zid=zoneOf(h.level),m=h.ip.split(".");
+    if(!zid||m.length!==4)return;
+    if(!nets[zid])nets[zid]={subnet:m[0]+"."+m[1]+"."+m[2]+".0/24",vlan:Number(m[2]),hosts:[]};
+    nets[zid].hosts.push(h.name);
+  });
+  return nets;
+}
+/* The addressed hosts the reachability questions are asked about, registered once by the page.
+   The functions below only read it; an item with no address is not on the network and is left
+   out, which the Segmentation pane says in words. */
+var HOSTS=[];
+function register(assets){HOSTS=assets.filter(function(a){return !!a.ip});return zoneNets(HOSTS)}
+function hosts(){return HOSTS.slice()}
+function hostByName(name){for(var i=0;i<HOSTS.length;i++)if(HOSTS[i].name===name)return HOSTS[i];return null}
+/* Which addressed hosts can this one reach? Pure: the answer follows from the registered host
+   list, the switch settings, the mode and the port, and none of them is changed.
+     mode "segmented"  every path runs through canPass under these rules
+     mode "flat"       one flat network: no zones, no VLANs, no firewalls, so every other
+                       addressed host is reached
+   port defaults to 502, the live attacks' protocol. An approved flow has its own fixed rule,
+   exactly as in canPass, so it is reached whatever the switches say. */
+function reachableFrom(name,rules,mode,port){
+  var me=hostByName(name);if(!me)return null;
+  if(port==null)port=502;
+  var from=zoneOf(me.level),reached=[],blocked=[];
+  HOSTS.forEach(function(h){
+    if(h.name===name)return;
+    if(mode==="flat"){reached.push(h.name);return}
+    var r=canPass({from:from,to:zoneOf(h.level),port:port,
+                   approved:!!approvedFlow(name,h.name,port)},rules);
+    if(r.passed)reached.push(h.name);else blocked.push({name:h.name,stoppedAt:r.stoppedAt});
+  });
+  return {from:name,mode:mode,port:port,total:HOSTS.length-1,count:reached.length,
+          reached:reached,blocked:blocked};
+}
+/* The hop-by-hop story of one path between two zones: every conduit in the order traffic meets
+   it, with its firewall or its gap and what happens there. Pure, and it agrees with canPass:
+   the first DENY wins and nothing past it is reached. */
+function hops(fromZone,toZone,port,approved,rules){
+  rules=rules||{};
+  var cs=route(fromZone,toZone),out=[],stoppedAt=null;
+  var i=zoneIndex(fromZone),step=zoneIndex(toZone)>i?1:-1,at=fromZone;
+  for(var n=0;n<cs.length;n++){
+    var c=cs[n],next=ZONES[zoneIndex(at)+step].id,
+        h={conduit:c.id,from:at,to:next,firewall:c.firewall,gap:!c.firewall};
+    if(stoppedAt)h.verdict="unreached";
+    else if(!c.firewall)h.verdict="gap";
+    else if(approved)h.verdict="approved";
+    else if(rules[c.firewall]==="deny"&&portMatches(flow(c.rule),port)){h.verdict="deny";stoppedAt=c.firewall}
+    else h.verdict="pass";
+    out.push(h);at=next;
+  }
+  return {hops:out,passed:!stoppedAt,stoppedAt:stoppedAt};
+}
 root.NetworkModel={ZONES:ZONES,CONDUITS:CONDUITS,FLOWS:FLOWS,
   zoneIndex:zoneIndex,zoneOf:zoneOf,flow:flow,switches:switches,
-  portMatches:portMatches,approvedFlow:approvedFlow,route:route,canPass:canPass};
+  portMatches:portMatches,approvedFlow:approvedFlow,route:route,canPass:canPass,
+  zoneNets:zoneNets,register:register,hosts:hosts,reachableFrom:reachableFrom,hops:hops};
 })(window);
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -982,7 +1117,7 @@ var FWS=[
  ["FW-Edge","5","4","Internet edge firewall. Only the VPN gateway and outbound web traffic may pass"],
  ["FW-IT-DMZ","4","3.5","Separates the office network from the OT DMZ. Office hosts may reach the DMZ servers only"],
  ["FW-DMZ-OT","3.5","3","Separates the DMZ from operations. No direct path from the office network to the plant floor"],
- ["FW-Cell-1","2","1","Line 1 cell firewall. Only HMI-Line1, the historian and the engineering workstation may reach PLC-Line1"]
+ ["FW-Cell-1","2","1","Cell firewall on the level 2 to level 1 boundary: this model has one conduit between those levels, so every level 1 controller sits behind it. Only HMI-Line1, the historian and the engineering workstation may reach PLC-Line1. As found it was named the line 1 cell firewall"]
 ].map(function(f){return {ip:"",name:f[0],type:"Firewall",level:f[1],crit:"high",fn:f[3],kind:"fw",
   zone:"Between level "+f[1]+" and level "+f[2],lo:f[2],fy:(levelY[f[1]]+levelY[f[2]])/2,ya:levelY[f[1]],yb:levelY[f[2]]}});
 /* a trace names its ends by address (src, dst) or, for items with no address, by asset (srcA, dstA) */
@@ -1082,9 +1217,15 @@ var HI_SEAL=190,SP_NORMAL=160;
 var st={sp:SP_NORMAL,pv:159.7,rpm:1200,ppm:42,heater:1,conv:1,robot:1};
 var hist=[],queue=[],rows=[],tid=0x1A00,lastTid=0,step=0,ticks=0;
 var NM=window.NetworkModel;
+/* the segmentation view asks its reachability questions about the addressed assets; NETS holds
+   the demo subnet and VLAN per zone, derived from those addresses */
+var NETS=NM.register(ASSETS);
 /* The four switches, as found: every one ALLOW, which is the state these paths were actually in,
    so a first-time visitor still sees an alarm. SIMULATED; demo rules, not advice for a real plant. */
 var SEG={};NM.switches().forEach(function(r){SEG[r.firewall]="allow"});
+/* the Segmentation tab's own state: mode, zone display, matrix protocol and picked cell */
+/* touched: the 3D highlight appears once the reader picks a path or a cell, not before */
+var SEGV={mode:"segmented",zones:false,mxPort:502,sel:null,cellPath:false,hostTrace:null,touched:false};
 var segEvent=null;
 var alarms=[],alarmSeq=0,firstOut=null,active=null,selRec=null,scan={addrs:[],frames:[]},scene3d=null,curTab="live";
 
@@ -1413,25 +1554,31 @@ function recPath(a){
 }
 function segOf(path){return NM.canPass(path,SEG)}
 function buildRules(){
-  var ul=$("#rules");ul.textContent="";
-  NM.switches().forEach(function(r){
-    var li=el("li"),lb=el("div","lb");
-    lb.appendChild(el("b",null,r.firewall+" · rule "+r.id));
-    lb.appendChild(el("span","tx",r.label));
+  /* the same four switches twice: once on the Live attack tab, once on the Segmentation tab.
+     One SEG state behind both; the buttons carry data-fw, never a duplicate id. */
+  ["#rules","#rules-seg"].forEach(function(sel){
+    var ul=$(sel);if(!ul)return;ul.textContent="";
+    NM.switches().forEach(function(r){
+      var li=el("li"),lb=el("div","lb");
+      lb.appendChild(el("b",null,r.firewall+" · rule "+r.id));
+      lb.appendChild(el("span","tx",r.label));
 
-    var b=el("button","swt");b.type="button";b.setAttribute("data-fw",r.firewall);
-    b.addEventListener("click",function(){
-      SEG[r.firewall]=SEG[r.firewall]==="deny"?"allow":"deny";refresh();
+      var b=el("button","swt");b.type="button";b.setAttribute("data-fw",r.firewall);
+      b.addEventListener("click",function(){
+        SEG[r.firewall]=SEG[r.firewall]==="deny"?"allow":"deny";refresh();
+      });
+      li.appendChild(lb);li.appendChild(b);li.appendChild(el("p","dt",r.detail));
+      ul.appendChild(li);
     });
-    li.appendChild(lb);li.appendChild(b);li.appendChild(el("p","dt",r.detail));
-    ul.appendChild(li);
   });
 }
 function paintRules(){
   NM.switches().forEach(function(r){
-    var b=$('.swt[data-fw="'+r.firewall+'"]'),on=SEG[r.firewall]!=="deny";
-    b.textContent=on?"ALLOW":"DENY";b.setAttribute("aria-pressed",on?"true":"false");
-    b.setAttribute("aria-label",r.label+": "+(on?"allow":"deny"));
+    var on=SEG[r.firewall]!=="deny";
+    document.querySelectorAll('.swt[data-fw="'+r.firewall+'"]').forEach(function(b){
+      b.textContent=on?"ALLOW":"DENY";b.setAttribute("aria-pressed",on?"true":"false");
+      b.setAttribute("aria-label",r.label+": "+(on?"allow":"deny"));
+    });
   });
   var stop=0;
   ["setpoint","robot","scan"].forEach(function(k){if(!segOf(attackPath(k)).passed)stop++});
@@ -1439,6 +1586,163 @@ function paintRules(){
   var sum=$("#seg-sum");sum.textContent="";
   sum.appendChild(el("b",null,stop+" of 3 live attacks stop"));
   sum.appendChild(document.createTextNode(" \u00b7 "+recStop+" of 8 recorded alerts would stop \u00b7 simulated"));
+}
+
+/* ================= 05 Segmentation ================= */
+/* SIMULATED. Demo subnets, demo VLANs and demo rules, not a recommendation for a real plant. */
+var PROTOS=[["Modbus/TCP",502],["DNP3",20000],["OPC UA",4840],["RDP",3389]];
+function protoName(port){for(var i=0;i<PROTOS.length;i++)if(PROTOS[i][1]===port)return PROTOS[i][0];return "port "+port}
+function zoneTitle(zid){return zid+" "+NM.ZONES[NM.zoneIndex(zid)].name}
+function zoneNetText(zid){var n=NETS[zid];return n?n.subnet+" \u00b7 VLAN "+n.vlan:"no addressed hosts"}
+var MXZONES=NM.ZONES.slice().reverse();   /* L5 first, like the drawing */
+/* the reach counter's figures, measured from the model every paint, never typed in */
+function segReach(which){
+  if(which==="flat")return NM.reachableFrom("OFFICE-PC-14",{},"flat",502);
+  var rules={};
+  NM.switches().forEach(function(r){rules[r.firewall]=which==="deny"?"deny":(which==="found"?"allow":SEG[r.firewall])});
+  return NM.reachableFrom("OFFICE-PC-14",rules,"segmented",502);
+}
+function fillProto(sel){PROTOS.forEach(function(p){var o=el("option",null,p[0]+" \u00b7 port "+p[1]);o.value=p[1];sel.appendChild(o)})}
+function buildSeg(){
+  if(!$("#pane-seg"))return;
+  fillProto($("#mx-proto"));fillProto($("#pt-proto"));
+  [["#pt-src","OFFICE-PC-14"],["#pt-dst","PLC-Line2"]].forEach(function(cfg){
+    var sel=$(cfg[0]);
+    NM.hosts().forEach(function(h){var o=el("option",null,h.name+" \u00b7 "+zoneTitle(NM.zoneOf(h.level)));o.value=h.name;sel.appendChild(o)});
+    sel.value=cfg[1];
+  });
+  /* who the counter counts, and who it leaves out */
+  var box=$("#reach-list"),inc=el("ul"),exc=el("ul");
+  box.appendChild(el("p",null,"Counted: every item with a network address, "+NM.hosts().length+" hosts. OFFICE-PC-14 is the source, so the counter asks about the other "
+    +(NM.hosts().length-1)+". An address marked demo-only belongs to an asset invented for this demo, not to the project's asset file."));
+  NM.hosts().forEach(function(h){
+    var a=byName[h.name],li=el("li",null,h.name+" \u00b7 "+h.ip+" \u00b7 "+zoneTitle(NM.zoneOf(h.level)));
+    if(a&&a.demo)li.appendChild(el("span","dm","demo-only address"));
+    inc.appendChild(li);
+  });
+  box.appendChild(inc);
+  box.appendChild(el("p",null,"Left out, because they have no network address: the drawn internet cloud, the field devices wired straight to a controller or gateway, and the four firewalls, which are the boundaries the paths cross, not targets."));
+  ASSETS.concat(FWS).filter(function(a){return !a.ip}).forEach(function(a){
+    exc.appendChild(el("li",null,a.name+" \u00b7 "+(a.kind==="fw"?"firewall, demo only":(WIRED[a.name]?"wired to "+WIRED[a.name]:"drawn for the demo"))));
+  });
+  box.appendChild(exc);
+  /* the matrix skeleton: one header row, then one row per source zone */
+  var mx=$("#mx"),thead=el("thead"),hr=el("tr"),c0=el("th",null,"from \\ to");
+  c0.setAttribute("scope","col");hr.appendChild(c0);
+  MXZONES.forEach(function(z){var th=el("th",null,z.id);th.setAttribute("scope","col");th.title=z.name;hr.appendChild(th)});
+  thead.appendChild(hr);mx.appendChild(thead);
+  var tb=el("tbody");
+  MXZONES.forEach(function(zs){
+    var tr=el("tr"),th=el("th",null,zs.id+" "+zs.name);th.setAttribute("scope","row");tr.appendChild(th);
+    MXZONES.forEach(function(zd){
+      var td=el("td"),b=el("button");b.type="button";
+      b.setAttribute("data-from",zs.id);b.setAttribute("data-to",zd.id);
+      b.addEventListener("click",function(){
+        SEGV.sel={from:zs.id,to:zd.id};SEGV.cellPath=true;
+        paintSeg();if(scene3d)scene3d.update();
+      });
+      td.appendChild(b);tr.appendChild(td);
+    });
+    tb.appendChild(tr);
+  });
+  mx.appendChild(tb);
+  $("#mode-seg").addEventListener("click",function(){SEGV.mode="segmented";paintSeg();if(scene3d)scene3d.update()});
+  $("#mode-flat").addEventListener("click",function(){SEGV.mode="flat";paintSeg();if(scene3d)scene3d.update()});
+  $("#zones-btn").addEventListener("click",function(){SEGV.zones=!SEGV.zones;paintSeg();if(scene3d)scene3d.update()});
+  $("#mx-proto").addEventListener("change",function(){SEGV.mxPort=Number(this.value);paintSeg();if(scene3d)scene3d.update()});
+  ["#pt-src","#pt-dst","#pt-proto"].forEach(function(s){
+    $(s).addEventListener("change",function(){SEGV.cellPath=false;SEGV.touched=true;paintSeg();if(scene3d)scene3d.update()});
+  });
+}
+function paintSeg(){
+  if(!$("#reach"))return;
+  var flat=SEGV.mode==="flat";
+  $("#mode-seg").setAttribute("aria-pressed",flat?"false":"true");
+  $("#mode-flat").setAttribute("aria-pressed",flat?"true":"false");
+  var zb=$("#zones-btn");zb.setAttribute("aria-pressed",SEGV.zones?"true":"false");
+  zb.textContent=SEGV.zones?"Hide zones in 3D":"Show zones in 3D";
+  /* the reach counter: three fixed, measured states, plus the switches as they stand now */
+  var rf=segReach("flat"),ra=segReach("found"),rd=segReach("deny"),rn=segReach("now");
+  var r=$("#reach");r.textContent="";
+  r.appendChild(el("b",null,"If OFFICE-PC-14 is compromised, how many of the other "+rf.total+" addressed hosts can it reach?"));
+  var t=el("table");
+  [["One flat network, no segmentation",rf],
+   ["Segmented, as found: all four switches ALLOW",ra],
+   ["Segmented, all four switches DENY",rd],
+   ["Segmented, with the switches as set now",rn]].forEach(function(row){
+    var tr=el("tr"),th=el("th",null,row[0]);th.setAttribute("scope","row");
+    tr.appendChild(th);tr.appendChild(el("td",null,row[1].count+" of "+row[1].total));t.appendChild(tr);
+  });
+  r.appendChild(t);
+  r.appendChild(el("p","foot","Counted on Modbus/TCP port 502, the live attacks' protocol, every figure measured from the model on this page. Mode now: "+(flat?"flat network":"segmented")+". Simulated."));
+  /* the matrix cells */
+  document.querySelectorAll("#mx td button").forEach(function(b){
+    var from=b.getAttribute("data-from"),to=b.getAttribute("data-to"),txt,fw="",cls="";
+    if(from===to){txt="Same zone";fw="no conduit"}
+    else if(flat){txt="Allowed";fw="flat network"}
+    else{
+      var v=NM.canPass({from:from,to:to,approved:false,port:SEGV.mxPort},SEG);
+      if(v.passed){txt="Allowed";fw=v.crossed.length?"":"no firewall"}
+      else{txt="Denied";cls="no";fw="at "+v.stoppedAt}
+    }
+    b.textContent="";b.appendChild(el("b",null,txt));b.appendChild(el("span","fw",fw||"\u00a0"));
+    b.parentNode.className=cls;
+    var sel=!!(SEGV.sel&&SEGV.sel.from===from&&SEGV.sel.to===to);
+    b.setAttribute("aria-pressed",sel?"true":"false");
+    b.setAttribute("aria-label",zoneTitle(from)+" to "+zoneTitle(to)+", "+protoName(SEGV.mxPort)+" port "+SEGV.mxPort+": "+txt+(fw?", "+fw:""));
+  });
+  paintMxSel();paintPathTest();
+}
+function paintMxSel(){
+  var s=$("#mx-sel");if(!s)return;
+  if(!SEGV.sel){s.textContent="No cell picked yet.";return}
+  var from=SEGV.sel.from,to=SEGV.sel.to,p=protoName(SEGV.mxPort)+" port "+SEGV.mxPort;
+  if(from===to){
+    s.textContent=zoneTitle(from)+" to itself, "+p+": traffic inside one zone crosses no conduit, so no firewall ever sees it. Flat or segmented makes no difference inside a zone.";return;
+  }
+  if(SEGV.mode==="flat"){
+    s.textContent=zoneTitle(from)+" to "+zoneTitle(to)+", "+p+": allowed. A flat network puts nothing between them. Shown in the 3D view.";return;
+  }
+  var h=NM.hops(from,to,SEGV.mxPort,false,SEG),parts=[];
+  h.hops.forEach(function(x){
+    if(x.verdict==="gap")parts.push(x.conduit+" ("+x.from+" to "+x.to+") has no firewall");
+    else if(x.verdict==="deny")parts.push(x.firewall+" denies it on "+x.conduit);
+    else if(x.verdict==="pass")parts.push(x.firewall+" allows it");
+  });
+  s.textContent=zoneTitle(from)+" to "+zoneTitle(to)+", "+p+": "+(h.passed?"allowed":"denied at "+h.stoppedAt)+". "+parts.join("; ")+". Shown in the 3D view.";
+}
+function paintPathTest(){
+  var out=$("#pt-out");if(!out)return;
+  var sName=$("#pt-src").value,dName=$("#pt-dst").value,port=Number($("#pt-proto").value);
+  var s=byName[sName],d=byName[dName],from=NM.zoneOf(s.level),to=NM.zoneOf(d.level);
+  var approved=!!NM.approvedFlow(sName,dName,port);
+  var line=sName+" ("+zoneTitle(from)+") to "+dName+" ("+zoneTitle(to)+") on "+protoName(port)+" port "+port;
+  out.textContent="";
+  if(SEGV.mode==="flat"){
+    out.appendChild(el("p","vd","ALLOWED \u00b7 FLAT NETWORK"));
+    out.appendChild(el("p",null,line+". One flat network: no zone boundary and no firewall on the way."));
+    SEGV.hostTrace={srcA:s,dstA:d,cvar:"--live",stopAt:null};
+    return;
+  }
+  var h=NM.hops(from,to,port,approved,SEG);
+  out.appendChild(el("p","vd",h.passed?(approved?"ALLOWED \u00b7 APPROVED FLOW":"ALLOWED"):"STOPPED AT "+h.stoppedAt));
+  out.appendChild(el("p",null,line+"."+(approved?" An approved flow has its own fixed rule: no switch touches it.":"")));
+  if(from===to){
+    out.appendChild(el("p",null,"Same zone: the path crosses no conduit and meets no firewall."));
+  }else{
+    var ol=el("ol");
+    h.hops.forEach(function(x){
+      var head=x.conduit+" \u00b7 "+x.from+" to "+x.to+" \u00b7 ",txt;
+      if(x.verdict==="gap")txt=head+"no firewall: an unfiltered gap, nothing to set";
+      else if(x.verdict==="approved")txt=head+x.firewall+" passes it: approved flow, fixed rule";
+      else if(x.verdict==="pass")txt=head+x.firewall+" allows it (switch set to ALLOW)";
+      else if(x.verdict==="deny")txt=head+x.firewall+" DENIES it: the path stops here";
+      else txt=head+"not reached: the path already stopped";
+      ol.appendChild(el("li",x.verdict,txt));
+    });
+    out.appendChild(ol);
+  }
+  SEGV.hostTrace={srcA:s,dstA:d,cvar:h.passed?"--live":"--mute",stopAt:h.stoppedAt};
 }
 function buildWindows(){
   var ul=$("#windows");ul.textContent="";
@@ -1473,7 +1777,7 @@ function paintWindows(){
 }
 /* every view of the alarms in one place */
 function refresh(){
-  paintRules();paintAlarm();paintWindows();setButtons();paintEq();paintRecs();paintTraceBtn();
+  paintRules();paintSeg();paintAlarm();paintWindows();setButtons();paintEq();paintRecs();paintTraceBtn();
   if(scene3d)scene3d.update();
 }
 function setButtons(){
@@ -1553,12 +1857,16 @@ function showTab(which){
   $("#tab-rec").setAttribute("aria-pressed",which==="rec"?"true":"false");
   $("#tab-lim").setAttribute("aria-pressed",which==="lim"?"true":"false");
   $("#tab-sim").setAttribute("aria-pressed",which==="sim"?"true":"false");
+  $("#tab-seg").setAttribute("aria-pressed",which==="seg"?"true":"false");
   $("#pane-live").hidden=which!=="live";$("#pane-rec").hidden=which!=="rec";$("#pane-lim").hidden=which!=="lim";$("#pane-sim").hidden=which!=="sim";
+  $("#pane-seg").hidden=which!=="seg";
   curTab=which;paintEq();
+  if(which==="seg")paintSeg();
   if(which==="sim"){if(!SB.hist.length)SB.hist.push(SB.st.pv);SB.sig="";sbPaint()}
   paint();paintTraceBtn();if(scene3d)scene3d.update();
 }
 $("#tab-sim").addEventListener("click",function(){showTab("sim")});
+$("#tab-seg").addEventListener("click",function(){showTab("seg")});
 $("#tab-lim").addEventListener("click",function(){showTab("lim")});
 $("#tab-live").addEventListener("click",function(){showTab("live")});
 $("#tab-rec").addEventListener("click",function(){showTab("rec")});
@@ -1940,6 +2248,35 @@ function build(){
     scene.add(g);f.center=new THREE.Vector3(x,f.fy,z);f.top=new THREE.Vector3(x,f.fy+0.3,z);
     f.lab=addLabel(f.tag,f.top,"plate");f.lab.asset=f;f.lab.always=true;
   });
+  /* Zone boxes for the Segmentation tab: an outline per level and a plate with subnet and demo
+     VLAN. One stripe pattern, drawn once, marks only the picked or focused zone; the plate text,
+     not the pattern, carries the meaning. Hidden until the reader asks for zones. */
+  var stripeCv=document.createElement("canvas");stripeCv.width=stripeCv.height=32;
+  var sctx=stripeCv.getContext("2d");sctx.strokeStyle="#fff";sctx.lineWidth=5;sctx.beginPath();
+  for(var sdi=-1;sdi<4;sdi++){sctx.moveTo(sdi*16-8,40);sctx.lineTo(sdi*16+40,-8)}
+  sctx.stroke();
+  var stripeTex=new THREE.CanvasTexture(stripeCv);
+  stripeTex.wrapS=stripeTex.wrapT=THREE.RepeatWrapping;stripeTex.repeat.set(6,2);
+  var zoneObjs=[];
+  NM.ZONES.forEach(function(zz){
+    var zy=levelY[zz.level],lm=new THREE.LineBasicMaterial();
+    var zbox=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(SLAB_W+0.6,1.18,SLAB_D+0.6)),lm);
+    zbox.position.set(0,zy+0.52,0);zbox.visible=false;scene.add(zbox);
+    var wm=new THREE.MeshBasicMaterial({map:stripeTex,transparent:true,opacity:0.3,side:THREE.DoubleSide,depthWrite:false});
+    var wall=new THREE.Mesh(new THREE.BoxGeometry(SLAB_W+0.6,1.18,SLAB_D+0.6),wm);
+    wall.position.copy(zbox.position);wall.visible=false;scene.add(wall);
+    /* the level gutter already names each level, so the zone plate stays narrow: id, subnet, VLAN */
+    var ztext=zz.id+" · "+zoneNetText(zz.id);
+    var zlab=addLabel(ztext,new THREE.Vector3(SLAB_W/2+0.3,zy+1.52,0),"plate zone");
+    zlab.asset={level:zz.level,kind:"zone",name:ztext,tag:ztext};zlab.always=false;
+    zoneObjs.push({z:zz,box:zbox,wall:wall,lab:zlab,lm:lm,wm:wm});
+  });
+  var flatLm=new THREE.LineBasicMaterial();
+  var flatBox=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(SLAB_W+1.0,levelY["5"]+1.7,SLAB_D+1.0)),flatLm);
+  flatBox.position.set(0,(levelY["5"]+1.7)/2-0.25,0);flatBox.visible=false;scene.add(flatBox);
+  var flatText="One flat network · no VLANs · nothing between the levels";
+  var flatLab=addLabel(flatText,new THREE.Vector3(SLAB_W/2+0.5,levelY["5"]+1.55,0),"plate zone");
+  flatLab.asset={level:"5",kind:"zone",name:flatText,tag:flatText};flatLab.always=false;
   var ALL=ASSETS.concat(FWS);
   /* signal-tag plates: shown when their tag is lit, or when their device is selected */
   SIGS.forEach(function(s){s.lab=addLabel(s.tag,s.asset.top.clone().add(new THREE.Vector3(0,0.42,0)),"sig")});
@@ -1981,10 +2318,26 @@ function build(){
         if(dev==="MOTOR-Conveyor-1"){var vf=byName["VFD-Conveyor-1"];vf.mat.color.set(col)}
       });
     }
-    /* the Limits tab shows its own path; What-if shows no path; the other tabs show the alarm or the picked alert */
-    var traces=simOn?[]:((curTab==="lim"&&LIM.trace)?[LIM.trace]
+    /* the Segmentation tab's zone boxes: visible only while asked for, stripes on one zone only */
+    var zonesOn=curTab==="seg"&&SEGV.zones,zFlat=SEGV.mode==="flat";
+    var selZone=(SEGV.sel&&SEGV.cellPath)?SEGV.sel.from:(focusLvl!==null?NM.zoneOf(focusLvl):null);
+    zoneObjs.forEach(function(o){
+      var on=zonesOn&&!zFlat;
+      o.box.visible=on;o.lm.color.copy(dimC(new THREE.Color(ink),isDim(o.lab.asset)));
+      o.wall.visible=on&&o.z.id===selZone;o.wm.color.set(ink);
+      o.lab.always=on;
+      if(!on)o.lab.el.style.display="none";
+    });
+    flatBox.visible=zonesOn&&zFlat;flatLm.color.set(ink);
+    flatLab.always=flatBox.visible;
+    if(!flatBox.visible)flatLab.el.style.display="none";
+    /* the Limits tab shows its own path; What-if shows no path; the Segmentation tab shows its
+       path test or its picked matrix cell; the other tabs show the alarm or the picked alert */
+    var traces=simOn?[]
+      :(curTab==="seg"?((!SEGV.cellPath&&SEGV.touched&&SEGV.hostTrace)?[SEGV.hostTrace]:[])
+      :((curTab==="lim"&&LIM.trace)?[LIM.trace]
       :(alarms.length?alarms.map(function(a){return a.trace})
-      :(segEvent?[segEvent.trace]:(selRec?[selRec.trace]:[]))));
+      :(segEvent?[segEvent.trace]:(selRec?[selRec.trace]:[])))));
     traces.forEach(function(tr,ti){
       /* a denied path ends at the firewall that stopped it: the destination is never reached, so it
          is not lit, and neither is any firewall further down the route */
@@ -2009,6 +2362,39 @@ function build(){
       var pulse=new THREE.Mesh(new THREE.SphereGeometry(0.17,16,12),new THREE.MeshBasicMaterial({color:col}));
       pulse.position.copy(reduce?to:from);temp.add(pulse);pulses.push({mesh:pulse,curve:curve});
     });
+    /* the matrix's picked cell: the path drawn along the conduit spine, a visible break where a
+       conduit has no firewall, and a stop at the first DENY */
+    if(curTab==="seg"&&SEGV.cellPath&&SEGV.sel&&SEGV.sel.from!==SEGV.sel.to){
+      var zp=SEGV.sel,zpFlat=SEGV.mode==="flat";
+      var zhh=zpFlat
+        ?{hops:NM.route(zp.from,zp.to).map(function(c){return {conduit:c.id,verdict:"pass",firewall:null}}),passed:true,stoppedAt:null}
+        :NM.hops(zp.from,zp.to,SEGV.mxPort,false,SEG);
+      var zCol=css(zhh.passed?"--live":"--alarm"),zMat=new THREE.MeshBasicMaterial({color:zCol});
+      var ZX=-3.3,ZZ=-0.55;
+      var zY=function(zid){return levelY[NM.ZONES[NM.zoneIndex(zid)].level]+0.35};
+      var zSeg=function(y1,y2){var hgt=Math.abs(y2-y1);if(hgt<0.05)return;
+        var m=new THREE.Mesh(C(0.055,hgt,8),zMat);m.position.set(ZX,(y1+y2)/2,ZZ);temp.add(m)};
+      var zDot=function(y){var m=new THREE.Mesh(new THREE.SphereGeometry(0.14,14,10),zMat);
+        m.position.set(ZX,y,ZZ);temp.add(m)};
+      var iz=NM.zoneIndex(zp.from),jz=NM.zoneIndex(zp.to),stp=jz>iz?1:-1,atz=zp.from;
+      zDot(zY(zp.from));
+      for(var hz=0;hz<zhh.hops.length;hz++){
+        var hp=zhh.hops[hz],nz=NM.ZONES[NM.zoneIndex(atz)+stp].id,ya=zY(atz),yb=zY(nz),ym=(ya+yb)/2;
+        if(hp.verdict==="unreached")break;
+        if(hp.verdict==="gap"){zSeg(ya,ym-0.22);zSeg(ym+0.22,yb)}
+        else if(hp.verdict==="deny"){
+          var zf=byTag[hp.firewall];
+          zSeg(ya,zf?zf.fy:ym);
+          if(zf){zf.mat.color.set(css("--alarm"));zf.lab.el.classList.add("hot");zf.lab.over=zf.tag+" · DENY"}
+          break;
+        }else{
+          zSeg(ya,yb);
+          if(hp.firewall){var zf2=byTag[hp.firewall];if(zf2){zf2.mat.color.set(zCol);zf2.lab.el.classList.add("hot")}}
+        }
+        atz=nz;
+      }
+      if(zhh.passed)zDot(zY(zp.to));
+    }
     /* a tag in alarm, or whose limit change is blocked or would miss an alarm, is lit on the plant and in the equipment list */
     ALL.forEach(function(a){
       var on=!!(a.tag&&lit[a.tag]);a.lab.el.classList.toggle("lit",on);
@@ -2054,7 +2440,9 @@ function build(){
         box={x:cx-ww/2,y:cy,w:ww,h:hh,prio:L.prio||1};
         var hit=overlap(box,placed);
         if(!hit)break;
-        cy=hit.y-hh-2;box=null;
+        /* strictly upward: the first overlap found may sit below the current try, and jumping
+           back down to it would burn the tries oscillating between two boxes */
+        cy=Math.min(cy-1,hit.y-hh-2);box=null;
       }
       if(!box){L.el.style.display="none";continue}
       placed.push(box);
@@ -2097,7 +2485,10 @@ function build(){
          gives way to the level in focus whatever it is, or jumping to a level would not
          reliably reveal it. */
       var key=l.asset&&(l.asset.kind==="fw"||l.asset.tag==="PLC-101");
-      l.prio=lit?3:(hot?2:(l.el.classList.contains("dim")?0.5:(key?1.5:1)));
+      /* a zone plate names the whole level, so when shown it is placed before equipment and
+         firewall plates: it is wide, and nudging it last would hide it at busy angles */
+      var zone=l.asset&&l.asset.kind==="zone";
+      l.prio=lit?3:(hot?2:(l.el.classList.contains("dim")?0.5:(zone?1.6:(key?1.5:1))));
       if(l.asset&&l.el.style.display===""){
         var t=l.over||(hot?(l.asset.tag?l.asset.tag+" · "+l.asset.name:l.asset.name):l.asset.tag);
         if(l.shown!==t){l.shown=t;l.el.textContent=t}
@@ -2273,6 +2664,11 @@ window.__sentinelot={
     blocked:segEvent?{fw:segEvent.fw,rule:segEvent.rule,kind:segEvent.kind,reached:segEvent.reached}:null}))},
   rules:function(){return JSON.parse(JSON.stringify(SEG))},
   setRule:function(fw,v){SEG[fw]=v;refresh()},
+  segv:function(){
+    var f=segReach("flat"),a=segReach("found"),d=segReach("deny"),n=segReach("now");
+    return {mode:SEGV.mode,zones:SEGV.zones,port:SEGV.mxPort,
+            sel:SEGV.sel?{from:SEGV.sel.from,to:SEGV.sel.to}:null,cellPath:SEGV.cellPath,
+            reach:{flat:f.count,found:a.count,deny:d.count,now:n.count,total:f.total}}},
   sim:function(){return JSON.parse(JSON.stringify({inp:SB.inp,st:SB.st,view:SB.view,proposed:LIM.proposed}))}
 };
 (function(){
@@ -2283,10 +2679,10 @@ window.__sentinelot={
   b.addEventListener("click",function(){var n=dark()?"light":"dark";root.setAttribute("data-theme",n);try{localStorage.setItem("sot-theme",n)}catch(e){}lab()});
   lab();if(mq)mq.addEventListener("change",lab);
 })();
-buildRules();buildWindows();buildEq();
+buildRules();buildSeg();paintSeg();buildWindows();buildEq();
 /* on a phone the firewall switches start folded, so the attack buttons and the annunciator
    stay within one screen of each other. On a wider screen they are open. */
-if(window.matchMedia&&window.matchMedia("(max-width:767px)").matches)$("#segbox").open=false;
+if(window.matchMedia&&window.matchMedia("(max-width:767px)").matches){$("#segbox").open=false;$("#segbox2").open=false}
 $("#an-ack").addEventListener("click",ackAll);$("#an-reset").addEventListener("click",resetAlarms);
 $("#showtrace").addEventListener("click",showTrace);
 /* the button follows the plant in and out of view. No scroll handler, no sticky plant, nothing
